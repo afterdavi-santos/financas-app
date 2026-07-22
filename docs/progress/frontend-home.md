@@ -81,6 +81,28 @@ Refatorar `src/routes/ProtectedRoute.tsx` para guarda de layout com `<Outlet/>`:
 4. Criar despesa → cards (Despesas/Economia) atualizam e ela aparece em "Últimas despesas".
 5. Reload não desloga; `/` sem token → redireciona `/login`.
 
+## Estado (atualizado 2026-07-21)
+
+Parte 1 CONSTRUÍDA. Todos os arquivos acima foram criados; `DashboardPage.tsx`
+removido; `ProtectedRoute` virou guarda de layout com `<Outlet/>`; `App.tsx`
+usa rotas aninhadas `ProtectedRoute > Layout > index(HomePage)`.
+`npm run build` compila limpo (tsc + vite, 95 módulos).
+
+Detalhe de implementação vs. plano: `DespesaResponse` traz `categoria`
+ANINHADA (`{id, nome}`), não `categoriaId` — o type `Despesa` reflete isso e a
+lista "Últimas despesas" usa `d.categoria.nome`. `DespesaRequest` (envio) manda
+`categoriaId`, como planejado.
+
+VERIFICADO ponta a ponta (2026-07-21) com Postgres + `spring-boot:run` +
+`npm run dev`, dirigindo o navegador real:
+- registrar → redireciona pro /login com aviso verde "Conta criada!".
+- login → cai na Home real (sidebar + 3 StatCards + últimas despesas), não no placeholder.
+- criar categoria → modal fecha, refetch popula o select de despesa.
+- criar despesa (R$ 150,50, Alimentação, Extraordinária) → cards Despesas/Economia
+  atualizam (Economia -R$ 150,50 em vermelho) e a despesa aparece em "Últimas despesas".
+- reload em `/` mantém logado; `/` sem token no localStorage → redireciona pro /login.
+Parte 1 concluída e funcionando.
+
 ## Parte 2 (depois)
 Gráfico de gastos por categoria (Recharts, agrupando a lista de despesas no front)
 e comparativo mês a mês (`GET /api/relatorios/comparar-meses`).

@@ -1,17 +1,10 @@
-import { Navigate } from "react-router-dom";
-import type { ReactNode } from "react";
+import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-// Uso em App.tsx:
-//   <ProtectedRoute><DashboardPage /></ProtectedRoute>
-// Se não estiver autenticado, o <Navigate> troca a rota para /login
-// (replace: não deixa a página protegida no histórico do navegador).
-export function ProtectedRoute({ children }: { children: ReactNode }) {
+// Agora é uma "guarda de layout": usada como rota-pai em App.tsx.
+// Se autenticado, o <Outlet/> deixa as rotas filhas renderizarem;
+// senão, redireciona para /login (replace: não empilha no histórico).
+export function ProtectedRoute() {
   const { isAuthenticated } = useAuth();
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  return <>{children}</>;
+  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
 }
