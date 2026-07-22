@@ -5,6 +5,10 @@ import { Layout } from "./components/Layout";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { HomePage } from "./pages/HomePage";
+import { DespesasPage } from "./pages/DespesasPage";
+import { CategoriasPage } from "./pages/CategoriasPage";
+import { RendasPage } from "./pages/RendasPage";
+import { ObjetivosPage } from "./pages/ObjetivosPage";
 
 // AuthProvider por fora: todo o app enxerga o estado de autenticação.
 // BrowserRouter: liga as URLs do navegador às páginas abaixo.
@@ -22,6 +26,10 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route index element={<HomePage />} /> {/* "/" */}
+              <Route path="despesas" element={<DespesasPage />} />
+              <Route path="categorias" element={<CategoriasPage />} />
+              <Route path="rendas" element={<RendasPage />} />
+              <Route path="objetivos" element={<ObjetivosPage />} />
             </Route>
           </Route>
         </Routes>

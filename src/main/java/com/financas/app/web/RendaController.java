@@ -74,11 +74,12 @@ public class RendaController {
         renda.setDescricao(request.descricao());
         renda.setValor(request.valor());
         renda.setMesReferencia(request.mesReferencia());
+        renda.setTipo(request.tipo());
         return renda;
     }
 
     private static RendaResponse toResponse(Renda renda) {
-        return new RendaResponse(renda.getId(), renda.getDescricao(), renda.getValor(), renda.getMesReferencia());
+        return new RendaResponse(renda.getId(), renda.getDescricao(), renda.getValor(), renda.getMesReferencia(), renda.getTipo());
     }
 
 }

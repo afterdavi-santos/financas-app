@@ -1,6 +1,9 @@
 package com.financas.app.model;
 
+import com.financas.app.model.enums.TipoRenda;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -35,6 +38,9 @@ public class Renda {
      * Primeiro dia do mês de referência (ex: 2026-07-01 para julho/2026).
      */
     private LocalDate mesReferencia;
+
+    @Enumerated(EnumType.STRING)
+    private TipoRenda tipo;
 
     @ManyToOne
     @JoinColumn(name = "usuario_id", nullable = false)

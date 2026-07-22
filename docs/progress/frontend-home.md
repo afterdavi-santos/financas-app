@@ -103,6 +103,30 @@ VERIFICADO ponta a ponta (2026-07-21) com Postgres + `spring-boot:run` +
 - reload em `/` mantém logado; `/` sem token no localStorage → redireciona pro /login.
 Parte 1 concluída e funcionando.
 
-## Parte 2 (depois)
-Gráfico de gastos por categoria (Recharts, agrupando a lista de despesas no front)
-e comparativo mês a mês (`GET /api/relatorios/comparar-meses`).
+## Parte 1.5 (atualizado 2026-07-21): tipo de renda + páginas do menu
+
+MUDANÇA DE BACKEND: `Renda` ganhou campo `tipo` (enum `TipoRenda`:
+FIXA, FREELA, RETORNO_INVESTIMENTOS), `@NotNull` no `RendaRequest` e presente no
+`RendaResponse`. `ddl-auto=update` adicionou a coluna com check constraint
+automaticamente (backend reiniciado). 87 testes continuam passando (ajustado
+`RendaControllerTest` para enviar `tipo`).
+
+FRONTEND:
+- Home agora tem 3 botões: "+ Adicionar renda" (verde, `NovaRendaModal`),
+  despesa e categoria. Renda usa `<input type="month">` → envia `YYYY-MM-01`.
+- Páginas do menu lateral CRIADAS e habilitadas na Sidebar:
+  `DespesasPage` (mês atual, criar/excluir), `CategoriasPage` (criar/excluir),
+  `RendasPage` (listar todas, criar/excluir), `ObjetivosPage` (barra de
+  progresso, criar/aportar/excluir). Rotas aninhadas em `App.tsx` sob Layout.
+- Novos utils `utils/rotulos.ts` (rótulos dos enums + `dataBR`/`mesBR`);
+  HomePage refatorada para usá-los. Novos modais: `NovaRendaModal`,
+  `NovoObjetivoModal`, `AportarModal`. Novo `PageHeader`.
+- Exclusões usam `confirm()` do navegador. `npm run build` limpo (105 módulos),
+  `npm run lint` só com aviso pré-existente no AuthContext.
+- Verificação em navegador com o USUÁRIO (ele testa). Falta só Relatórios.
+
+## Parte 2 — Relatórios (única parte do menu que falta)
+Página `Relatórios` (ainda "em breve" na Sidebar): gráfico de gastos por
+categoria (Recharts, agrupando a lista de despesas no front) e comparativo
+mês a mês (`GET /api/relatorios/comparar-meses` → `ResumoMensal[]`:
+`{mes, totalRenda, totalDespesas, economia}`). Considerar a skill `dataviz`.

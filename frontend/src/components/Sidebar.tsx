@@ -1,15 +1,14 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-// Itens de navegação. Só "Início" tem rota real na Parte 1;
-// os demais ficam desabilitados com o rótulo "em breve".
+// Itens de navegação. "Relatórios" (gráficos) ainda fica "em breve".
 const itens = [
   { rotulo: "Início", para: "/", ativo: true },
-  { rotulo: "Despesas", para: "#", ativo: false },
-  { rotulo: "Categorias", para: "#", ativo: false },
-  { rotulo: "Rendas", para: "#", ativo: false },
+  { rotulo: "Despesas", para: "/despesas", ativo: true },
+  { rotulo: "Categorias", para: "/categorias", ativo: true },
+  { rotulo: "Rendas", para: "/rendas", ativo: true },
+  { rotulo: "Objetivos", para: "/objetivos", ativo: true },
   { rotulo: "Relatórios", para: "#", ativo: false },
-  { rotulo: "Objetivos", para: "#", ativo: false },
 ];
 
 export function Sidebar() {

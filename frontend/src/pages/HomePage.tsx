@@ -2,22 +2,18 @@ import { useEffect, useState } from "react";
 import { StatCard } from "../components/StatCard";
 import { NovaDespesaModal } from "../components/NovaDespesaModal";
 import { NovaCategoriaModal } from "../components/NovaCategoriaModal";
+import { NovaRendaModal } from "../components/NovaRendaModal";
 import { listarCategorias } from "../api/categorias";
 import { listarDespesas } from "../api/despesas";
 import { totalRenda } from "../api/rendas";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
+import { rotuloTipoDespesa, dataBR } from "../utils/rotulos";
 import {
   primeiroDiaDoMesISO,
   ultimoDiaDoMesISO,
 } from "../utils/datas";
 import type { Categoria, Despesa } from "../types/financas";
-
-// Traduz o enum do backend para um rótulo amigável.
-const rotuloTipo: Record<Despesa["tipo"], string> = {
-  FIXA: "Fixa",
-  EXTRAORDINARIA: "Extraordinária",
-};
 
 export function HomePage() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -29,6 +25,7 @@ export function HomePage() {
   // Controle de qual modal está aberto.
   const [modalDespesa, setModalDespesa] = useState(false);
   const [modalCategoria, setModalCategoria] = useState(false);
+  const [modalRenda, setModalRenda] = useState(false);
 
   // Busca tudo o que a home precisa: categorias, despesas do mês e renda do mês.
   // Promise.all dispara as 3 chamadas em paralelo (mais rápido que em sequência).
@@ -71,6 +68,7 @@ export function HomePage() {
   function aoSalvar() {
     setModalDespesa(false);
     setModalCategoria(false);
+    setModalRenda(false);
     carregar();
   }
 
@@ -78,7 +76,13 @@ export function HomePage() {
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-800">Início</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setModalRenda(true)}
+            className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+          >
+            + Adicionar renda
+          </button>
           <button
             onClick={() => setModalDespesa(true)}
             className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -140,8 +144,8 @@ export function HomePage() {
                         {d.descricao}
                       </p>
                       <p className="text-xs text-slate-500">
-                        {d.categoria.nome} · {rotuloTipo[d.tipo]} ·{" "}
-                        {d.data.split("-").reverse().join("/")}
+                        {d.categoria.nome} · {rotuloTipoDespesa[d.tipo]} ·{" "}
+                        {dataBR(d.data)}
                       </p>
                     </div>
                     <span className="font-semibold text-slate-800">
@@ -164,6 +168,11 @@ export function HomePage() {
       <NovaCategoriaModal
         aberto={modalCategoria}
         onClose={() => setModalCategoria(false)}
+        onCriada={aoSalvar}
+      />
+      <NovaRendaModal
+        aberto={modalRenda}
+        onClose={() => setModalRenda(false)}
         onCriada={aoSalvar}
       />
     </div>

@@ -18,3 +18,8 @@ export async function criarDespesa(req: DespesaRequest): Promise<Despesa> {
   const { data } = await api.post<Despesa>("/despesas", req);
   return data;
 }
+
+// DELETE /api/despesas/{id} -> 204 (sem corpo).
+export async function excluirDespesa(id: number): Promise<void> {
+  await api.delete(`/despesas/${id}`);
+}

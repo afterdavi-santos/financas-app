@@ -14,3 +14,8 @@ export async function criarCategoria(
   const { data } = await api.post<Categoria>("/categorias", req);
   return data;
 }
+
+// DELETE /api/categorias/{id} -> 204 (sem corpo).
+export async function excluirCategoria(id: number): Promise<void> {
+  await api.delete(`/categorias/${id}`);
+}

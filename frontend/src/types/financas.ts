@@ -4,6 +4,9 @@
 // -> enum TipoDespesa (FIXA | EXTRAORDINARIA)
 export type TipoDespesa = "FIXA" | "EXTRAORDINARIA";
 
+// -> enum TipoRenda (FIXA | FREELA | RETORNO_INVESTIMENTOS)
+export type TipoRenda = "FIXA" | "FREELA" | "RETORNO_INVESTIMENTOS";
+
 // -> CategoriaResponse ({ id, nome })
 export interface Categoria {
   id: number;
@@ -37,4 +40,37 @@ export interface DespesaRequest {
 // -> TotalResponse ({ total }) — usado por /rendas/total.
 export interface Total {
   total: number;
+}
+
+// -> RendaResponse ({ id, descricao, valor, mesReferencia, tipo })
+export interface Renda {
+  id: number;
+  descricao: string;
+  valor: number;
+  mesReferencia: string; // "YYYY-MM-DD" (1º dia do mês, por convenção)
+  tipo: TipoRenda;
+}
+
+// -> RendaRequest ({ descricao, valor, mesReferencia, tipo })
+export interface RendaRequest {
+  descricao: string;
+  valor: number;
+  mesReferencia: string; // "YYYY-MM-DD"
+  tipo: TipoRenda;
+}
+
+// -> ObjetivoResponse ({ id, descricao, valorAlvo, valorAtual, dataAlvo })
+export interface Objetivo {
+  id: number;
+  descricao: string;
+  valorAlvo: number;
+  valorAtual: number;
+  dataAlvo: string; // "YYYY-MM-DD"
+}
+
+// -> ObjetivoRequest ({ descricao, valorAlvo, dataAlvo })
+export interface ObjetivoRequest {
+  descricao: string;
+  valorAlvo: number;
+  dataAlvo: string; // "YYYY-MM-DD"
 }
