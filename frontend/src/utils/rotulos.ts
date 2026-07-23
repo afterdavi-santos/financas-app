@@ -22,3 +22,14 @@ export function mesBR(iso: string): string {
   const [ano, mes] = iso.split("-");
   return `${mes}/${ano}`;
 }
+
+const MESES_CURTOS = [
+  "jan", "fev", "mar", "abr", "mai", "jun",
+  "jul", "ago", "set", "out", "nov", "dez",
+];
+
+// "2026-07-01" -> "jul/26" (rótulo compacto do eixo X dos gráficos mensais).
+export function mesCurtoBR(iso: string): string {
+  const [ano, mes] = iso.split("-");
+  return `${MESES_CURTOS[Number(mes) - 1]}/${ano.slice(2)}`;
+}

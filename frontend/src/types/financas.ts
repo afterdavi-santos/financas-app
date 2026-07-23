@@ -74,3 +74,41 @@ export interface ObjetivoRequest {
   valorAlvo: number;
   dataAlvo: string; // "YYYY-MM-DD"
 }
+
+// -> LimiteCategoriaResponse: categoria chega ANINHADA (como em Despesa).
+export interface LimiteCategoria {
+  id: number;
+  valorLimite: number;
+  mesReferencia: string; // "YYYY-MM-DD" (1º dia do mês)
+  categoria: Categoria;
+}
+
+// -> LimiteCategoriaRequest: aqui mandamos só o categoriaId.
+export interface LimiteCategoriaRequest {
+  valorLimite: number;
+  mesReferencia: string; // "YYYY-MM-DD"
+  categoriaId: number;
+}
+
+// -> StatusLimiteResponse ({ valorLimite, valorGasto, estourado }).
+export interface StatusLimite {
+  valorLimite: number;
+  valorGasto: number;
+  estourado: boolean;
+}
+
+// -> ResumoMensal (relatório): um ponto do gráfico de comparação mês a mês.
+export interface ResumoMensal {
+  mes: string; // "YYYY-MM-DD" (1º dia do mês)
+  totalRenda: number;
+  totalDespesas: number;
+  economia: number;
+}
+
+// -> ResumoAnual (relatório): um ponto do gráfico de comparação ano a ano.
+export interface ResumoAnual {
+  ano: number;
+  totalRenda: number;
+  totalDespesas: number;
+  economia: number;
+}

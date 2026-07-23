@@ -9,6 +9,8 @@ import { DespesasPage } from "./pages/DespesasPage";
 import { CategoriasPage } from "./pages/CategoriasPage";
 import { RendasPage } from "./pages/RendasPage";
 import { ObjetivosPage } from "./pages/ObjetivosPage";
+import { LimitesPage } from "./pages/LimitesPage";
+import { RelatoriosPage } from "./pages/RelatoriosPage";
 
 // AuthProvider por fora: todo o app enxerga o estado de autenticação.
 // BrowserRouter: liga as URLs do navegador às páginas abaixo.
@@ -30,6 +32,8 @@ export default function App() {
               <Route path="categorias" element={<CategoriasPage />} />
               <Route path="rendas" element={<RendasPage />} />
               <Route path="objetivos" element={<ObjetivosPage />} />
+              <Route path="limites" element={<LimitesPage />} />
+              <Route path="relatorios" element={<RelatoriosPage />} />
             </Route>
           </Route>
         </Routes>

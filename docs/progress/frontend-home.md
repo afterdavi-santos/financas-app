@@ -125,8 +125,62 @@ FRONTEND:
   `npm run lint` só com aviso pré-existente no AuthContext.
 - Verificação em navegador com o USUÁRIO (ele testa). Falta só Relatórios.
 
-## Parte 2 — Relatórios (única parte do menu que falta)
-Página `Relatórios` (ainda "em breve" na Sidebar): gráfico de gastos por
-categoria (Recharts, agrupando a lista de despesas no front) e comparativo
-mês a mês (`GET /api/relatorios/comparar-meses` → `ResumoMensal[]`:
-`{mes, totalRenda, totalDespesas, economia}`). Considerar a skill `dataviz`.
+## Parte 2 — Relatórios + Limites (CONCLUÍDA e VERIFICADA em 2026-07-23)
+
+Fecha o MVP do menu: os dois recursos que faltavam consumir do backend
+(`RelatorioController` e `LimiteCategoriaController`) agora têm frontend.
+Nenhuma mudança de backend foi necessária (todos os endpoints já existiam).
+
+### Relatórios (gráficos Recharts)
+- `api/relatorios.ts` — `compararMeses(inicio, fim)` (`GET /api/relatorios/comparar-meses`)
+  e `compararAnos(anoInicio, anoFim)` (`GET /api/relatorios/comparar-anos`).
+  (Não usei `/economia`; a economia já vem em cada `ResumoMensal`/`ResumoAnual`.)
+- `pages/RelatoriosPage.tsx` — dois cards, cada um com um `ComposedChart`
+  (Recharts 3): duas **barras** (Renda verde `#16a34a` × Despesas vermelho
+  `#dc2626`) e uma **linha** de Economia (azul `#2563eb`) por cima. Seletores:
+  "Mês a mês" (3/6/12 meses, default 6) e "Ano a ano" (2/3/5 anos, default 3).
+  Componente interno `GraficoComparativo` reaproveitado nos dois. Mapeia a
+  resposta para `{ rotulo, Renda, Despesas, Economia }` (chaves = séries).
+  Tooltip formata BRL; eixo Y compacto ("R$ 1,5 mil"). `ResponsiveContainer`
+  dentro de um `div h-72`.
+- Tipos novos em `types/financas.ts`: `ResumoMensal`, `ResumoAnual`.
+- Utils novos: `datas.primeiroDiaMesesAtrasISO(n)` (início do intervalo mensal)
+  e `rotulos.mesCurtoBR("2026-07-01") -> "jul/26"` (eixo X).
+- **Gotcha do Recharts 3**: o `formatter` do `<Tooltip>` tem tipagem estrita —
+  o parâmetro `value` precisa aceitar `number | string | ReadonlyArray<...> |
+  undefined` (o array é `readonly`), senão `tsc -b` quebra. Normalizado com
+  `Number(value)`.
+
+### Limites de gastos (CRUD + status)
+- `api/limites.ts` — `listarLimites(mes)`, `statusLimite(categoriaId, mes)`
+  (`GET /api/limites-categoria/status` → `{valorLimite, valorGasto, estourado}`),
+  `criarLimite(req)`, `excluirLimite(id)`.
+- `components/NovoLimiteModal.tsx` — form `{categoria(select), valorLimite,
+  mês(input month)}`. Recebe `mesPadrao` (o mês em foco na página) como default.
+  Sem categorias → bloqueia com aviso âmbar (padrão do `NovaDespesaModal`).
+- `pages/LimitesPage.tsx` — seletor `<input type="month">` no header (recarrega
+  no `onChange` via `useEffect([mes])`). Para cada limite do mês, faz
+  `Promise.all` chamando `statusLimite` para saber o gasto. Cada card mostra
+  categoria, "R$ gasto de R$ teto", **barra de progresso** (verde <80%, âmbar
+  ≥80%, vermelho se estourou) e selo "Estourou". `LimiteCategoriaResponse` traz
+  `categoria` ANINHADA (`{id, nome}`), como `Despesa`.
+- Tipos novos: `LimiteCategoria`, `LimiteCategoriaRequest`, `StatusLimite`.
+
+### Encaixe
+- `App.tsx` — rotas `/limites` e `/relatorios` sob `Layout`.
+- `Sidebar.tsx` — "Relatórios" saiu de *em breve* → ativo; adicionado "Limites".
+  Agora TODOS os itens do menu estão ativos.
+
+### Verificação (2026-07-23)
+- `npm run build` limpo (tsc + vite, 672 módulos; aviso esperado de chunk >500 kB
+  por causa do Recharts — não é erro).
+- Smoke test da API via `curl` (registrar→login→categoria→despesa→limite→status→
+  relatório): limite estourou certo (`valorGasto 300 > 250`, `estourado true`);
+  comparar-meses retornou a série com economia -300 em julho.
+- **Dirigido no navegador real** com dados semeados: Relatórios renderiza os dois
+  gráficos; Limites mostra Mercado (300/250, barra vermelha cheia, "Estourou",
+  120%) e Lazer (120/500, barra verde, 24%). Funcionando ponta a ponta.
+
+### MVP do menu concluído. Próximos passos (definidos pelo usuário)
+O usuário vai agora fazer **mudanças visuais** e **regras de negócio** que façam
+mais sentido pra ele — este é o ponto de partida dessa próxima fase.

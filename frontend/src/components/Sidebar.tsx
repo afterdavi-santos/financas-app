@@ -1,14 +1,15 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-// Itens de navegação. "Relatórios" (gráficos) ainda fica "em breve".
+// Itens de navegação do menu lateral.
 const itens = [
   { rotulo: "Início", para: "/", ativo: true },
   { rotulo: "Despesas", para: "/despesas", ativo: true },
   { rotulo: "Categorias", para: "/categorias", ativo: true },
   { rotulo: "Rendas", para: "/rendas", ativo: true },
   { rotulo: "Objetivos", para: "/objetivos", ativo: true },
-  { rotulo: "Relatórios", para: "#", ativo: false },
+  { rotulo: "Limites", para: "/limites", ativo: true },
+  { rotulo: "Relatórios", para: "/relatorios", ativo: true },
 ];
 
 export function Sidebar() {
