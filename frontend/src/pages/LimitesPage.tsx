@@ -8,15 +8,10 @@ import { formatarBRL } from "../utils/moeda";
 import { primeiroDiaDoMesISO } from "../utils/datas";
 import type { Categoria, LimiteCategoria, StatusLimite } from "../types/financas";
 
-// Cada linha junta o teto (limite) com quanto já foi gasto no mês (status).
+// Cada linha junta o teto (limite fixo) com quanto já foi gasto no mês atual.
 interface Linha {
   limite: LimiteCategoria;
   status: StatusLimite;
-}
-
-// "2026-07-01" -> "2026-07" (valor que o <input type="month"> entende).
-function mesInicial(): string {
-  return primeiroDiaDoMesISO().slice(0, 7);
 }
 
 // Cor da barra conforme o quanto do teto já foi consumido.
@@ -29,21 +24,32 @@ function corDaBarra(estourado: boolean, proporcao: number): string {
 export function LimitesPage() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [linhas, setLinhas] = useState<Linha[]>([]);
-  const [mes, setMes] = useState(mesInicial()); // "YYYY-MM"
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
+  // Limite em edição (null com modal aberto = criação de um novo).
+  const [editando, setEditando] = useState<LimiteCategoria | null>(null);
+
+  function abrirNovo() {
+    setEditando(null);
+    setModalAberto(true);
+  }
+
+  function abrirEdicao(limite: LimiteCategoria) {
+    setEditando(limite);
+    setModalAberto(true);
+  }
 
   async function carregar() {
     setErro(null);
     setCarregando(true);
     try {
-      const mesReferencia = `${mes}-01`;
+      // O gasto é sempre avaliado no mês atual (o limite em si é fixo).
+      const mesReferencia = primeiroDiaDoMesISO();
       const [cats, limites] = await Promise.all([
         listarCategorias(),
-        listarLimites(mesReferencia),
+        listarLimites(),
       ]);
-      // Para cada limite, busca quanto já foi gasto na categoria naquele mês.
       const comStatus = await Promise.all(
         limites.map(async (limite) => ({
           limite,
@@ -59,11 +65,15 @@ export function LimitesPage() {
     }
   }
 
-  // Recarrega sempre que o mês muda (e na primeira carga).
   useEffect(() => {
     carregar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mes]);
+  }, []);
+
+  // No modo criação, só oferecemos categorias que ainda não têm limite.
+  const categoriasComLimite = new Set(linhas.map((l) => l.limite.categoria.id));
+  const categoriasSemLimite = categorias.filter(
+    (c) => !categoriasComLimite.has(c.id),
+  );
 
   async function excluir(linha: Linha) {
     if (!confirm(`Excluir o limite de "${linha.limite.categoria.nome}"?`)) return;
@@ -78,14 +88,8 @@ export function LimitesPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader titulo="Limites de gastos">
-        <input
-          type="month"
-          value={mes}
-          onChange={(e) => setMes(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
         <button
-          onClick={() => setModalAberto(true)}
+          onClick={abrirNovo}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           + Novo limite
@@ -103,7 +107,7 @@ export function LimitesPage() {
       ) : linhas.length === 0 ? (
         <section className="rounded-xl bg-white p-5 shadow-sm">
           <p className="text-sm text-slate-500">
-            Nenhum limite definido para este mês.
+            Nenhum limite definido ainda.
           </p>
         </section>
       ) : (
@@ -134,6 +138,12 @@ export function LimitesPage() {
                       </span>
                     )}
                     <button
+                      onClick={() => abrirEdicao(limite)}
+                      className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      Editar
+                    </button>
+                    <button
                       onClick={() => excluir({ limite, status })}
                       className="text-sm font-medium text-red-600 hover:text-red-700"
                     >
@@ -160,13 +170,13 @@ export function LimitesPage() {
 
       <NovoLimiteModal
         aberto={modalAberto}
+        limite={editando}
         onClose={() => setModalAberto(false)}
         onCriado={() => {
           setModalAberto(false);
           carregar();
         }}
-        categorias={categorias}
-        mesPadrao={mes}
+        categorias={editando ? categorias : categoriasSemLimite}
       />
     </div>
   );

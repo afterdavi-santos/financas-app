@@ -34,3 +34,28 @@ export function primeiroDiaMesesAtrasISO(n: number): string {
   const hoje = new Date();
   return paraISO(new Date(hoje.getFullYear(), hoje.getMonth() - n, 1));
 }
+
+// --- Helpers que recebem um mês "YYYY-MM" (valor do <input type="month">) ---
+
+// Mês atual no formato do <input type="month">, ex.: "2026-07".
+export function mesAtualYYYYMM(): string {
+  return hojeISO().slice(0, 7);
+}
+
+// "2026-07" -> "2026-07-01" (primeiro dia do mês informado).
+export function primeiroDiaDoMes(mes: string): string {
+  return `${mes}-01`;
+}
+
+// "2026-07" -> "2026-07-31" (último dia; dia 0 do mês seguinte).
+export function ultimoDiaDoMes(mes: string): string {
+  const [ano, m] = mes.split("-").map(Number);
+  return paraISO(new Date(ano, m, 0)); // m já é 1-based; new Date usa 0-based, então m = mês seguinte
+}
+
+// "2026-07" -> "2026-06" (mês anterior; vira o ano corretamente em janeiro).
+export function mesAnteriorYYYYMM(mes: string): string {
+  const [ano, m] = mes.split("-").map(Number);
+  const d = new Date(ano, m - 2, 1); // m-1 = mês atual (0-based); m-2 = anterior
+  return paraISO(d).slice(0, 7);
+}

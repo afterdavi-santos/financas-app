@@ -1,19 +1,22 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { StatCard } from "../components/StatCard";
 import { NovaDespesaModal } from "../components/NovaDespesaModal";
 import { NovaCategoriaModal } from "../components/NovaCategoriaModal";
 import { NovaRendaModal } from "../components/NovaRendaModal";
+import { SimularDespesaModal } from "../components/SimularDespesaModal";
 import { listarCategorias } from "../api/categorias";
 import { listarDespesas } from "../api/despesas";
 import { totalRenda } from "../api/rendas";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { rotuloTipoDespesa, dataBR } from "../utils/rotulos";
-import {
-  primeiroDiaDoMesISO,
-  ultimoDiaDoMesISO,
-} from "../utils/datas";
+import { mesAtualYYYYMM, primeiroDiaDoMesISO, ultimoDiaDoMesISO } from "../utils/datas";
 import type { Categoria, Despesa } from "../types/financas";
+
+// Guardamos no localStorage o último mês em que o usuário já viu o lembrete de
+// redefinir limites, para mostrá-lo uma vez por mês (ao entrar no mês novo).
+const CHAVE_LEMBRETE = "financas.lembreteLimites";
 
 export function HomePage() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -26,6 +29,21 @@ export function HomePage() {
   const [modalDespesa, setModalDespesa] = useState(false);
   const [modalCategoria, setModalCategoria] = useState(false);
   const [modalRenda, setModalRenda] = useState(false);
+  const [modalSimular, setModalSimular] = useState(false);
+
+  const navigate = useNavigate();
+
+  // Mostra o lembrete de limites se ainda não foi visto neste mês.
+  // (Inicializa lendo o localStorage uma única vez, no primeiro render.)
+  const [mostrarLembrete, setMostrarLembrete] = useState(
+    () => localStorage.getItem(CHAVE_LEMBRETE) !== mesAtualYYYYMM(),
+  );
+
+  // Marca o lembrete como visto neste mês (não reaparece até o mês seguinte).
+  function dispensarLembrete() {
+    localStorage.setItem(CHAVE_LEMBRETE, mesAtualYYYYMM());
+    setMostrarLembrete(false);
+  }
 
   // Busca tudo o que a home precisa: categorias, despesas do mês e renda do mês.
   // Promise.all dispara as 3 chamadas em paralelo (mais rápido que em sequência).
@@ -95,8 +113,40 @@ export function HomePage() {
           >
             + Adicionar categoria
           </button>
+          <button
+            onClick={() => setModalSimular(true)}
+            className="rounded-md bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300"
+          >
+            Simular despesa
+          </button>
         </div>
       </div>
+
+      {/* Lembrete de início de mês: sugere redefinir os limites de gastos. */}
+      {mostrarLembrete && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <p className="text-sm text-blue-900">
+            O mês virou! Deseja redefinir seus limites de despesas?
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                dispensarLembrete();
+                navigate("/limites");
+              }}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Sim, redefinir
+            </button>
+            <button
+              onClick={dispensarLembrete}
+              className="rounded-md px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+            >
+              Agora não
+            </button>
+          </div>
+        </div>
+      )}
 
       {erro && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -174,6 +224,11 @@ export function HomePage() {
         aberto={modalRenda}
         onClose={() => setModalRenda(false)}
         onCriada={aoSalvar}
+      />
+      <SimularDespesaModal
+        aberto={modalSimular}
+        onClose={() => setModalSimular(false)}
+        categorias={categorias}
       />
     </div>
   );

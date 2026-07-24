@@ -1,18 +1,23 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Modal } from "./Modal";
 import { criarDespesa } from "../api/despesas";
+import { statusLimiteOuNulo } from "../api/limites";
 import { mensagemDeErro } from "../api/erros";
+import { formatarBRL } from "../utils/moeda";
 import { hojeISO } from "../utils/datas";
-import type { Categoria, TipoDespesa } from "../types/financas";
+import type { Categoria, StatusLimite, TipoDespesa } from "../types/financas";
 
 // Modal do form de nova despesa. Recebe a lista de categorias (para o select)
 // já carregada pela home, evitando uma segunda requisição aqui.
+// `dataPadrao` (opcional) define a data inicial do form — a tela de Despesas
+// passa uma data do mês em foco para lançar direto nele; sem ela, usa hoje.
 interface Props {
   aberto: boolean;
   onClose: () => void;
   onCriada: () => void;
   categorias: Categoria[];
+  dataPadrao?: string; // "YYYY-MM-DD"
 }
 
 export function NovaDespesaModal({
@@ -20,16 +25,58 @@ export function NovaDespesaModal({
   onClose,
   onCriada,
   categorias,
+  dataPadrao,
 }: Props) {
+  const dataInicial = dataPadrao ?? hojeISO();
   const [descricao, setDescricao] = useState("");
   const [valor, setValor] = useState(""); // string no input; convertida ao enviar
-  const [data, setData] = useState(hojeISO()); // default: hoje
+  const [data, setData] = useState(dataInicial);
+
+  // Ao (re)abrir o modal, sincroniza a data com o mês em foco atual.
+  useEffect(() => {
+    if (aberto) setData(dataInicial);
+  }, [aberto, dataInicial]);
   const [tipo, setTipo] = useState<TipoDespesa>("EXTRAORDINARIA");
   const [categoriaId, setCategoriaId] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
+  // Limite da categoria selecionada no mês da despesa (null = categoria sem limite).
+  const [statusLimite, setStatusLimite] = useState<StatusLimite | null>(null);
 
   const semCategorias = categorias.length === 0;
+
+  // Sempre que a categoria ou o mês da despesa mudam, busca o limite daquela
+  // categoria naquele mês para poder avisar se a despesa vai estourar o teto.
+  useEffect(() => {
+    if (!aberto || !categoriaId) {
+      setStatusLimite(null);
+      return;
+    }
+    let cancelado = false;
+    const mesReferencia = `${data.slice(0, 7)}-01`;
+    statusLimiteOuNulo(Number(categoriaId), mesReferencia)
+      .then((s) => {
+        if (!cancelado) setStatusLimite(s);
+      })
+      .catch(() => {
+        if (!cancelado) setStatusLimite(null);
+      });
+    // Cleanup: ignora respostas antigas se a categoria/mês mudou no meio da busca.
+    return () => {
+      cancelado = true;
+    };
+  }, [aberto, categoriaId, data]);
+
+  // Previsão do estouro: gasto atual + valor digitado vs. o teto.
+  const valorNum = Number(valor);
+  const previsao =
+    statusLimite && valorNum > 0
+      ? {
+          novoTotal: statusLimite.valorGasto + valorNum,
+          limite: statusLimite.valorLimite,
+          estoura: statusLimite.valorGasto + valorNum > statusLimite.valorLimite,
+        }
+      : null;
 
   async function aoEnviar(evento: FormEvent) {
     evento.preventDefault();
@@ -46,7 +93,7 @@ export function NovaDespesaModal({
       // limpa os campos para o próximo uso
       setDescricao("");
       setValor("");
-      setData(hojeISO());
+      setData(dataInicial);
       setTipo("EXTRAORDINARIA");
       setCategoriaId("");
       onCriada();
@@ -184,6 +231,21 @@ export function NovaDespesaModal({
               </select>
             </div>
           </div>
+
+          {/* Aviso de limite: só aparece se a categoria tem teto no mês. */}
+          {previsao &&
+            (previsao.estoura ? (
+              <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                ⚠️ Esta despesa vai <strong>estourar o limite</strong> da
+                categoria: {formatarBRL(previsao.novoTotal)} de{" "}
+                {formatarBRL(previsao.limite)}.
+              </p>
+            ) : (
+              <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+                Dentro do limite: ficará em {formatarBRL(previsao.novoTotal)} de{" "}
+                {formatarBRL(previsao.limite)}.
+              </p>
+            ))}
 
           <div className="flex justify-end gap-2 pt-2">
             <button

@@ -1,36 +1,52 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Modal } from "./Modal";
-import { criarObjetivo } from "../api/objetivos";
+import { criarObjetivo, atualizarObjetivo } from "../api/objetivos";
 import { mensagemDeErro } from "../api/erros";
+import type { Objetivo } from "../types/financas";
 
-// Modal de novo objetivo: descrição, valor-alvo e data-alvo.
+// Modal de objetivo: descrição, valor-alvo e data-alvo.
+// `objetivo` (opcional) coloca o modal em modo EDIÇÃO — prefill + PUT em vez de POST.
 interface Props {
   aberto: boolean;
   onClose: () => void;
   onCriada: () => void;
+  objetivo?: Objetivo | null;
 }
 
-export function NovoObjetivoModal({ aberto, onClose, onCriada }: Props) {
+export function NovoObjetivoModal({
+  aberto,
+  onClose,
+  onCriada,
+  objetivo,
+}: Props) {
+  const editando = !!objetivo;
   const [descricao, setDescricao] = useState("");
   const [valorAlvo, setValorAlvo] = useState("");
   const [dataAlvo, setDataAlvo] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
 
+  // Ao abrir, sincroniza os campos: com objetivo -> prefill; sem -> limpa.
+  useEffect(() => {
+    if (!aberto) return;
+    setErro(null);
+    setDescricao(objetivo?.descricao ?? "");
+    setValorAlvo(objetivo ? String(objetivo.valorAlvo) : "");
+    setDataAlvo(objetivo?.dataAlvo ?? "");
+  }, [aberto, objetivo]);
+
   async function aoEnviar(evento: FormEvent) {
     evento.preventDefault();
     setErro(null);
     setCarregando(true);
     try {
-      await criarObjetivo({
-        descricao,
-        valorAlvo: Number(valorAlvo),
-        dataAlvo,
-      });
-      setDescricao("");
-      setValorAlvo("");
-      setDataAlvo("");
+      const req = { descricao, valorAlvo: Number(valorAlvo), dataAlvo };
+      if (editando) {
+        await atualizarObjetivo(objetivo.id, req);
+      } else {
+        await criarObjetivo(req);
+      }
       onCriada();
     } catch (e) {
       setErro(mensagemDeErro(e));
@@ -40,7 +56,11 @@ export function NovoObjetivoModal({ aberto, onClose, onCriada }: Props) {
   }
 
   return (
-    <Modal titulo="Novo objetivo" aberto={aberto} onClose={onClose}>
+    <Modal
+      titulo={editando ? "Editar objetivo" : "Novo objetivo"}
+      aberto={aberto}
+      onClose={onClose}
+    >
       <form onSubmit={aoEnviar} className="space-y-4">
         {erro && (
           <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">

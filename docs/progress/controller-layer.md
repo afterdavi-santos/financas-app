@@ -12,7 +12,7 @@ Localização: `src/main/java/com/financas/app/web/` (controllers), `src/main/ja
 
 ## Tratamento de erros
 
-`GlobalExceptionHandler` (`@RestControllerAdvice`) mapeia: `RecursoNaoEncontradoException` → 404, `EmailJaCadastradoException` → 409, `CredenciaisInvalidasException` → 401, `MethodArgumentNotValidException` (`@Valid`) → 400 com lista de campos. Resposta padronizada em `ErrorResponse`.
+`GlobalExceptionHandler` (`@RestControllerAdvice`) mapeia: `RecursoNaoEncontradoException` → 404, `EmailJaCadastradoException` → 409, `LimiteJaExisteException` → 409, `CredenciaisInvalidasException` → 401, `MethodArgumentNotValidException` (`@Valid`) → 400 com lista de campos. Resposta padronizada em `ErrorResponse`.
 
 ## Endpoints
 
@@ -20,15 +20,15 @@ Localização: `src/main/java/com/financas/app/web/` (controllers), `src/main/ja
 - `CategoriaController` (`/api/categorias`) — CRUD.
 - `DespesaController` (`/api/despesas`) — CRUD + `GET /` com filtros (`categoriaId`, `tipo`, `inicio`, `fim`) + `GET /total`.
 - `RendaController` (`/api/rendas`) — CRUD + `GET /total?mesReferencia`.
-- `ObjetivoController` (`/api/objetivos`) — CRUD + `POST /{id}/aportar`.
-- `LimiteCategoriaController` (`/api/limites-categoria`) — CRUD + `GET /status?categoriaId&mesReferencia`.
+- `ObjetivoController` (`/api/objetivos`) — CRUD (inclui `PUT /{id}`) + `POST /{id}/aportar`.
+- `LimiteCategoriaController` (`/api/limites-categoria`) — CRUD (inclui `PUT /{id}`) + `GET /status?categoriaId&mesReferencia`. **Limite é fixo por categoria** (não tem mais `mesReferencia`): `GET /` lista todos os limites do usuário; `criar` recusa um segundo limite na mesma categoria (`LimiteJaExisteException` → 409). O `/status` ainda recebe `mesReferencia` porque o *gasto* é sempre avaliado num mês (normalmente o atual) contra o teto fixo.
 - `RelatorioController` (`/api/relatorios`) — `GET /economia`, `GET /comparar-meses`, `GET /comparar-anos`.
 
 Padrão de DTO: `XRequest` (record com Bean Validation) + `XResponse` (record), mapeamento manual (`toEntity`/`toResponse`) como métodos privados estáticos dentro do próprio controller — sem mapper genérico.
 
 ## Estado dos testes
 
-87 testes no total (49 de service + 38 de controller/`@WebMvcTest`, um arquivo de teste por controller).
+88 testes no total (50 de service + 38 de controller/`@WebMvcTest`, um arquivo de teste por controller).
 
 ### Pegadinha de `@WebMvcTest` + Spring Security
 

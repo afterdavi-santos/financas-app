@@ -13,6 +13,15 @@ export async function criarObjetivo(req: ObjetivoRequest): Promise<Objetivo> {
   return data;
 }
 
+// PUT /api/objetivos/{id} -> atualiza descrição/valorAlvo/dataAlvo do objetivo.
+export async function atualizarObjetivo(
+  id: number,
+  req: ObjetivoRequest,
+): Promise<Objetivo> {
+  const { data } = await api.put<Objetivo>(`/objetivos/${id}`, req);
+  return data;
+}
+
 // POST /api/objetivos/{id}/aportar body {valor} -> objetivo com valorAtual somado.
 export async function aportarObjetivo(
   id: number,

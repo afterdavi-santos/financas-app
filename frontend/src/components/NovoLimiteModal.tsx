@@ -1,19 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Modal } from "./Modal";
-import { criarLimite } from "../api/limites";
+import { criarLimite, atualizarLimite } from "../api/limites";
 import { mensagemDeErro } from "../api/erros";
-import type { Categoria } from "../types/financas";
+import type { Categoria, LimiteCategoria } from "../types/financas";
 
-// Modal do form de novo limite de gasto por categoria.
-// Recebe as categorias (para o select) e o mês em foco na página (mesPadrao,
-// no formato "YYYY-MM"), para o novo limite já cair no mês que está sendo visto.
+// Modal de limite de gasto por categoria (teto FIXO, sem mês).
+// - Criação: recebe as categorias sem limite ainda (select).
+// - Edição (`limite` presente): prefill do valor; a CATEGORIA fica travada,
+//   pois o backend só atualiza o valor (não troca a categoria do limite).
 interface Props {
   aberto: boolean;
   onClose: () => void;
   onCriado: () => void;
   categorias: Categoria[];
-  mesPadrao: string; // "YYYY-MM"
+  limite?: LimiteCategoria | null;
 }
 
 export function NovoLimiteModal({
@@ -21,29 +22,38 @@ export function NovoLimiteModal({
   onClose,
   onCriado,
   categorias,
-  mesPadrao,
+  limite,
 }: Props) {
+  const editando = !!limite;
   const [categoriaId, setCategoriaId] = useState("");
   const [valor, setValor] = useState("");
-  const [mes, setMes] = useState(mesPadrao); // "YYYY-MM"
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
 
   const semCategorias = categorias.length === 0;
+
+  // Ao abrir, sincroniza os campos: com limite -> prefill; sem -> limpa.
+  useEffect(() => {
+    if (!aberto) return;
+    setErro(null);
+    setCategoriaId(limite ? String(limite.categoria.id) : "");
+    setValor(limite ? String(limite.valorLimite) : "");
+  }, [aberto, limite]);
 
   async function aoEnviar(evento: FormEvent) {
     evento.preventDefault();
     setErro(null);
     setCarregando(true);
     try {
-      await criarLimite({
+      const req = {
         valorLimite: Number(valor),
-        mesReferencia: `${mes}-01`, // "YYYY-MM" -> "YYYY-MM-01"
         categoriaId: Number(categoriaId),
-      });
-      setCategoriaId("");
-      setValor("");
-      setMes(mesPadrao);
+      };
+      if (editando) {
+        await atualizarLimite(limite.id, req);
+      } else {
+        await criarLimite(req);
+      }
       onCriado();
     } catch (e) {
       setErro(mensagemDeErro(e));
@@ -53,8 +63,12 @@ export function NovoLimiteModal({
   }
 
   return (
-    <Modal titulo="Novo limite" aberto={aberto} onClose={onClose}>
-      {semCategorias ? (
+    <Modal
+      titulo={editando ? "Editar limite" : "Novo limite"}
+      aberto={aberto}
+      onClose={onClose}
+    >
+      {semCategorias && !editando ? (
         // Sem categoria não dá para definir um teto (categoriaId é obrigatório).
         <div className="space-y-4">
           <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
@@ -87,10 +101,11 @@ export function NovoLimiteModal({
             <select
               id="limite-categoria"
               required
-              autoFocus
+              autoFocus={!editando}
+              disabled={editando} // categoria não muda na edição
               value={categoriaId}
               onChange={(e) => setCategoriaId(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
             >
               <option value="" disabled>
                 Selecione...
@@ -103,43 +118,24 @@ export function NovoLimiteModal({
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label
-                htmlFor="limite-valor"
-                className="text-sm font-medium text-slate-700"
-              >
-                Limite (R$)
-              </label>
-              <input
-                id="limite-valor"
-                type="number"
-                step="0.01"
-                min="0.01"
-                required
-                value={valor}
-                onChange={(e) => setValor(e.target.value)}
-                placeholder="0,00"
-                className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label
-                htmlFor="limite-mes"
-                className="text-sm font-medium text-slate-700"
-              >
-                Mês
-              </label>
-              <input
-                id="limite-mes"
-                type="month"
-                required
-                value={mes}
-                onChange={(e) => setMes(e.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+          <div className="space-y-1">
+            <label
+              htmlFor="limite-valor"
+              className="text-sm font-medium text-slate-700"
+            >
+              Limite (R$)
+            </label>
+            <input
+              id="limite-valor"
+              type="number"
+              step="0.01"
+              min="0.01"
+              required
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              placeholder="0,00"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

@@ -75,18 +75,16 @@ export interface ObjetivoRequest {
   dataAlvo: string; // "YYYY-MM-DD"
 }
 
-// -> LimiteCategoriaResponse: categoria chega ANINHADA (como em Despesa).
+// -> LimiteCategoriaResponse: teto FIXO por categoria (não tem mês).
 export interface LimiteCategoria {
   id: number;
   valorLimite: number;
-  mesReferencia: string; // "YYYY-MM-DD" (1º dia do mês)
-  categoria: Categoria;
+  categoria: Categoria; // ANINHADA (como em Despesa)
 }
 
 // -> LimiteCategoriaRequest: aqui mandamos só o categoriaId.
 export interface LimiteCategoriaRequest {
   valorLimite: number;
-  mesReferencia: string; // "YYYY-MM-DD"
   categoriaId: number;
 }
 

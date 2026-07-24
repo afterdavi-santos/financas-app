@@ -1,5 +1,6 @@
 package com.financas.app.service;
 
+import com.financas.app.exception.LimiteJaExisteException;
 import com.financas.app.exception.RecursoNaoEncontradoException;
 import com.financas.app.model.Categoria;
 import com.financas.app.model.LimiteCategoria;
@@ -67,7 +68,6 @@ class LimiteCategoriaServiceTest {
         LimiteCategoria limite = new LimiteCategoria();
         limite.setId(limiteId);
         limite.setValorLimite(valorLimite);
-        limite.setMesReferencia(JULHO);
         limite.setUsuario(usuarioComId(usuarioId));
         limite.setCategoria(categoriaDoUsuario(categoriaId, usuarioId));
         return limite;
@@ -77,9 +77,9 @@ class LimiteCategoriaServiceTest {
     void deveCriarLimiteParaCategoriaDoUsuario() {
         LimiteCategoria novo = new LimiteCategoria();
         novo.setValorLimite(new BigDecimal("500"));
-        novo.setMesReferencia(JULHO);
         novo.setCategoria(categoriaDoUsuario(5L, 1L));
 
+        when(limiteCategoriaRepository.findByUsuarioIdAndCategoriaId(1L, 5L)).thenReturn(Optional.empty());
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioComId(1L)));
         when(categoriaRepository.findById(5L)).thenReturn(Optional.of(categoriaDoUsuario(5L, 1L)));
         when(limiteCategoriaRepository.save(any(LimiteCategoria.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -88,6 +88,21 @@ class LimiteCategoriaServiceTest {
 
         assertThat(salvo.getUsuario().getId()).isEqualTo(1L);
         assertThat(salvo.getCategoria().getId()).isEqualTo(5L);
+    }
+
+    @Test
+    void deveFalharAoCriarLimiteDuplicadoNaCategoria() {
+        LimiteCategoria novo = new LimiteCategoria();
+        novo.setValorLimite(new BigDecimal("500"));
+        novo.setCategoria(categoriaDoUsuario(5L, 1L));
+
+        when(limiteCategoriaRepository.findByUsuarioIdAndCategoriaId(1L, 5L))
+                .thenReturn(Optional.of(limiteComId(9L, 1L, 5L, new BigDecimal("300"))));
+
+        assertThatThrownBy(() -> limiteCategoriaService.criar(1L, novo))
+                .isInstanceOf(LimiteJaExisteException.class);
+
+        verify(limiteCategoriaRepository, never()).save(any());
     }
 
     @Test
@@ -105,11 +120,11 @@ class LimiteCategoriaServiceTest {
     }
 
     @Test
-    void deveListarLimitesPorMes() {
-        when(limiteCategoriaRepository.findByUsuarioIdAndMesReferencia(1L, JULHO))
+    void deveListarLimites() {
+        when(limiteCategoriaRepository.findByUsuarioId(1L))
                 .thenReturn(List.of(limiteComId(1L, 1L, 5L, new BigDecimal("500"))));
 
-        List<LimiteCategoria> limites = limiteCategoriaService.listarPorMes(1L, JULHO);
+        List<LimiteCategoria> limites = limiteCategoriaService.listar(1L);
 
         assertThat(limites).hasSize(1);
     }
@@ -119,7 +134,6 @@ class LimiteCategoriaServiceTest {
         LimiteCategoria existente = limiteComId(1L, 1L, 5L, new BigDecimal("500"));
         LimiteCategoria dadosAtualizados = new LimiteCategoria();
         dadosAtualizados.setValorLimite(new BigDecimal("700"));
-        dadosAtualizados.setMesReferencia(JULHO);
 
         when(limiteCategoriaRepository.findById(1L)).thenReturn(Optional.of(existente));
         when(limiteCategoriaRepository.save(any(LimiteCategoria.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -153,7 +167,7 @@ class LimiteCategoriaServiceTest {
     @Test
     void deveVerificarLimiteNaoEstourado() {
         LimiteCategoria limite = limiteComId(1L, 1L, 5L, new BigDecimal("500"));
-        when(limiteCategoriaRepository.findByUsuarioIdAndCategoriaIdAndMesReferencia(1L, 5L, JULHO))
+        when(limiteCategoriaRepository.findByUsuarioIdAndCategoriaId(1L, 5L))
                 .thenReturn(Optional.of(limite));
         when(despesaService.calcularTotalPorCategoriaEPeriodo(1L, 5L, JULHO, JULHO.withDayOfMonth(31)))
                 .thenReturn(new BigDecimal("300"));
@@ -167,7 +181,7 @@ class LimiteCategoriaServiceTest {
     @Test
     void deveVerificarLimiteEstourado() {
         LimiteCategoria limite = limiteComId(1L, 1L, 5L, new BigDecimal("500"));
-        when(limiteCategoriaRepository.findByUsuarioIdAndCategoriaIdAndMesReferencia(1L, 5L, JULHO))
+        when(limiteCategoriaRepository.findByUsuarioIdAndCategoriaId(1L, 5L))
                 .thenReturn(Optional.of(limite));
         when(despesaService.calcularTotalPorCategoriaEPeriodo(1L, 5L, JULHO, JULHO.withDayOfMonth(31)))
                 .thenReturn(new BigDecimal("600"));
@@ -179,7 +193,7 @@ class LimiteCategoriaServiceTest {
 
     @Test
     void deveFalharAoVerificarLimiteInexistente() {
-        when(limiteCategoriaRepository.findByUsuarioIdAndCategoriaIdAndMesReferencia(1L, 5L, JULHO))
+        when(limiteCategoriaRepository.findByUsuarioIdAndCategoriaId(1L, 5L))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> limiteCategoriaService.verificarLimite(1L, 5L, JULHO))

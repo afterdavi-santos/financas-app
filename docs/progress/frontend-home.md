@@ -184,3 +184,86 @@ Nenhuma mudança de backend foi necessária (todos os endpoints já existiam).
 ### MVP do menu concluído. Próximos passos (definidos pelo usuário)
 O usuário vai agora fazer **mudanças visuais** e **regras de negócio** que façam
 mais sentido pra ele — este é o ponto de partida dessa próxima fase.
+
+## Parte 3 — Regras de negócio e insights (CONCLUÍDA em 2026-07-24)
+
+Fase de "mudanças que fazem sentido pro usuário". Quase tudo é **derivado no
+frontend** a partir dos endpoints que já existiam; a única mudança de backend foi
+tornar o limite **fixo por categoria** (ver abaixo). `npm run build`/`lint` limpos
+(só o aviso pré-existente do `AuthContext`); 88 testes do backend passando.
+
+### Despesas — tela de análise (`pages/DespesasPage.tsx`)
+Título passou de "Despesas do mês" → **"Despesas"** e ganhou **seletor de mês**
+(`<input type="month">`, padrão da `LimitesPage`). A página busca as despesas do
+mês em foco **e do mês anterior** (para comparar) e mostra:
+- **2 StatCards clicáveis**: total de despesas **Fixas** e **Extraordinárias** →
+  clique abre um popup com o detalhamento agrupado por categoria.
+- **Top 5 categorias** (só **extraordinárias**), cada linha clicável → mesmo popup.
+- **⚠️ Ponto de atenção** (maior alta) e **🎉 Parabéns** (maior baixa) **vs. mês
+  anterior**, comparando **só despesas extraordinárias**, exibindo **R$ e %**
+  (categoria sem gasto no mês anterior aparece como "nova").
+- Lista completa + excluir (comportamento antigo, mantido).
+- Novos arquivos: `utils/despesasResumo.ts` (funções puras: `somaPorTipo`,
+  `totalPorCategoria`, `topCategorias`, `variacaoCategorias`, `maiorAlta`,
+  `maiorBaixa`) e `components/DetalheDespesasModal.tsx` (popup reutilizado nos 3
+  cliques). `utils/datas.ts` ganhou helpers de mês parametrizado
+  (`mesAtualYYYYMM`, `primeiroDiaDoMes`, `ultimoDiaDoMes`, `mesAnteriorYYYYMM`).
+- `StatCard` ganhou prop opcional `onClick` (vira `<button>`); Home inalterada.
+- `NovaDespesaModal` recebe `dataPadrao` para **lançar direto no mês em foco**
+  (hoje se for o mês atual; dia 1 caso contrário).
+
+### Objetivos — termômetro + "como chegar à meta" (`pages/ObjetivosPage.tsx`)
+- **Termômetro em degradê vermelho→verde**: barra com gradiente cobrindo toda a
+  largura + uma "tampa" cinza à direita revelando só até o **progresso**
+  (`valorAtual/valorAlvo`).
+- Bloco **"Como chegar à meta"** (cálculo em `utils/objetivos.ts`, função pura
+  `planoObjetivo`, recalculada a cada render → dinâmica): `valorFaltante /
+  mesesRestantes` = **aporte mensal**, e o **% da renda fixa** que isso representa
+  (renda fixa = soma das rendas `tipo FIXA` do mês atual, buscadas via
+  `listarRendas`). Trata: meta atingida, sem renda fixa (orienta cadastrar),
+  `% > 100` (destaque + aviso) e prazo vencido.
+
+### Edição de Objetivos e Limites
+O backend já tinha `PUT` para os dois. Frontend: botão **Editar** nas páginas e os
+modais `NovoObjetivoModal`/`NovoLimiteModal` viraram criação **e** edição (prefill +
+`useEffect` de sincronização ao abrir). No limite, na edição a **categoria fica
+travada** (o backend só atualiza o valor).
+
+### Home — lembrete de mês, simular e aviso de estouro (`pages/HomePage.tsx`)
+- **Lembrete de virada de mês**: banner "O mês virou! Deseja redefinir seus limites
+  de despesas?" com "Sim, redefinir" (`navigate("/limites")`) e "Agora não".
+  Mostrado **uma vez por mês** — controlado por `localStorage`
+  (`financas.lembreteLimites` = último mês reconhecido). Aparece no início do mês e
+  some após qualquer clique, até o mês seguinte.
+- **Botão "Simular despesa"** → `components/SimularDespesaModal.tsx`: sem gravar
+  nada, informa se um valor hipotético numa categoria **estoura o limite** (e por
+  quanto) ou, se não, **quanto ainda sobra em R$ e %**. Categoria sem limite →
+  avisa que não há teto.
+- **Aviso ao lançar despesa** (`NovaDespesaModal`): ao escolher categoria + valor,
+  busca o status do limite e mostra em tempo real, **vermelho** se vai estourar ou
+  **verde** se fica dentro (não bloqueia salvar). Só aparece se a categoria tiver
+  limite.
+- Helper novo na API: `statusLimiteOuNulo` — o backend responde **404** quando a
+  categoria não tem limite; esse wrapper devolve `null` nesse caso (ausência de
+  limite não é erro), usado no aviso e na simulação.
+
+### MUDANÇA DE BACKEND — limite fixo por categoria
+Decisão do usuário: o limite deixou de ser por mês e virou **informação fixa/atual
+por categoria**, editável a qualquer momento. Implicações:
+- `LimiteCategoria` **sem `mesReferencia`**; repo `findByUsuarioId` /
+  `findByUsuarioIdAndCategoriaId`; DTOs (`Request`/`Response`) sem o mês.
+- `criar` recusa 2º limite na mesma categoria → nova `LimiteJaExisteException`
+  (409). `verificarLimite` acha por categoria mas avalia o gasto **no mês pedido**
+  (o front manda o mês atual).
+- `GET /api/limites-categoria` **sem parâmetro** (lista todos).
+- Frontend: `LimitesPage` **sem seletor de mês**; no "+ Novo limite" só aparecem
+  categorias **sem limite ainda**; campo de mês removido do `NovoLimiteModal` e do
+  `SimularDespesaModal`.
+- **Dívida de banco (dev)**: `ddl-auto=update` não dropa colunas, então
+  `limite_categoria.mes_referencia` continua existindo (órfã, nullable — inofensiva).
+  Limpeza opcional: `ALTER TABLE limite_categoria DROP COLUMN mes_referencia;` (e
+  deduplicar limites antigos por categoria, se houver).
+
+### Verificação
+`npm run build` + `npm run lint` limpos; `mvnw test` = **88 verdes**. Falta a
+verificação ponta a ponta no navegador (o usuário costuma testar ele mesmo).
