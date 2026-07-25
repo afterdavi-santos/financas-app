@@ -8,9 +8,17 @@ interface ModalProps {
   aberto: boolean;
   onClose: () => void;
   children: ReactNode;
+  // Largura máxima (classe Tailwind). Default estreito; telas com gráfico usam mais.
+  largura?: string;
 }
 
-export function Modal({ titulo, aberto, onClose, children }: ModalProps) {
+export function Modal({
+  titulo,
+  aberto,
+  onClose,
+  children,
+  largura = "max-w-md",
+}: ModalProps) {
   // useEffect: liga um "efeito colateral" ao ciclo de vida do componente.
   // Aqui: enquanto o modal está aberto, ouvimos a tecla Esc no documento.
   // O return é a "limpeza" (remove o listener quando fecha/desmonta).
@@ -33,7 +41,7 @@ export function Modal({ titulo, aberto, onClose, children }: ModalProps) {
     >
       {/* stopPropagation: clique DENTRO do card não borbulha até o backdrop. */}
       <div
-        className="w-full max-w-md rounded-xl bg-white shadow-xl"
+        className={`max-h-[90vh] w-full ${largura} overflow-y-auto rounded-xl bg-white shadow-xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">

@@ -15,31 +15,27 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+// Cada aporte é um depósito individual feito num objetivo (antes eram apenas
+// somados em Objetivo.valorAtual). Guardar cada um permite listar a linha do
+// tempo e editar/remover um aporte específico.
 @Entity
-@Table(name = "objetivo")
+@Table(name = "aporte")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class Objetivo {
+public class Aporte {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String descricao;
+    private BigDecimal valor;
 
-    // Mini descrição opcional: um incentivo/motivação para lembrar por que a meta importa.
-    private String incentivo;
-
-    private BigDecimal valorAlvo;
-
-    private BigDecimal valorAtual;
-
-    private LocalDate dataAlvo;
+    private LocalDate data;
 
     @ManyToOne
-    @JoinColumn(name = "usuario_id", nullable = false)
-    private Usuario usuario;
+    @JoinColumn(name = "objetivo_id", nullable = false)
+    private Objetivo objetivo;
 
 }

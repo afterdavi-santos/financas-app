@@ -22,6 +22,15 @@ export async function criarRenda(req: RendaRequest): Promise<Renda> {
   return data;
 }
 
+// PUT /api/rendas/{id} -> atualiza descrição/valor/mês/tipo da renda.
+export async function atualizarRenda(
+  id: number,
+  req: RendaRequest,
+): Promise<Renda> {
+  const { data } = await api.put<Renda>(`/rendas/${id}`, req);
+  return data;
+}
+
 // DELETE /api/rendas/{id} -> 204 (sem corpo).
 export async function excluirRenda(id: number): Promise<void> {
   await api.delete(`/rendas/${id}`);

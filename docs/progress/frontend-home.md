@@ -267,3 +267,224 @@ por categoria**, editável a qualquer momento. Implicações:
 ### Verificação
 `npm run build` + `npm run lint` limpos; `mvnw test` = **88 verdes**. Falta a
 verificação ponta a ponta no navegador (o usuário costuma testar ele mesmo).
+
+## Parte 4 — Sessão de login + histórico de aportes + incentivo (CONSTRUÍDA 2026-07-24)
+
+Três pedidos do usuário: (1) resolver o problema do tempo limite de sessão;
+(2) poder editar/remover aportes do objetivo, com um gráfico de linha do tempo;
+(3) um campo de "incentivo" (mini descrição) no objetivo.
+
+### Sessão de login (bug: app travava ao expirar)
+Antes, `isAuthenticated = token !== null` — não checava expiração e não havia
+tratamento de 401, então a sessão vencida deixava o app dando erro sem deslogar.
+- Backend: `jwt.expiration-ms` de 24h → **2h** (7.200.000). Fácil de reverter.
+- `utils/jwt.ts` novo: `tokenExpirado(token)` decodifica o payload (base64url) e
+  compara `exp` com agora. Não valida assinatura (isso é do backend), só o prazo.
+- `AuthContext`: no init, descarta o token do localStorage se já expirou → cai
+  no /login em vez de sessão morta (cobre "voltei depois de 2h e recarreguei").
+- `api/client.ts`: **interceptor de response**. Em 401 (fora de `/auth/*`), limpa
+  o token e `window.location.assign("/login?expirada=1")` — cobre a sessão que
+  vence com o app aberto. Ignora 401 de login/registro (é credencial inválida).
+- `LoginPage`: lê `?expirada=1` (`useSearchParams`) e mostra aviso âmbar
+  "Sua sessão expirou".
+
+### Aportes viram registros individuais (MUDANÇA DE BACKEND)
+Antes `aportar()` só somava em `Objetivo.valorAtual`, sem histórico. Agora:
+- Nova entidade **`Aporte`** (id, valor, data, `@ManyToOne Objetivo`), tabela
+  `aporte`, `AporteRepository.findByObjetivoIdOrderByDataAscIdAsc`.
+- `AporteRequest` ganhou `data` (opcional → serviço usa hoje se null); novo
+  `AporteResponse (id, valor, data)`.
+- `ObjetivoService`: `aportar(usuarioId, objetivoId, valor, data)` cria o Aporte e
+  ajusta `valorAtual` **por delta** (`+= valor`). Novos: `listarAportes`,
+  `editarAporte` (delta = novoValor − antigo), `removerAporte` (`-= valor`).
+  Delta em vez de recomputar do zero **preserva valorAtual legado** de objetivos
+  que acumularam antes dos aportes existirem.
+- `ObjetivoController`: `GET /{id}/aportes`, `PUT /{id}/aportes/{aporteId}`,
+  `DELETE /{id}/aportes/{aporteId}`; `POST /{id}/aportar` mantido (agora passa a
+  data). Checagem de posse: aporte tem que pertencer ao objetivo do usuário.
+- Testes: `ObjetivoServiceTest`/`ObjetivoControllerTest` atualizados (construtor
+  do service mudou; assinatura do aportar; novos casos). **Backend agora = 22
+  testes nesses dois arquivos, todos verdes** (suíte total sobe de 88).
+- **Dívida de dados (dev)**: objetivos com `valorAtual` legado NÃO têm registros
+  de Aporte — o valor total é preservado, mas a linha do tempo só mostra os
+  aportes novos. Para testar limpo, criar objetivo do zero.
+
+### Frontend dos aportes
+- `types/financas.ts`: `Aporte`, `AporteRequest`; `Objetivo`/`ObjetivoRequest`
+  ganharam `incentivo?: string | null`.
+- `api/objetivos.ts`: `aportarObjetivo(id, req)` (assinatura mudou p/ objeto com
+  valor+data), `listarAportes`, `editarAporte`, `removerAporte`.
+- `AportarModal`: agora tem campo **data** (default hoje) e reseta ao abrir.
+- **`LinhaTempoAportesModal.tsx`** (novo): abre por objetivo (popup, sem trocar de
+  página). Gráfico **Recharts `LineChart`** do valor **acumulado** por data +
+  lista de aportes com **edição inline** (data+valor) e excluir. `onAlterado`
+  refaz o fetch da página (valorAtual muda). `Modal` ganhou prop opcional
+  `largura` (default `max-w-md`; aqui usa `max-w-2xl`) + scroll interno.
+- `ObjetivosPage`: mostra o incentivo (itálico, índigo) sob a descrição; botões
+  "Aportar" (azul) + "Linha do tempo" (cinza) lado a lado; renderiza o novo modal.
+
+### Incentivo (mini descrição)
+- Backend: campo `incentivo` (String, nullable) em `Objetivo` + `ObjetivoRequest`
+  (sem validação, opcional) + `ObjetivoResponse`; `atualizar` seta o incentivo.
+  `ddl-auto=update` cria a coluna sozinho.
+- `NovoObjetivoModal`: `<textarea>` opcional "Incentivo" (prefill na edição;
+  envia `null` quando vazio).
+
+### Verificação
+`mvnw test -Dtest=ObjetivoServiceTest,ObjetivoControllerTest` = **22 verdes**.
+`npm run build` limpo (tsc + vite, 678 módulos; aviso de chunk do Recharts
+esperado). `npm run lint` só com o aviso pré-existente do `AuthContext`.
+**Falta a verificação ponta a ponta no navegador** e rodar a suíte de backend
+completa (só rodei os 2 arquivos de Objetivo).
+
+## Parte 5 — Rendas (ajustes) + Investimento CDB (CONSTRUÍDA e VERIFICADA em 2026-07-25)
+
+Sessão longa, com bastante iteração no desenho do CDB (o usuário foi corrigindo o
+rumo conforme via funcionando). O resultado final está descrito primeiro; as
+decisões que foram **revertidas no caminho** ficam marcadas como tal, porque
+explicam por que o código tem a forma que tem.
+
+### Rendas — ajustes pequenos
+- Rótulo `FREELA` → **"Renda variável"** (só o texto exibido; enum do backend
+  continua `FREELA`, sem migração).
+- **Editar renda** no frontend (`NovaRendaModal` virou criação **e** edição,
+  mesmo padrão do `NovoObjetivoModal`) — o backend já tinha `PUT`, só faltava usar.
+- `RendasPage` agora mostra **3 seções separadas por tipo** (Fixa / Renda
+  variável / Retorno de investimentos) em vez de uma lista única.
+- **`RETORNO_INVESTIMENTOS` saiu do `<select>`** de "Nova renda" — não dá mais
+  pra criar esse tipo manualmente, só existe via resgate de um Investimento CDB
+  (ver abaixo). A `<option>` só reaparece (escondida) se o registro **editado**
+  já for desse tipo, pra não trocar o tipo dele silenciosamente ao salvar.
+
+### Investimento CDB — desenho final
+
+**Decisão do usuário: fica como aba/seção própria na Home ("Investimento CDB"),
+separada de Renda.** Só vira um lançamento de Renda (e só soma no total do mês)
+**quando é resgatado** — enquanto ativo, não conta como renda de nenhum mês.
+
+*(Tentativa inicial, REVERTIDA: os campos de CDB (`investimentoCdb`,
+`percentualCdi`, `dataAplicacao`, `dataResgate`) foram colocados dentro da
+própria `Renda`, com `NovaRendaModal` ganhando um checkbox "É um CDB?". O
+usuário decidiu que fazia mais sentido separado — todo esse código foi
+removido de `Renda`/`RendaRequest`/`RendaResponse`/`RendaService`/
+`RendaController` e reconstruído como entidade própria.)*
+
+#### CDI real via Banco Central (mantido desde a 1ª tentativa)
+- **API pública do BCB** (SGS, série 12 = "Taxa de juros - CDI", % ao dia),
+  sem chave de acesso: `https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados`.
+- `BcbCdiClient` — chama a API via `RestClient`. **Gotcha**: quando não há
+  valor publicado no período pedido (ex.: consultar "hoje" antes da publicação
+  diária do BCB, que sai só no fim do dia), o BCB devolve **HTTP 404** com um
+  corpo de erro em vez de array vazio — sem tratar isso, a exceção não
+  capturada acabava se manifestando pro front como uma **falsa "sessão
+  expirada"** (401), porque esse projeto devolve 401 pra qualquer rota
+  `/api/**` sem handler correspondente (achado depurando com o usuário — ver
+  "Incidentes de depuração" abaixo). Corrigido: `catch (RestClientException)`
+  → devolve lista vazia + `log.warn`.
+- `CdiDiario` (tabela `cdi_diario`, cache local) + `CdiService`: `garantirCache`
+  só busca no BCB o trecho que falta (cabeça/cauda do intervalo já cacheado).
+  Como o BCB só publica dias úteis, **as datas da tabela já são o calendário
+  de dias úteis** — não precisa de lista de feriados.
+- **Otimização de performance** (pedida pelo usuário, resposta "meio lenta"):
+  `CdiService` guarda em memória (`Map<LocalDate, Instant>`, cooldown de 20 min)
+  quando uma busca não trouxe dado novo — evita bater no BCB de novo a cada
+  requisição enquanto "hoje" ainda não foi publicado (era a causa da lentidão:
+  toda consulta de posição tentava buscar "hoje" e falhava de novo).
+- `CdiController` — `GET /api/cdi/atual`: taxa diária mais recente + anualizada
+  aproximada (`(1+diária)^252 - 1`), usado pra mostrar "CDI atual" ao cadastrar.
+
+#### Modelo de dados: `InvestimentoCdb` é um CONTAINER de `AporteCdb` (lotes)
+Passou por uma correção de bug importante: a versão inicial guardava
+`valorAplicado`/`dataAplicacao` direto no `InvestimentoCdb`, e "investir mais"
+somava o valor atual (já rendido) como se fosse principal novo e **reiniciava**
+a `dataAplicacao` — isso **apagava o rendimento acumulado** (o usuário reportou:
+"zera como se não tivesse rendido nada" e "nada é descontado no resgate").
+Correção: cada aporte (o inicial + cada "investir mais") virou um **lote**
+próprio (`AporteCdb`: valor + data), com seu **próprio relógio** de
+rendimento/dias (IOF/IR). `InvestimentoCdb` guarda só `descricao`,
+`percentualCdi` (comum a todos os lotes) e `dataResgate`. O front só vê a
+**soma** dos lotes (`InvestimentoCdbResponse.valorAplicado` = soma;
+`dataAplicacao` = data do lote mais antigo).
+- `AporteCdbRepository.findByInvestimentoIdOrderByDataAplicacaoAscIdAsc` — ordem
+  **FIFO**, usada pra consumir lotes num resgate parcial (o mais antigo primeiro).
+- `investirMais()` só cria um `AporteCdb` novo — **não toca** nos lotes existentes.
+- **Ordenação por inserção**: `InvestimentoCdbRepository.findByUsuarioIdOrderByIdAsc`
+  (o usuário reclamou que a lista parecia ordenada por valor; sem `ORDER BY`
+  explícito o banco não garante nenhuma ordem).
+
+#### Resgate: usuário recebe EXATAMENTE o que pede ("gross-up")
+Decisão do usuário, confirmando como funciona de verdade: você pede pra
+resgatar R$X e **recebe R$X** — quem "paga" o IOF/IR é o saldo que **fica**
+investido, não o valor entregue. Isso é o oposto de "informar o valor bruto a
+sacar e receber menos".
+- `ImpostosCdb` (util puro): tabela de **IOF regressivo** (96% no dia 1 → 0%
+  a partir do dia 30, `Decreto 6.306/2007`) e **IR regressivo** (22,5% / 20% /
+  17,5% / 15%, `Lei 11.033/2004`).
+- Fórmula de valorização: `valorAtual = valorAplicado * fatorCdiAcumulado^(%CDI/100)`.
+- **Gross-up**: dado o líquido desejado, resolve `valorBruto = valorLíquido /
+  (1 − taxaEfetiva)`, onde `taxaEfetiva` combina IOF+IR sobre a fração de
+  rendimento embutida no saque. Implementado com FIFO entre lotes: consome o
+  lote mais antigo por inteiro se o líquido pedido "cabe" nele; senão faz o
+  gross-up só dentro do **último** lote tocado (parcial), preservando os
+  seguintes intactos.
+- `InvestimentoCdbService.processarResgate(...)` roda **duas vezes** por
+  resgate real: 1ª com `persistir=false` (valida e calcula, pode lançar
+  `OperacaoInvalidaException` se não há saldo suficiente, sem mutar nada), 2ª
+  com `persistir=true` (efetiva). Evita deixar lotes parcialmente mutados se o
+  resgate falhar no meio.
+- Endpoints: `POST /{id}/simular-resgate` e `/resgatar` (corpo `{valor}` =
+  líquido desejado) + `/simular-resgate-total` e `/resgatar-total` (sem corpo,
+  drena tudo — usado pelo botão "Resgatar tudo").
+- Resgate cria um lançamento de `Renda` (`tipo RETORNO_INVESTIMENTOS`,
+  `mesReferencia` = mês do resgate, `valor` = líquido) — é assim que o
+  investimento "vira renda" só quando resgatado.
+
+#### Frontend
+- `pages/HomePage.tsx` — nova seção "Investimento CDB" (entre as StatCards e
+  "Últimas despesas"): lista os ativos (`dataResgate == null`), busca a posição
+  de cada um em paralelo (`Promise.all`), botões **Investir mais**, **Resgatar**,
+  Editar, Excluir por linha.
+- `components/NovoInvestimentoCdbModal.tsx` — criação (descrição, valor, %CDI,
+  data, mostra CDI atual) e edição (só descrição + %CDI editáveis — valor/data
+  viram soma de lotes, então ficam **escondidos** no modo edição; continuam
+  sendo enviados por baixo, pré-preenchidos, porque o `InvestimentoCdbRequest`
+  ainda exige esses campos `@NotNull` — o backend simplesmente os ignora no PUT).
+- `components/InvestirMaisModal.tsx` — só um campo de valor.
+- `components/ResgatarCdbModal.tsx` — o mais retrabalhado da sessão:
+  - Sem botão "Calcular" separado. **"Resgatar"** e **"Resgatar tudo"** cada um
+    funciona em **2 cliques**: 1º simula e o próprio botão vira "Confirmar
+    resgate"; 2º efetiva. Mudar o valor descarta uma simulação parcial pendente.
+  - Card de impostos enxuto (só o que o usuário pediu): **IOF sobre o
+    rendimento** (some da lista se não houver), **IR sobre o rendimento**,
+    **valor descontado com os impostos** (= líquido + impostos, ou seja, o
+    **bruto retirado da posição** — não a soma dos impostos sozinha, ajustado
+    depois de o usuário apontar a confusão) e **valor que você recebe**.
+- `api/investimentosCdb.ts`, `api/cdi.ts` — novos módulos.
+- `types/financas.ts` — `InvestimentoCdb`, `InvestimentoCdbRequest`,
+  `PosicaoCdb`, `SimulacaoResgate` (`valorBrutoRetirado`, não `valorSolicitado`
+  — renomeado quando o significado mudou pro gross-up), `CdiAtual`.
+
+### Incidentes de depuração (vale saber pra próxima vez)
+1. **"Sessão expirada" falsa ao marcar CDB**: o backend rodando (`spring-boot:run`)
+   estava desatualizado (de antes do código do CDI existir). Rota desconhecida
+   em `/api/**` → 401 (não 404) nesse projeto, e o interceptor de sessão (Parte 4)
+   tratou isso como sessão vencida. Lição: **reiniciar o backend** sempre que
+   endpoints novos forem adicionados — `mvnw spring-boot:run` não faz hot-reload.
+2. **BCB devolvendo 404 "Value(s) not found"**: coberto acima, na seção de CDI.
+3. **Maven com cache incremental enganoso**: `mvn test-compile` às vezes reportou
+   "Nothing to compile - all classes are up to date" mesmo com fontes de teste
+   alteradas. Usar `mvn clean test-compile`/`clean test` quando isso for suspeito.
+
+### Dívida de dados (dev)
+Investimentos CDB criados **antes** da migração pro modelo de lotes (`AporteCdb`)
+ficaram sem lote associado (a tabela é nova; `ddl-auto=update` não migra dados
+de colunas removidas). Aparecem com saldo zerado — é preciso recriá-los. Mesmo
+tipo de dívida já existia em `limite_categoria.mes_referencia` (Parte 3).
+
+### Verificação
+Suíte completa do backend: **137 testes verdes** (destaque:
+`investirMaisNaoDeveApagarORendimentoJaAcumuladoNoLotePrimeiro`, o teste do bug
+relatado, e um caso de resgate parcial cruzando 2 lotes via FIFO).
+`npm run build` limpo. Verificado ponta a ponta via `curl` a cada reinício do
+backend (criar investimento, investir mais, simular/confirmar resgate parcial e
+total) e depois confirmado pelo usuário no navegador real.

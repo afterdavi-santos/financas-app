@@ -2,6 +2,7 @@ package com.financas.app.web;
 
 import com.financas.app.exception.GlobalExceptionHandler;
 import com.financas.app.exception.RecursoNaoEncontradoException;
+import com.financas.app.model.Aporte;
 import com.financas.app.model.Objetivo;
 import com.financas.app.model.Usuario;
 import com.financas.app.security.JwtAuthenticationFilter;
@@ -30,6 +31,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -93,7 +95,7 @@ class ObjetivoControllerTest {
 
     @Test
     void deveAportarNoObjetivo() throws Exception {
-        when(objetivoService.aportar(1L, 40L, new BigDecimal("200.00")))
+        when(objetivoService.aportar(eq(1L), eq(40L), eq(new BigDecimal("200.00")), any()))
                 .thenReturn(objetivo(40L, new BigDecimal("200.00")));
 
         mockMvc.perform(post("/api/objetivos/40/aportar")
@@ -134,6 +136,50 @@ class ObjetivoControllerTest {
     void deveRecusarRequisicaoSemAutenticacao() throws Exception {
         mockMvc.perform(get("/api/objetivos"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void deveListarAportesDoObjetivo() throws Exception {
+        Aporte aporte = new Aporte();
+        aporte.setId(10L);
+        aporte.setValor(new BigDecimal("200.00"));
+        aporte.setData(LocalDate.of(2026, 7, 24));
+        when(objetivoService.listarAportes(1L, 40L)).thenReturn(List.of(aporte));
+
+        mockMvc.perform(get("/api/objetivos/40/aportes")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(10))
+                .andExpect(jsonPath("$[0].valor").value(200.00))
+                .andExpect(jsonPath("$[0].data").value("2026-07-24"));
+    }
+
+    @Test
+    void deveEditarAporte() throws Exception {
+        when(objetivoService.editarAporte(eq(1L), eq(40L), eq(10L), eq(new BigDecimal("350.00")), any()))
+                .thenReturn(objetivo(40L, new BigDecimal("350.00")));
+
+        mockMvc.perform(put("/api/objetivos/40/aportes/10")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"valor":350.00,"data":"2026-07-24"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valorAtual").value(350.00));
+    }
+
+    @Test
+    void deveRemoverAporte() throws Exception {
+        when(objetivoService.removerAporte(1L, 40L, 10L))
+                .thenReturn(objetivo(40L, BigDecimal.ZERO));
+
+        mockMvc.perform(delete("/api/objetivos/40/aportes/10")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valorAtual").value(0));
     }
 
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { NovoObjetivoModal } from "../components/NovoObjetivoModal";
 import { AportarModal } from "../components/AportarModal";
+import { LinhaTempoAportesModal } from "../components/LinhaTempoAportesModal";
 import { listarObjetivos, excluirObjetivo } from "../api/objetivos";
 import { listarRendas } from "../api/rendas";
 import { mensagemDeErro } from "../api/erros";
@@ -21,6 +22,8 @@ export function ObjetivosPage() {
   const [editando, setEditando] = useState<Objetivo | null>(null);
   // Objetivo selecionado para aportar (null = modal de aporte fechado).
   const [aportando, setAportando] = useState<Objetivo | null>(null);
+  // Objetivo cuja linha do tempo de aportes está aberta (null = fechada).
+  const [linhaTempo, setLinhaTempo] = useState<Objetivo | null>(null);
 
   function abrirNovo() {
     setEditando(null);
@@ -107,7 +110,12 @@ export function ObjetivosPage() {
                     <p className="font-semibold text-slate-800">
                       {obj.descricao}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    {obj.incentivo && (
+                      <p className="mt-0.5 text-xs italic text-indigo-600">
+                        “{obj.incentivo}”
+                      </p>
+                    )}
+                    <p className="mt-0.5 text-xs text-slate-500">
                       Meta: {dataBR(obj.dataAlvo)}
                     </p>
                   </div>
@@ -199,12 +207,20 @@ export function ObjetivosPage() {
                   )}
                 </div>
 
-                <button
-                  onClick={() => setAportando(obj)}
-                  className="mt-4 w-full rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
-                >
-                  Aportar
-                </button>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => setAportando(obj)}
+                    className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  >
+                    Aportar
+                  </button>
+                  <button
+                    onClick={() => setLinhaTempo(obj)}
+                    className="flex-1 rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                  >
+                    Linha do tempo
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -227,6 +243,11 @@ export function ObjetivosPage() {
           setAportando(null);
           carregar();
         }}
+      />
+      <LinhaTempoAportesModal
+        objetivo={linhaTempo}
+        onClose={() => setLinhaTempo(null)}
+        onAlterado={carregar}
       />
     </div>
   );

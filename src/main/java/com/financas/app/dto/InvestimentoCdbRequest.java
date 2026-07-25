@@ -7,10 +7,10 @@ import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-public record ObjetivoRequest(
+public record InvestimentoCdbRequest(
         @NotBlank String descricao,
-        String incentivo,
-        @NotNull @Positive BigDecimal valorAlvo,
-        @NotNull LocalDate dataAlvo
+        @NotNull @Positive BigDecimal valorAplicado,
+        @NotNull @Positive BigDecimal percentualCdi,
+        @NotNull LocalDate dataAplicacao
 ) {
 }

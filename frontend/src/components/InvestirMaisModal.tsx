@@ -1,43 +1,31 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { FormEvent } from "react";
 import { Modal } from "./Modal";
-import { aportarObjetivo } from "../api/objetivos";
+import { investirMaisCdb } from "../api/investimentosCdb";
 import { mensagemDeErro } from "../api/erros";
-import { hojeISO } from "../utils/datas";
-import type { Objetivo } from "../types/financas";
+import type { InvestimentoCdb } from "../types/financas";
 
-// Modal para "aportar" (adicionar dinheiro) num objetivo específico.
-// Recebe o objetivo-alvo; quando null, o modal fica fechado.
+// Modal para aportar mais dinheiro num investimento CDB já existente.
 interface Props {
-  objetivo: Objetivo | null;
+  investimento: InvestimentoCdb | null;
   onClose: () => void;
-  onAportado: () => void;
+  onInvestido: () => void;
 }
 
-export function AportarModal({ objetivo, onClose, onAportado }: Props) {
+export function InvestirMaisModal({ investimento, onClose, onInvestido }: Props) {
   const [valor, setValor] = useState("");
-  const [data, setData] = useState(hojeISO());
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
 
-  // Ao abrir num objetivo, reseta o formulário (data volta para hoje).
-  useEffect(() => {
-    if (objetivo) {
-      setValor("");
-      setData(hojeISO());
-      setErro(null);
-    }
-  }, [objetivo]);
-
   async function aoEnviar(evento: FormEvent) {
     evento.preventDefault();
-    if (!objetivo) return;
+    if (!investimento) return;
     setErro(null);
     setCarregando(true);
     try {
-      await aportarObjetivo(objetivo.id, { valor: Number(valor), data });
+      await investirMaisCdb(investimento.id, Number(valor));
       setValor("");
-      onAportado();
+      onInvestido();
     } catch (e) {
       setErro(mensagemDeErro(e));
     } finally {
@@ -47,8 +35,8 @@ export function AportarModal({ objetivo, onClose, onAportado }: Props) {
 
   return (
     <Modal
-      titulo={objetivo ? `Aportar em "${objetivo.descricao}"` : "Aportar"}
-      aberto={objetivo !== null}
+      titulo={investimento ? `Investir mais — ${investimento.descricao}` : "Investir mais"}
+      aberto={investimento !== null}
       onClose={onClose}
     >
       <form onSubmit={aoEnviar} className="space-y-4">
@@ -58,15 +46,20 @@ export function AportarModal({ objetivo, onClose, onAportado }: Props) {
           </p>
         )}
 
+        <p className="text-xs text-slate-500">
+          O valor extra passa a render junto com o saldo atual, a partir de
+          hoje.
+        </p>
+
         <div className="space-y-1">
           <label
-            htmlFor="aporte-valor"
+            htmlFor="investir-mais-valor"
             className="text-sm font-medium text-slate-700"
           >
-            Valor do aporte (R$)
+            Valor adicional (R$)
           </label>
           <input
-            id="aporte-valor"
+            id="investir-mais-valor"
             type="number"
             step="0.01"
             min="0.01"
@@ -75,23 +68,6 @@ export function AportarModal({ objetivo, onClose, onAportado }: Props) {
             value={valor}
             onChange={(e) => setValor(e.target.value)}
             placeholder="0,00"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label
-            htmlFor="aporte-data"
-            className="text-sm font-medium text-slate-700"
-          >
-            Data do aporte
-          </label>
-          <input
-            id="aporte-data"
-            type="date"
-            required
-            value={data}
-            onChange={(e) => setData(e.target.value)}
             className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -107,9 +83,9 @@ export function AportarModal({ objetivo, onClose, onAportado }: Props) {
           <button
             type="submit"
             disabled={carregando}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
           >
-            {carregando ? "Aportando..." : "Aportar"}
+            {carregando ? "Investindo..." : "Investir"}
           </button>
         </div>
       </form>

@@ -29,6 +29,12 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(HttpStatus.CONFLICT.value(), ex.getMessage()));
     }
 
+    @ExceptionHandler(OperacaoInvalidaException.class)
+    public ResponseEntity<ErrorResponse> tratarOperacaoInvalida(OperacaoInvalidaException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(HttpStatus.BAD_REQUEST.value(), ex.getMessage()));
+    }
+
     @ExceptionHandler(CredenciaisInvalidasException.class)
     public ResponseEntity<ErrorResponse> tratarCredenciaisInvalidas(CredenciaisInvalidasException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)

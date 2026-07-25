@@ -1,18 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Modal } from "./Modal";
-import { criarRenda } from "../api/rendas";
+import { criarRenda, atualizarRenda } from "../api/rendas";
 import { mensagemDeErro } from "../api/erros";
 import { primeiroDiaDoMesISO } from "../utils/datas";
-import type { TipoRenda } from "../types/financas";
+import type { Renda, TipoRenda } from "../types/financas";
 
-// Modal do form de nova renda: descricao, valor e mês de referência.
+// Modal do form de renda: descricao, valor e mês de referência.
 // O <input type="month"> devolve "YYYY-MM"; o backend espera "YYYY-MM-DD",
 // então completamos com "-01" (1º dia do mês) ao enviar.
+// `renda` (opcional) coloca o modal em modo EDIÇÃO — prefill + PUT em vez de POST.
 interface Props {
   aberto: boolean;
   onClose: () => void;
   onCriada: () => void;
+  renda?: Renda | null;
 }
 
 // "2026-07-01" -> "2026-07" (valor que o <input type="month"> entende).
@@ -20,7 +22,8 @@ function mesInicial(): string {
   return primeiroDiaDoMesISO().slice(0, 7);
 }
 
-export function NovaRendaModal({ aberto, onClose, onCriada }: Props) {
+export function NovaRendaModal({ aberto, onClose, onCriada, renda }: Props) {
+  const editando = !!renda;
   const [descricao, setDescricao] = useState("");
   const [valor, setValor] = useState("");
   const [mes, setMes] = useState(mesInicial()); // "YYYY-MM"
@@ -28,21 +31,32 @@ export function NovaRendaModal({ aberto, onClose, onCriada }: Props) {
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
 
+  // Ao abrir, sincroniza os campos: com renda -> prefill; sem -> limpa.
+  useEffect(() => {
+    if (!aberto) return;
+    setErro(null);
+    setDescricao(renda?.descricao ?? "");
+    setValor(renda ? String(renda.valor) : "");
+    setMes(renda ? renda.mesReferencia.slice(0, 7) : mesInicial());
+    setTipo(renda?.tipo ?? "FIXA");
+  }, [aberto, renda]);
+
   async function aoEnviar(evento: FormEvent) {
     evento.preventDefault();
     setErro(null);
     setCarregando(true);
     try {
-      await criarRenda({
+      const req = {
         descricao,
         valor: Number(valor),
         mesReferencia: `${mes}-01`, // "YYYY-MM" -> "YYYY-MM-01"
         tipo,
-      });
-      setDescricao("");
-      setValor("");
-      setMes(mesInicial());
-      setTipo("FIXA");
+      };
+      if (editando) {
+        await atualizarRenda(renda.id, req);
+      } else {
+        await criarRenda(req);
+      }
       onCriada();
     } catch (e) {
       setErro(mensagemDeErro(e));
@@ -52,7 +66,11 @@ export function NovaRendaModal({ aberto, onClose, onCriada }: Props) {
   }
 
   return (
-    <Modal titulo="Nova renda" aberto={aberto} onClose={onClose}>
+    <Modal
+      titulo={editando ? "Editar renda" : "Nova renda"}
+      aberto={aberto}
+      onClose={onClose}
+    >
       <form onSubmit={aoEnviar} className="space-y-4">
         {erro && (
           <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -132,10 +150,16 @@ export function NovaRendaModal({ aberto, onClose, onCriada }: Props) {
             className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="FIXA">Fixa</option>
-            <option value="FREELA">Freela</option>
-            <option value="RETORNO_INVESTIMENTOS">
-              Retorno de investimentos
-            </option>
+            <option value="FREELA">Renda variável</option>
+            {/* "Retorno de investimentos" não é mais criável aqui — só existe
+                via resgate de um Investimento CDB (aba Início). Mantemos a
+                option escondida só quando o registro editado já é desse tipo,
+                pra não trocar silenciosamente o tipo dele ao salvar. */}
+            {tipo === "RETORNO_INVESTIMENTOS" && (
+              <option value="RETORNO_INVESTIMENTOS">
+                Retorno de investimentos
+              </option>
+            )}
           </select>
         </div>
 

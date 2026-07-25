@@ -1,6 +1,7 @@
 import { createContext, useContext, useState } from "react";
 import type { ReactNode } from "react";
 import { TOKEN_KEY } from "../api/client";
+import { tokenExpirado } from "../utils/jwt";
 
 // O que fica disponível globalmente para qualquer componente do app.
 interface AuthContextType {
@@ -18,9 +19,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   // Estado inicializado a partir do localStorage:
   // se o usuário já logou antes, o token sobrevive a um reload da página.
-  const [token, setToken] = useState<string | null>(() =>
-    localStorage.getItem(TOKEN_KEY),
-  );
+  // MAS se o token já expirou (ex.: voltou depois de 2h), descartamos na hora —
+  // assim o usuário cai no /login em vez de entrar numa sessão morta.
+  const [token, setToken] = useState<string | null>(() => {
+    const salvo = localStorage.getItem(TOKEN_KEY);
+    if (tokenExpirado(salvo)) {
+      localStorage.removeItem(TOKEN_KEY);
+      return null;
+    }
+    return salvo;
+  });
 
   function login(novoToken: string) {
     localStorage.setItem(TOKEN_KEY, novoToken); // persiste no navegador

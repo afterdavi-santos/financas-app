@@ -8,7 +8,7 @@ export const rotuloTipoDespesa: Record<TipoDespesa, string> = {
 
 export const rotuloTipoRenda: Record<TipoRenda, string> = {
   FIXA: "Fixa",
-  FREELA: "Freela",
+  FREELA: "Renda variável",
   RETORNO_INVESTIMENTOS: "Retorno de investimentos",
 };
 

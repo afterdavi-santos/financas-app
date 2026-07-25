@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { login as loginApi } from "../api/auth";
 import { mensagemDeErro } from "../api/erros";
 import { useAuth } from "../context/AuthContext";
@@ -16,10 +16,14 @@ export function LoginPage() {
   const { login } = useAuth(); // guarda o token no contexto/localStorage
   const navigate = useNavigate(); // troca de rota sem recarregar a página
   const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   // Vindo de /registrar com sucesso? Mostra um aviso verde uma única vez.
   const recemRegistrado =
     (location.state as { registrado?: boolean } | null)?.registrado === true;
+
+  // Redirecionado por sessão expirada (interceptor de 401 em api/client.ts).
+  const sessaoExpirada = searchParams.get("expirada") === "1";
 
   async function aoEnviar(evento: FormEvent) {
     evento.preventDefault(); // impede o reload padrão do <form> do HTML
@@ -49,6 +53,12 @@ export function LoginPage() {
         {recemRegistrado && !erro && (
           <p className="bg-green-50 text-green-700 text-sm rounded-md px-3 py-2">
             Conta criada! Faça login para continuar.
+          </p>
+        )}
+
+        {sessaoExpirada && !erro && (
+          <p className="bg-amber-50 text-amber-700 text-sm rounded-md px-3 py-2">
+            Sua sessão expirou. Entre novamente para continuar.
           </p>
         )}
 

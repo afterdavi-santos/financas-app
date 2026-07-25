@@ -42,7 +42,7 @@ export interface Total {
   total: number;
 }
 
-// -> RendaResponse ({ id, descricao, valor, mesReferencia, tipo })
+// -> RendaResponse
 export interface Renda {
   id: number;
   descricao: string;
@@ -51,7 +51,7 @@ export interface Renda {
   tipo: TipoRenda;
 }
 
-// -> RendaRequest ({ descricao, valor, mesReferencia, tipo })
+// -> RendaRequest
 export interface RendaRequest {
   descricao: string;
   valor: number;
@@ -59,20 +59,87 @@ export interface RendaRequest {
   tipo: TipoRenda;
 }
 
-// -> ObjetivoResponse ({ id, descricao, valorAlvo, valorAtual, dataAlvo })
+// -> CdiAtualResponse: taxa CDI mais recente conhecida (Banco Central).
+export interface CdiAtual {
+  data: string; // "YYYY-MM-DD"
+  taxaDiariaPercentual: number;
+  taxaAnualizadaPercentual: number;
+}
+
+// -> InvestimentoCdbResponse: `valorAplicado` é o principal AINDA investido
+// (reduz a cada resgate parcial). `dataResgate` só é preenchida quando o
+// investimento é totalmente liquidado (aí some da lista de ativos).
+export interface InvestimentoCdb {
+  id: number;
+  descricao: string;
+  valorAplicado: number;
+  percentualCdi: number;
+  dataAplicacao: string; // "YYYY-MM-DD"
+  dataResgate: string | null;
+}
+
+// -> InvestimentoCdbRequest
+export interface InvestimentoCdbRequest {
+  descricao: string;
+  valorAplicado: number;
+  percentualCdi: number;
+  dataAplicacao: string; // "YYYY-MM-DD"
+}
+
+// -> PosicaoCdbResponse: quanto um investimento CDB ativo vale hoje.
+export interface PosicaoCdb {
+  valorAplicado: number;
+  valorAtual: number;
+  rendimentoBruto: number;
+  diasCorridos: number;
+  diasUteisRendidos: number;
+}
+
+// -> SimulacaoResgateResponse: `valorLiquido` é o que o usuário PEDIU pra
+// receber (ou, no resgate total, o máximo possível) — é o que efetivamente
+// cai na conta. `valorBrutoRetirado` é quanto sai de fato da posição pra
+// cobrir esse líquido + os impostos (sempre >= valorLiquido).
+export interface SimulacaoResgate {
+  valorAtual: number;
+  valorBrutoRetirado: number;
+  rendimentoProporcional: number;
+  diasCorridos: number;
+  percentualIof: number;
+  valorIof: number;
+  percentualIr: number;
+  valorIr: number;
+  valorLiquido: number;
+}
+
+// -> ObjetivoResponse ({ id, descricao, incentivo, valorAlvo, valorAtual, dataAlvo })
 export interface Objetivo {
   id: number;
   descricao: string;
+  incentivo?: string | null; // mini descrição/motivação (opcional)
   valorAlvo: number;
   valorAtual: number;
   dataAlvo: string; // "YYYY-MM-DD"
 }
 
-// -> ObjetivoRequest ({ descricao, valorAlvo, dataAlvo })
+// -> ObjetivoRequest ({ descricao, incentivo, valorAlvo, dataAlvo })
 export interface ObjetivoRequest {
   descricao: string;
+  incentivo?: string | null;
   valorAlvo: number;
   dataAlvo: string; // "YYYY-MM-DD"
+}
+
+// -> AporteResponse: um aporte individual (linha do tempo do objetivo).
+export interface Aporte {
+  id: number;
+  valor: number;
+  data: string; // "YYYY-MM-DD"
+}
+
+// -> AporteRequest ({ valor, data }); data é opcional (backend usa hoje se ausente).
+export interface AporteRequest {
+  valor: number;
+  data?: string; // "YYYY-MM-DD"
 }
 
 // -> LimiteCategoriaResponse: teto FIXO por categoria (não tem mês).

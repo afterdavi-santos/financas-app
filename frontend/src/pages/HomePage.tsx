@@ -5,14 +5,22 @@ import { NovaDespesaModal } from "../components/NovaDespesaModal";
 import { NovaCategoriaModal } from "../components/NovaCategoriaModal";
 import { NovaRendaModal } from "../components/NovaRendaModal";
 import { SimularDespesaModal } from "../components/SimularDespesaModal";
+import { NovoInvestimentoCdbModal } from "../components/NovoInvestimentoCdbModal";
+import { ResgatarCdbModal } from "../components/ResgatarCdbModal";
+import { InvestirMaisModal } from "../components/InvestirMaisModal";
 import { listarCategorias } from "../api/categorias";
 import { listarDespesas } from "../api/despesas";
 import { totalRenda } from "../api/rendas";
+import {
+  listarInvestimentosCdb,
+  posicaoInvestimentoCdb,
+  excluirInvestimentoCdb,
+} from "../api/investimentosCdb";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { rotuloTipoDespesa, dataBR } from "../utils/rotulos";
 import { mesAtualYYYYMM, primeiroDiaDoMesISO, ultimoDiaDoMesISO } from "../utils/datas";
-import type { Categoria, Despesa } from "../types/financas";
+import type { Categoria, Despesa, InvestimentoCdb, PosicaoCdb } from "../types/financas";
 
 // Guardamos no localStorage o último mês em que o usuário já viu o lembrete de
 // redefinir limites, para mostrá-lo uma vez por mês (ao entrar no mês novo).
@@ -25,11 +33,19 @@ export function HomePage() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
+  // Investimentos CDB: só os ATIVOS (dataResgate null) aparecem aqui.
+  const [investimentos, setInvestimentos] = useState<InvestimentoCdb[]>([]);
+  const [posicoesCdb, setPosicoesCdb] = useState<Record<number, PosicaoCdb>>({});
+
   // Controle de qual modal está aberto.
   const [modalDespesa, setModalDespesa] = useState(false);
   const [modalCategoria, setModalCategoria] = useState(false);
   const [modalRenda, setModalRenda] = useState(false);
   const [modalSimular, setModalSimular] = useState(false);
+  const [modalInvestimento, setModalInvestimento] = useState(false);
+  const [editandoInvestimento, setEditandoInvestimento] = useState<InvestimentoCdb | null>(null);
+  const [resgatando, setResgatando] = useState<InvestimentoCdb | null>(null);
+  const [investindoMaisEm, setInvestindoMaisEm] = useState<InvestimentoCdb | null>(null);
 
   const navigate = useNavigate();
 
@@ -45,22 +61,25 @@ export function HomePage() {
     setMostrarLembrete(false);
   }
 
-  // Busca tudo o que a home precisa: categorias, despesas do mês e renda do mês.
-  // Promise.all dispara as 3 chamadas em paralelo (mais rápido que em sequência).
+  // Busca tudo o que a home precisa: categorias, despesas do mês, renda do mês
+  // e investimentos CDB. Promise.all dispara em paralelo (mais rápido).
   async function carregar() {
     setErro(null);
     setCarregando(true);
     try {
       const inicio = primeiroDiaDoMesISO();
       const fim = ultimoDiaDoMesISO();
-      const [cats, desps, tot] = await Promise.all([
+      const [cats, desps, tot, invs] = await Promise.all([
         listarCategorias(),
         listarDespesas({ inicio, fim }),
         totalRenda(inicio), // mesReferencia = 1º dia do mês
+        listarInvestimentosCdb(),
       ]);
       setCategorias(cats);
       setDespesas(desps);
       setRenda(tot);
+      // Só os ativos aparecem na home (os encerrados já viraram Renda do mês do resgate).
+      setInvestimentos(invs.filter((i) => i.dataResgate === null));
     } catch (e) {
       setErro(mensagemDeErro(e));
     } finally {
@@ -72,6 +91,21 @@ export function HomePage() {
   useEffect(() => {
     carregar();
   }, []);
+
+  // Busca a posição (valor atual) de cada investimento ativo assim que a
+  // lista chega — separado do carregar() para não travar o resto da home
+  // esperando o cálculo de CDI.
+  useEffect(() => {
+    if (investimentos.length === 0) return;
+    Promise.all(
+      investimentos.map((i) => posicaoInvestimentoCdb(i.id).then((p) => [i.id, p] as const)),
+    )
+      .then((pares) => setPosicoesCdb(Object.fromEntries(pares)))
+      .catch(() => {
+        // Sem posição calculada ainda: os cards de investimento simplesmente
+        // mostram o valor aplicado até a próxima tentativa.
+      });
+  }, [investimentos]);
 
   // Derivados do estado (recalculados a cada render, sem estado extra):
   const totalDespesas = despesas.reduce((soma, d) => soma + d.valor, 0);
@@ -88,6 +122,26 @@ export function HomePage() {
     setModalCategoria(false);
     setModalRenda(false);
     carregar();
+  }
+
+  function abrirNovoInvestimento() {
+    setEditandoInvestimento(null);
+    setModalInvestimento(true);
+  }
+
+  function abrirEdicaoInvestimento(investimento: InvestimentoCdb) {
+    setEditandoInvestimento(investimento);
+    setModalInvestimento(true);
+  }
+
+  async function excluirInvestimento(investimento: InvestimentoCdb) {
+    if (!confirm(`Excluir o investimento "${investimento.descricao}"?`)) return;
+    try {
+      await excluirInvestimentoCdb(investimento.id);
+      carregar();
+    } catch (e) {
+      setErro(mensagemDeErro(e));
+    }
   }
 
   return (
@@ -173,6 +227,85 @@ export function HomePage() {
             />
           </div>
 
+          {/* Investimento CDB: só o que dá pra calcular automaticamente.
+              Só conta como renda no mês em que for resgatado. */}
+          <section className="rounded-xl bg-white p-5 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-800">
+                Investimento CDB
+              </h2>
+              <button
+                onClick={abrirNovoInvestimento}
+                className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+              >
+                + Novo investimento
+              </button>
+            </div>
+            {investimentos.length === 0 ? (
+              <p className="text-sm text-slate-500">
+                Nenhum investimento CDB ativo.
+              </p>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {investimentos.map((inv) => {
+                  const posicao = posicoesCdb[inv.id];
+                  return (
+                    <li key={inv.id} className="py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="font-medium text-slate-800">
+                            {inv.descricao}{" "}
+                            <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                              {inv.percentualCdi}% do CDI
+                            </span>
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            Aplicado em {dataBR(inv.dataAplicacao)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-semibold text-indigo-700">
+                            {formatarBRL(posicao ? posicao.valorAtual : inv.valorAplicado)}
+                          </span>
+                          <button
+                            onClick={() => setInvestindoMaisEm(inv)}
+                            className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                          >
+                            Investir mais
+                          </button>
+                          <button
+                            onClick={() => setResgatando(inv)}
+                            className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                          >
+                            Resgatar
+                          </button>
+                          <button
+                            onClick={() => abrirEdicaoInvestimento(inv)}
+                            className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => excluirInvestimento(inv)}
+                            className="text-sm font-medium text-red-600 hover:text-red-700"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+                      </div>
+                      {posicao && (
+                        <p className="mt-1 text-xs text-slate-500">
+                          Rendeu {formatarBRL(posicao.rendimentoBruto)} em{" "}
+                          {posicao.diasUteisRendidos} dias úteis
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
           {/* Últimas despesas */}
           <section className="rounded-xl bg-white p-5 shadow-sm">
             <h2 className="mb-3 text-lg font-semibold text-slate-800">
@@ -229,6 +362,31 @@ export function HomePage() {
         aberto={modalSimular}
         onClose={() => setModalSimular(false)}
         categorias={categorias}
+      />
+      <NovoInvestimentoCdbModal
+        aberto={modalInvestimento}
+        investimento={editandoInvestimento}
+        onClose={() => setModalInvestimento(false)}
+        onSalvo={() => {
+          setModalInvestimento(false);
+          carregar();
+        }}
+      />
+      <ResgatarCdbModal
+        investimento={resgatando}
+        onClose={() => setResgatando(null)}
+        onResgatado={() => {
+          setResgatando(null);
+          carregar();
+        }}
+      />
+      <InvestirMaisModal
+        investimento={investindoMaisEm}
+        onClose={() => setInvestindoMaisEm(null)}
+        onInvestido={() => {
+          setInvestindoMaisEm(null);
+          carregar();
+        }}
       />
     </div>
   );

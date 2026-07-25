@@ -1,5 +1,10 @@
 import { api } from "./client";
-import type { Objetivo, ObjetivoRequest } from "../types/financas";
+import type {
+  Aporte,
+  AporteRequest,
+  Objetivo,
+  ObjetivoRequest,
+} from "../types/financas";
 
 // GET /api/objetivos -> objetivos do usuário.
 export async function listarObjetivos(): Promise<Objetivo[]> {
@@ -22,14 +27,42 @@ export async function atualizarObjetivo(
   return data;
 }
 
-// POST /api/objetivos/{id}/aportar body {valor} -> objetivo com valorAtual somado.
+// POST /api/objetivos/{id}/aportar body {valor, data?} -> objetivo com valorAtual somado.
 export async function aportarObjetivo(
   id: number,
-  valor: number,
+  req: AporteRequest,
 ): Promise<Objetivo> {
-  const { data } = await api.post<Objetivo>(`/objetivos/${id}/aportar`, {
-    valor,
-  });
+  const { data } = await api.post<Objetivo>(`/objetivos/${id}/aportar`, req);
+  return data;
+}
+
+// GET /api/objetivos/{id}/aportes -> aportes em ordem cronológica (linha do tempo).
+export async function listarAportes(id: number): Promise<Aporte[]> {
+  const { data } = await api.get<Aporte[]>(`/objetivos/${id}/aportes`);
+  return data;
+}
+
+// PUT /api/objetivos/{id}/aportes/{aporteId} -> edita valor/data de um aporte.
+export async function editarAporte(
+  objetivoId: number,
+  aporteId: number,
+  req: AporteRequest,
+): Promise<Objetivo> {
+  const { data } = await api.put<Objetivo>(
+    `/objetivos/${objetivoId}/aportes/${aporteId}`,
+    req,
+  );
+  return data;
+}
+
+// DELETE /api/objetivos/{id}/aportes/{aporteId} -> remove um aporte.
+export async function removerAporte(
+  objetivoId: number,
+  aporteId: number,
+): Promise<Objetivo> {
+  const { data } = await api.delete<Objetivo>(
+    `/objetivos/${objetivoId}/aportes/${aporteId}`,
+  );
   return data;
 }
 

@@ -22,6 +22,7 @@ export function NovoObjetivoModal({
 }: Props) {
   const editando = !!objetivo;
   const [descricao, setDescricao] = useState("");
+  const [incentivo, setIncentivo] = useState("");
   const [valorAlvo, setValorAlvo] = useState("");
   const [dataAlvo, setDataAlvo] = useState("");
   const [erro, setErro] = useState<string | null>(null);
@@ -32,6 +33,7 @@ export function NovoObjetivoModal({
     if (!aberto) return;
     setErro(null);
     setDescricao(objetivo?.descricao ?? "");
+    setIncentivo(objetivo?.incentivo ?? "");
     setValorAlvo(objetivo ? String(objetivo.valorAlvo) : "");
     setDataAlvo(objetivo?.dataAlvo ?? "");
   }, [aberto, objetivo]);
@@ -41,7 +43,13 @@ export function NovoObjetivoModal({
     setErro(null);
     setCarregando(true);
     try {
-      const req = { descricao, valorAlvo: Number(valorAlvo), dataAlvo };
+      const req = {
+        descricao,
+        // envia null quando vazio (campo opcional no backend)
+        incentivo: incentivo.trim() || null,
+        valorAlvo: Number(valorAlvo),
+        dataAlvo,
+      };
       if (editando) {
         await atualizarObjetivo(objetivo.id, req);
       } else {
@@ -84,6 +92,23 @@ export function NovoObjetivoModal({
             onChange={(e) => setDescricao(e.target.value)}
             placeholder="Ex.: Reserva de emergência"
             className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label
+            htmlFor="obj-incentivo"
+            className="text-sm font-medium text-slate-700"
+          >
+            Incentivo <span className="text-slate-400">(opcional)</span>
+          </label>
+          <textarea
+            id="obj-incentivo"
+            rows={2}
+            value={incentivo}
+            onChange={(e) => setIncentivo(e.target.value)}
+            placeholder="Um lembrete de por que essa meta importa. Ex.: 6 meses de tranquilidade."
+            className="w-full resize-none rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
