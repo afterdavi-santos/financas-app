@@ -35,6 +35,12 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(HttpStatus.CONFLICT.value(), ex.getMessage()));
     }
 
+    @ExceptionHandler(InvestimentoJaVinculadoException.class)
+    public ResponseEntity<ErrorResponse> tratarInvestimentoJaVinculado(InvestimentoJaVinculadoException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse(HttpStatus.CONFLICT.value(), ex.getMessage()));
+    }
+
     @ExceptionHandler(OperacaoInvalidaException.class)
     public ResponseEntity<ErrorResponse> tratarOperacaoInvalida(OperacaoInvalidaException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

@@ -7,10 +7,12 @@ import com.financas.app.exception.OperacaoInvalidaException;
 import com.financas.app.exception.RecursoNaoEncontradoException;
 import com.financas.app.model.AporteCdb;
 import com.financas.app.model.InvestimentoCdb;
+import com.financas.app.model.Objetivo;
 import com.financas.app.model.Renda;
 import com.financas.app.model.Usuario;
 import com.financas.app.repository.AporteCdbRepository;
 import com.financas.app.repository.InvestimentoCdbRepository;
+import com.financas.app.repository.ObjetivoRepository;
 import com.financas.app.repository.RendaRepository;
 import com.financas.app.repository.UsuarioRepository;
 import org.assertj.core.data.Offset;
@@ -55,6 +57,9 @@ class InvestimentoCdbServiceTest {
     private UsuarioRepository usuarioRepository;
 
     @Mock
+    private ObjetivoRepository objetivoRepository;
+
+    @Mock
     private CdiService cdiService;
 
     private InvestimentoCdbService service;
@@ -62,7 +67,7 @@ class InvestimentoCdbServiceTest {
     @BeforeEach
     void setUp() {
         service = new InvestimentoCdbService(investimentoRepository, aporteRepository, rendaRepository,
-                usuarioRepository, cdiService);
+                usuarioRepository, objetivoRepository, cdiService);
     }
 
     private Usuario usuarioComId(Long id) {
@@ -269,6 +274,49 @@ class InvestimentoCdbServiceTest {
 
         assertThatThrownBy(() -> service.posicao(1L, 1L))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
+    }
+
+    // --- Vínculo com Objetivo ---------------------------------------------------
+
+    @Test
+    void deveDesvincularObjetivoAoExcluirOInvestimentoVinculado() {
+        InvestimentoCdb inv = investimentoAtivo(1L, 1L);
+        Objetivo objetivoVinculado = new Objetivo();
+        objetivoVinculado.setId(5L);
+        objetivoVinculado.setInvestimentoCdb(inv);
+        when(investimentoRepository.findById(1L)).thenReturn(Optional.of(inv));
+        when(aporteRepository.findByInvestimentoIdOrderByDataAplicacaoAscIdAsc(1L)).thenReturn(List.of());
+        when(objetivoRepository.findByInvestimentoCdbId(1L)).thenReturn(Optional.of(objetivoVinculado));
+
+        service.excluir(1L, 1L);
+
+        assertThat(objetivoVinculado.getInvestimentoCdb()).isNull();
+        verify(objetivoRepository).save(objetivoVinculado);
+        verify(investimentoRepository).delete(inv);
+    }
+
+    @Test
+    void deveFalharAoVincularInvestimentoJaResgatado() {
+        InvestimentoCdb encerrado = investimentoAtivo(1L, 1L);
+        encerrado.setDataResgate(LocalDate.now());
+        when(investimentoRepository.findById(1L)).thenReturn(Optional.of(encerrado));
+
+        assertThatThrownBy(() -> service.buscarParaVinculo(1L, 1L))
+                .isInstanceOf(OperacaoInvalidaException.class);
+    }
+
+    @Test
+    void deveCalcularValorAtualParaVinculoComObjetivo() {
+        LocalDate hoje = LocalDate.now();
+        InvestimentoCdb inv = investimentoAtivo(1L, 1L);
+        AporteCdb lote1 = lote(10L, inv, hoje.minusDays(40), new BigDecimal("1000.00"));
+        when(investimentoRepository.findById(1L)).thenReturn(Optional.of(inv));
+        when(aporteRepository.findByInvestimentoIdOrderByDataAplicacaoAscIdAsc(1L)).thenReturn(List.of(lote1));
+        when(cdiService.fatorAcumulado(lote1.getDataAplicacao(), hoje)).thenReturn(new BigDecimal("1.05"));
+
+        BigDecimal valorAtual = service.valorAtual(1L, 1L);
+
+        assertThat(valorAtual).isEqualByComparingTo("1050.00");
     }
 
 }

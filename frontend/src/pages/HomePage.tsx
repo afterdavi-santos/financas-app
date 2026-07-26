@@ -409,6 +409,11 @@ export function HomePage() {
                             <p className="text-xs text-slate-500">
                               Aplicado em {dataBR(inv.dataAplicacao)}
                             </p>
+                            {inv.objetivoId != null && (
+                              <p className="text-xs font-medium text-blue-600">
+                                🔗 Vinculado ao objetivo "{inv.objetivoDescricao}"
+                              </p>
+                            )}
                           </div>
                         </label>
                         <div className="flex items-center gap-3">
@@ -511,6 +516,7 @@ export function HomePage() {
         aberto={modalSimular}
         onClose={() => setModalSimular(false)}
         categorias={categorias}
+        onCategoriaCriada={carregar}
       />
       <NovoInvestimentoCdbModal
         aberto={modalInvestimento}

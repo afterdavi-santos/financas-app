@@ -69,6 +69,8 @@ export interface CdiAtual {
 // -> InvestimentoCdbResponse: `valorAplicado` é o principal AINDA investido
 // (reduz a cada resgate parcial). `dataResgate` só é preenchida quando o
 // investimento é totalmente liquidado (aí some da lista de ativos).
+// `objetivoId`/`objetivoDescricao` só vêm preenchidos quando este investimento
+// está vinculado a uma meta (ver Objetivo.investimentoCdbId).
 export interface InvestimentoCdb {
   id: number;
   descricao: string;
@@ -76,6 +78,8 @@ export interface InvestimentoCdb {
   percentualCdi: number;
   dataAplicacao: string; // "YYYY-MM-DD"
   dataResgate: string | null;
+  objetivoId?: number | null;
+  objetivoDescricao?: string | null;
 }
 
 // -> InvestimentoCdbRequest
@@ -111,7 +115,9 @@ export interface SimulacaoResgate {
   valorLiquido: number;
 }
 
-// -> ObjetivoResponse ({ id, descricao, incentivo, valorAlvo, valorAtual, dataAlvo })
+// -> ObjetivoResponse ({ id, descricao, incentivo, valorAlvo, valorAtual, dataAlvo, investimentoCdbId, investimentoCdbDescricao })
+// Quando `investimentoCdbId` está preenchido, `valorAtual` é a posição ATUAL
+// do investimento (calculada ao vivo pelo backend), não o saldo de aportes.
 export interface Objetivo {
   id: number;
   descricao: string;
@@ -119,6 +125,8 @@ export interface Objetivo {
   valorAlvo: number;
   valorAtual: number;
   dataAlvo: string; // "YYYY-MM-DD"
+  investimentoCdbId?: number | null;
+  investimentoCdbDescricao?: string | null;
 }
 
 // -> ObjetivoRequest ({ descricao, incentivo, valorAlvo, dataAlvo })

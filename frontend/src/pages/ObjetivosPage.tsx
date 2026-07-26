@@ -3,21 +3,24 @@ import { PageHeader } from "../components/PageHeader";
 import { NovoObjetivoModal } from "../components/NovoObjetivoModal";
 import { AportarModal } from "../components/AportarModal";
 import { LinhaTempoAportesModal } from "../components/LinhaTempoAportesModal";
+import { VincularInvestimentoModal } from "../components/VincularInvestimentoModal";
 import { BarraSelecao } from "../components/BarraSelecao";
 import { SelecionarTodos } from "../components/SelecionarTodos";
 import { useSelecao } from "../hooks/useSelecao";
 import { listarObjetivos, excluirObjetivo } from "../api/objetivos";
 import { listarRendas } from "../api/rendas";
+import { listarInvestimentosCdb } from "../api/investimentosCdb";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { dataBR } from "../utils/rotulos";
 import { primeiroDiaDoMesISO } from "../utils/datas";
 import { planoObjetivo } from "../utils/objetivos";
-import type { Objetivo, Renda } from "../types/financas";
+import type { InvestimentoCdb, Objetivo, Renda } from "../types/financas";
 
 export function ObjetivosPage() {
   const [objetivos, setObjetivos] = useState<Objetivo[]>([]);
   const [rendas, setRendas] = useState<Renda[]>([]);
+  const [investimentos, setInvestimentos] = useState<InvestimentoCdb[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
@@ -27,6 +30,8 @@ export function ObjetivosPage() {
   const [aportando, setAportando] = useState<Objetivo | null>(null);
   // Objetivo cuja linha do tempo de aportes está aberta (null = fechada).
   const [linhaTempo, setLinhaTempo] = useState<Objetivo | null>(null);
+  // Objetivo cujo vínculo com investimento está sendo editado (null = fechado).
+  const [vinculando, setVinculando] = useState<Objetivo | null>(null);
   const {
     selecionados,
     alternar,
@@ -50,12 +55,14 @@ export function ObjetivosPage() {
     setErro(null);
     setCarregando(true);
     try {
-      const [objs, rends] = await Promise.all([
+      const [objs, rends, invs] = await Promise.all([
         listarObjetivos(),
         listarRendas(),
+        listarInvestimentosCdb(),
       ]);
       setObjetivos(objs);
       setRendas(rends);
+      setInvestimentos(invs);
     } catch (e) {
       setErro(mensagemDeErro(e));
     } finally {
@@ -168,6 +175,11 @@ export function ObjetivosPage() {
                     <p className="mt-0.5 text-xs text-slate-500">
                       Meta: {dataBR(obj.dataAlvo)}
                     </p>
+                    {obj.investimentoCdbId != null && (
+                      <p className="mt-0.5 text-xs font-medium text-blue-600">
+                        🔗 Vinculado a {obj.investimentoCdbDescricao}
+                      </p>
+                    )}
                     </div>
                   </label>
                   <div className="flex items-center gap-3">
@@ -259,12 +271,14 @@ export function ObjetivosPage() {
                 </div>
 
                 <div className="mt-4 flex gap-2">
-                  <button
-                    onClick={() => setAportando(obj)}
-                    className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                  >
-                    Aportar
-                  </button>
+                  {obj.investimentoCdbId == null && (
+                    <button
+                      onClick={() => setAportando(obj)}
+                      className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                    >
+                      Aportar
+                    </button>
+                  )}
                   <button
                     onClick={() => setLinhaTempo(obj)}
                     className="flex-1 rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
@@ -272,6 +286,14 @@ export function ObjetivosPage() {
                     Linha do tempo
                   </button>
                 </div>
+                <button
+                  onClick={() => setVinculando(obj)}
+                  className="mt-2 w-full rounded-md border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  {obj.investimentoCdbId != null
+                    ? "Gerenciar vínculo com investimento"
+                    : "Vincular investimento"}
+                </button>
               </div>
             );
           })}
@@ -299,6 +321,15 @@ export function ObjetivosPage() {
         objetivo={linhaTempo}
         onClose={() => setLinhaTempo(null)}
         onAlterado={carregar}
+      />
+      <VincularInvestimentoModal
+        objetivo={vinculando}
+        investimentos={investimentos}
+        onClose={() => setVinculando(null)}
+        onAlterado={() => {
+          setVinculando(null);
+          carregar();
+        }}
       />
     </div>
   );

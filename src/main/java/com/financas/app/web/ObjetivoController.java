@@ -4,6 +4,7 @@ import com.financas.app.dto.AporteRequest;
 import com.financas.app.dto.AporteResponse;
 import com.financas.app.dto.ObjetivoRequest;
 import com.financas.app.dto.ObjetivoResponse;
+import com.financas.app.dto.VincularInvestimentoRequest;
 import com.financas.app.model.Aporte;
 import com.financas.app.model.Objetivo;
 import com.financas.app.security.UsuarioAutenticado;
@@ -99,6 +100,24 @@ public class ObjetivoController {
         return toResponse(objetivoService.removerAporte(usuarioAutenticado.getId(), id, aporteId));
     }
 
+    // --- Vínculo com Investimento CDB -----------------------------------------
+
+    @PutMapping("/{id}/investimento-cdb")
+    public ObjetivoResponse vincularInvestimento(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado,
+                                                  @PathVariable Long id,
+                                                  @Valid @RequestBody VincularInvestimentoRequest request) {
+        Objetivo objetivo = objetivoService.vincularInvestimento(
+                usuarioAutenticado.getId(), id, request.investimentoCdbId());
+        return toResponse(objetivo);
+    }
+
+    @DeleteMapping("/{id}/investimento-cdb")
+    public ObjetivoResponse desvincularInvestimento(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado,
+                                                     @PathVariable Long id) {
+        Objetivo objetivo = objetivoService.desvincularInvestimento(usuarioAutenticado.getId(), id);
+        return toResponse(objetivo);
+    }
+
     // --- Mapeamentos ---------------------------------------------------------
 
     private static Objetivo toEntity(ObjetivoRequest request) {
@@ -111,8 +130,11 @@ public class ObjetivoController {
     }
 
     private static ObjetivoResponse toResponse(Objetivo objetivo) {
+        var investimento = objetivo.getInvestimentoCdb();
         return new ObjetivoResponse(objetivo.getId(), objetivo.getDescricao(), objetivo.getIncentivo(),
-                objetivo.getValorAlvo(), objetivo.getValorAtual(), objetivo.getDataAlvo());
+                objetivo.getValorAlvo(), objetivo.getValorAtual(), objetivo.getDataAlvo(),
+                investimento != null ? investimento.getId() : null,
+                investimento != null ? investimento.getDescricao() : null);
     }
 
     private static AporteResponse toAporteResponse(Aporte aporte) {

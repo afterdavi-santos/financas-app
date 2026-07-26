@@ -3,10 +3,14 @@ import type { FormEvent } from "react";
 import { Modal } from "./Modal";
 import { criarDespesa } from "../api/despesas";
 import { statusLimiteOuNulo } from "../api/limites";
+import { criarCategoria } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { hojeISO } from "../utils/datas";
 import type { Categoria, StatusLimite, TipoDespesa } from "../types/financas";
+
+// Valor especial do <select> que abre o campo de "nova categoria" inline.
+const OPCAO_NOVA_CATEGORIA = "__nova__";
 
 // Modal do form de nova despesa. Recebe a lista de categorias (para o select)
 // já carregada pela home, evitando uma segunda requisição aqui.
@@ -38,17 +42,24 @@ export function NovaDespesaModal({
   }, [aberto, dataInicial]);
   const [tipo, setTipo] = useState<TipoDespesa>("EXTRAORDINARIA");
   const [categoriaId, setCategoriaId] = useState("");
+  const [novaCategoriaNome, setNovaCategoriaNome] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   // Limite da categoria selecionada no mês da despesa (null = categoria sem limite).
   const [statusLimite, setStatusLimite] = useState<StatusLimite | null>(null);
 
-  const semCategorias = categorias.length === 0;
+  const criandoNovaCategoria = categoriaId === OPCAO_NOVA_CATEGORIA;
+
+  // Sem nenhuma categoria disponível, já parte direto para "+ Nova
+  // categoria..." (não há outra opção útil no select).
+  useEffect(() => {
+    if (aberto && categorias.length === 0) setCategoriaId(OPCAO_NOVA_CATEGORIA);
+  }, [aberto, categorias]);
 
   // Sempre que a categoria ou o mês da despesa mudam, busca o limite daquela
   // categoria naquele mês para poder avisar se a despesa vai estourar o teto.
   useEffect(() => {
-    if (!aberto || !categoriaId) {
+    if (!aberto || !categoriaId || criandoNovaCategoria) {
       setStatusLimite(null);
       return;
     }
@@ -65,7 +76,7 @@ export function NovaDespesaModal({
     return () => {
       cancelado = true;
     };
-  }, [aberto, categoriaId, data]);
+  }, [aberto, categoriaId, data, criandoNovaCategoria]);
 
   // Previsão do estouro: gasto atual + valor digitado vs. o teto.
   const valorNum = Number(valor);
@@ -83,12 +94,18 @@ export function NovaDespesaModal({
     setErro(null);
     setCarregando(true);
     try {
+      // Se o usuário escolheu "+ Nova categoria...", cria a categoria antes
+      // e usa o id retornado para a despesa.
+      const idCategoria = criandoNovaCategoria
+        ? (await criarCategoria({ nome: novaCategoriaNome })).id
+        : Number(categoriaId);
+
       await criarDespesa({
         descricao,
         valor: Number(valor), // <input> devolve string; backend espera número
         data,
         tipo,
-        categoriaId: Number(categoriaId),
+        categoriaId: idCategoria,
       });
       // limpa os campos para o próximo uso
       setDescricao("");
@@ -96,6 +113,7 @@ export function NovaDespesaModal({
       setData(dataInicial);
       setTipo("EXTRAORDINARIA");
       setCategoriaId("");
+      setNovaCategoriaNome("");
       onCriada();
     } catch (e) {
       setErro(mensagemDeErro(e));
@@ -106,22 +124,6 @@ export function NovaDespesaModal({
 
   return (
     <Modal titulo="Nova despesa" aberto={aberto} onClose={onClose}>
-      {semCategorias ? (
-        // Sem categoria não dá para lançar despesa (categoriaId é obrigatório).
-        <div className="space-y-4">
-          <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
-            Você precisa criar uma categoria antes de lançar uma despesa.
-          </p>
-          <div className="flex justify-end">
-            <button
-              onClick={onClose}
-              className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
-      ) : (
         <form onSubmit={aoEnviar} className="space-y-4">
           {erro && (
             <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -228,9 +230,33 @@ export function NovaDespesaModal({
                     {c.nome}
                   </option>
                 ))}
+                <option value={OPCAO_NOVA_CATEGORIA}>
+                  + Nova categoria...
+                </option>
               </select>
             </div>
           </div>
+
+          {criandoNovaCategoria && (
+            <div className="space-y-1">
+              <label
+                htmlFor="despesa-nova-categoria"
+                className="text-sm font-medium text-slate-700"
+              >
+                Nome da nova categoria
+              </label>
+              <input
+                id="despesa-nova-categoria"
+                type="text"
+                required
+                autoFocus
+                value={novaCategoriaNome}
+                onChange={(e) => setNovaCategoriaNome(e.target.value)}
+                placeholder="Ex.: Alimentação"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
 
           {/* Aviso de limite: só aparece se a categoria tem teto no mês. */}
           {previsao &&
@@ -264,7 +290,6 @@ export function NovaDespesaModal({
             </button>
           </div>
         </form>
-      )}
     </Modal>
   );
 }

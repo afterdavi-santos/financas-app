@@ -70,3 +70,22 @@ export async function removerAporte(
 export async function excluirObjetivo(id: number): Promise<void> {
   await api.delete(`/objetivos/${id}`);
 }
+
+// PUT /api/objetivos/{id}/investimento-cdb {investimentoCdbId} -> vincula um
+// investimento CDB ao objetivo; o valorAtual passa a ser a posição dele.
+export async function vincularInvestimento(
+  id: number,
+  investimentoCdbId: number,
+): Promise<Objetivo> {
+  const { data } = await api.put<Objetivo>(`/objetivos/${id}/investimento-cdb`, {
+    investimentoCdbId,
+  });
+  return data;
+}
+
+// DELETE /api/objetivos/{id}/investimento-cdb -> desvincula; valorAtual volta
+// a ser o saldo de aportes manuais.
+export async function desvincularInvestimento(id: number): Promise<Objetivo> {
+  const { data } = await api.delete<Objetivo>(`/objetivos/${id}/investimento-cdb`);
+  return data;
+}

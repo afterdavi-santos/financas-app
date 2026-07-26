@@ -1,7 +1,10 @@
 package com.financas.app.service;
 
+import com.financas.app.exception.InvestimentoJaVinculadoException;
+import com.financas.app.exception.OperacaoInvalidaException;
 import com.financas.app.exception.RecursoNaoEncontradoException;
 import com.financas.app.model.Aporte;
+import com.financas.app.model.InvestimentoCdb;
 import com.financas.app.model.Objetivo;
 import com.financas.app.model.Usuario;
 import com.financas.app.repository.AporteRepository;
@@ -38,11 +41,14 @@ class ObjetivoServiceTest {
     @Mock
     private UsuarioRepository usuarioRepository;
 
+    @Mock
+    private InvestimentoCdbService investimentoCdbService;
+
     private ObjetivoService objetivoService;
 
     @BeforeEach
     void setUp() {
-        objetivoService = new ObjetivoService(objetivoRepository, aporteRepository, usuarioRepository);
+        objetivoService = new ObjetivoService(objetivoRepository, aporteRepository, usuarioRepository, investimentoCdbService);
     }
 
     private Usuario usuarioComId(Long id) {
@@ -231,6 +237,83 @@ class ObjetivoServiceTest {
         aporte.setData(LocalDate.of(2026, 7, 24));
         aporte.setObjetivo(objetivo);
         return aporte;
+    }
+
+    // --- Vínculo com Investimento CDB ------------------------------------------
+
+    private InvestimentoCdb investimentoComId(Long id, Long usuarioId) {
+        InvestimentoCdb investimento = new InvestimentoCdb();
+        investimento.setId(id);
+        investimento.setDescricao("CDB Banco XP");
+        investimento.setUsuario(usuarioComId(usuarioId));
+        return investimento;
+    }
+
+    @Test
+    void deveVincularInvestimentoAoObjetivoESubstituirValorAtualPelaPosicao() {
+        Objetivo existente = objetivoComId(1L, 1L, new BigDecimal("100"));
+        InvestimentoCdb investimento = investimentoComId(10L, 1L);
+        when(objetivoRepository.findById(1L)).thenReturn(Optional.of(existente));
+        when(investimentoCdbService.buscarParaVinculo(1L, 10L)).thenReturn(investimento);
+        when(objetivoRepository.findByInvestimentoCdbId(10L)).thenReturn(Optional.empty());
+        when(objetivoRepository.save(any(Objetivo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(investimentoCdbService.valorAtual(1L, 10L)).thenReturn(new BigDecimal("1234.56"));
+
+        Objetivo vinculado = objetivoService.vincularInvestimento(1L, 1L, 10L);
+
+        assertThat(vinculado.getInvestimentoCdb()).isEqualTo(investimento);
+        assertThat(vinculado.getValorAtual()).isEqualByComparingTo("1234.56");
+    }
+
+    @Test
+    void deveFalharAoVincularInvestimentoJaVinculadoAOutroObjetivo() {
+        Objetivo existente = objetivoComId(1L, 1L, new BigDecimal("100"));
+        Objetivo outroObjetivo = objetivoComId(2L, 1L, BigDecimal.ZERO);
+        InvestimentoCdb investimento = investimentoComId(10L, 1L);
+        when(objetivoRepository.findById(1L)).thenReturn(Optional.of(existente));
+        when(investimentoCdbService.buscarParaVinculo(1L, 10L)).thenReturn(investimento);
+        when(objetivoRepository.findByInvestimentoCdbId(10L)).thenReturn(Optional.of(outroObjetivo));
+
+        assertThatThrownBy(() -> objetivoService.vincularInvestimento(1L, 1L, 10L))
+                .isInstanceOf(InvestimentoJaVinculadoException.class);
+
+        verify(objetivoRepository, never()).save(any());
+    }
+
+    @Test
+    void deveDesvincularInvestimentoDoObjetivo() {
+        Objetivo existente = objetivoComId(1L, 1L, new BigDecimal("100"));
+        existente.setInvestimentoCdb(investimentoComId(10L, 1L));
+        when(objetivoRepository.findById(1L)).thenReturn(Optional.of(existente));
+        when(objetivoRepository.save(any(Objetivo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Objetivo desvinculado = objetivoService.desvincularInvestimento(1L, 1L);
+
+        assertThat(desvinculado.getInvestimentoCdb()).isNull();
+    }
+
+    @Test
+    void deveFalharAoAportarEmObjetivoVinculadoAInvestimento() {
+        Objetivo existente = objetivoComId(1L, 1L, new BigDecimal("100"));
+        existente.setInvestimentoCdb(investimentoComId(10L, 1L));
+        when(objetivoRepository.findById(1L)).thenReturn(Optional.of(existente));
+
+        assertThatThrownBy(() -> objetivoService.aportar(1L, 1L, new BigDecimal("50"), null))
+                .isInstanceOf(OperacaoInvalidaException.class);
+
+        verify(aporteRepository, never()).save(any());
+    }
+
+    @Test
+    void deveListarObjetivoVinculadoComValorAtualDaPosicaoDoInvestimento() {
+        Objetivo existente = objetivoComId(1L, 1L, new BigDecimal("100"));
+        existente.setInvestimentoCdb(investimentoComId(10L, 1L));
+        when(objetivoRepository.findByUsuarioId(1L)).thenReturn(List.of(existente));
+        when(investimentoCdbService.valorAtual(1L, 10L)).thenReturn(new BigDecimal("777.00"));
+
+        List<Objetivo> objetivos = objetivoService.listarPorUsuario(1L);
+
+        assertThat(objetivos.get(0).getValorAtual()).isEqualByComparingTo("777.00");
     }
 
 }

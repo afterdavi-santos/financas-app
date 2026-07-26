@@ -657,3 +657,145 @@ teste manual com `curl` contra uma instância descartável do backend (documenta
 acima). **Falta o usuário testar ponta a ponta no navegador** com o backend
 reiniciado (o fix do `@Transactional` só vale depois de reiniciar — `mvnw
 spring-boot:run` não faz hot-reload, gotcha já conhecido do projeto).
+
+Commitado e enviado (`f4be4a5`, branch `frontend`) em 2026-07-26.
+
+## Parte 8 — Criar categoria/limite inline em Nova despesa e Simular despesa (2026-07-26)
+
+Pedido do usuário: nos modais "Adicionar despesa" e "Simular despesa" da Home,
+poder criar a categoria (e, no simulador, também o limite) sem precisar fechar
+o modal e ir até a tela de Categorias/Limites. Só frontend — reaproveita o
+mesmo padrão "+ Nova categoria..." que o `NovoLimiteModal` já usava.
+
+- `NovaDespesaModal.tsx`: removida a tela de bloqueio "crie uma categoria
+  antes" quando `categorias` vem vazio. O `<select>` de categoria ganhou a
+  opção `+ Nova categoria...` (constante `OPCAO_NOVA_CATEGORIA`, igual ao
+  `NovoLimiteModal`); sem nenhuma categoria, já abre direto nessa opção. Ao
+  submeter, se estiver criando, chama `criarCategoria()` primeiro e usa o id
+  retornado na despesa. O `useEffect` que busca o status do limite ignora
+  enquanto está no modo "nova categoria" (ainda não há id numérico).
+- `SimularDespesaModal.tsx`: mesma opção `+ Nova categoria...` no select (sem
+  categoria, abre direto nela). Além disso, quando o resultado da simulação diz
+  que a categoria **não tem limite** (`temLimite === false`), em vez de só
+  avisar, mostra um campo de valor + botão "Criar limite" inline — cria via
+  `criarLimite()` e re-simula automaticamente com o novo teto. Novo prop
+  opcional `onCategoriaCriada` (a Home passa `carregar`, a mesma função que já
+  recarrega categorias/despesas/renda) para a lista de categorias da Home ficar
+  atualizada depois de criar uma categoria por aqui.
+- `HomePage.tsx`: só a linha `onCategoriaCriada={carregar}` no
+  `<SimularDespesaModal>`.
+
+### Ajuste (mesmo dia): limite já aparece junto ao criar a categoria
+Feedback do usuário: no simulador, ao escolher "+ Nova categoria...", o campo
+de limite só aparecia depois de clicar "Simular" (repetindo o fluxo de duas
+etapas que já existia para categoria já existente sem limite). Corrigido —
+quando `criandoNovaCategoria`, o campo "Limite da categoria (R$) — opcional"
+já aparece ao lado do nome, antes de simular. Um único clique em "Simular" cria
+a categoria e (se preenchido) o limite, e já mostra o resultado.
+- `aoSimular`: depois de criar a categoria, se `novoLimiteValor` estiver
+  preenchido, cria o limite também (reaproveita `criarLimite`) antes de buscar
+  o status.
+- `<select>` de categoria: o `onChange` agora limpa `resultado`/
+  `novoLimiteValor` ao trocar de categoria manualmente — evita que um valor de
+  limite digitado para uma categoria "escape" para outra se o usuário mudar de
+  ideia no meio do preenchimento.
+
+### Verificação
+`npm run build` e `npm run lint` limpos (só o aviso pré-existente do
+`AuthContext`). **Falta testar ponta a ponta no navegador** (fluxo: abrir
+"Adicionar despesa"/"Simular despesa" sem nenhuma categoria cadastrada → criar
+categoria inline → no simulador, criar categoria nova já com limite preenchido
+num único clique → resultado da simulação aparece direto; também testar
+categoria já existente sem limite → criar limite inline → resultado atualiza).
+
+## Parte 9 — Vincular Objetivo a Investimento CDB (CONSTRUÍDA 2026-07-26)
+
+Pedido do usuário: poder atrelar um Objetivo a um Investimento CDB. Decisões
+confirmadas com o usuário antes de implementar (via pergunta direta):
+- O progresso do objetivo passa a ser a **posição atual (ao vivo)** do CDB
+  (aplicado + rendimento), não só o que for resgatado.
+- **1:1** — um objetivo vincula no máximo 1 CDB; um CDB só pode estar
+  vinculado a 1 objetivo por vez.
+- Enquanto vinculado, **aportes manuais ficam bloqueados** (o progresso vem
+  só da posição do investimento).
+
+### Backend
+- `Objetivo` ganhou `@OneToOne @JoinColumn(name="investimento_cdb_id",
+  unique=true) InvestimentoCdb investimentoCdb` (nullable). `ddl-auto=update`
+  cria a coluna+constraint sozinho (dev).
+- `ObjetivoRepository.findByInvestimentoCdbId` — usado tanto para checar
+  unicidade quanto para desvincular automaticamente quando o investimento é
+  excluído.
+- Novo `InvestimentoJaVinculadoException` (409) — tentar vincular um CDB que
+  já está preso a outro objetivo.
+- `InvestimentoCdbService` ganhou:
+  - `buscarParaVinculo(usuarioId, investimentoId)` — valida posse e que o
+    investimento não foi resgatado ainda (`OperacaoInvalidaException` se já
+    encerrado — a posição ficaria travada em zero pra sempre).
+  - `valorAtual(usuarioId, investimentoId)` — soma dos lotes ativos calculada
+    ao vivo, sem o guard de "não resgatado" (assim um objetivo vinculado a um
+    CDB totalmente resgatado mostra progresso 0, não quebra).
+  - `excluir()` agora desvincula qualquer `Objetivo` apontando pro
+    investimento **antes** de apagar os lotes e o investimento — sem isso, o
+    objetivo ficaria com uma FK órfã.
+  - `toResponse()` passou a fazer um lookup reverso (`objetivoRepository.
+    findByInvestimentoCdbId`) pra preencher `objetivoId`/`objetivoDescricao`
+    na resposta do investimento (pra Home/ObjetivosPage saberem quais CDBs já
+    estão "presos").
+- `ObjetivoService` ganhou `vincularInvestimento`/`desvincularInvestimento`,
+  e `aportar`/`editarAporte`/`removerAporte` agora recusam
+  (`OperacaoInvalidaException`) se o objetivo estiver vinculado.
+- **Truque para não quebrar `ObjetivoControllerTest`**: em vez de mover o
+  mapeamento pra `ObjetivoResponse` pro `ObjetivoService` (o que exigiria
+  stubar `objetivoService.toResponse(...)` em cada teste do controller, já
+  que o service é mockado lá), o `valorAtual` computado da posição do CDB é
+  aplicado **em memória, sem persistir** (`comValorAtualEfetivo`, chamado só
+  em `listarPorUsuario`/`atualizar`/`vincularInvestimento`) diretamente no
+  objeto `Objetivo` retornado — o `toResponse` estático do controller
+  continua igual, só ganhou os 2 campos novos lendo `objetivo.
+  getInvestimentoCdb()`. Resultado: os 143 testes existentes passaram **sem
+  nenhuma alteração**, só a suíte de serviço precisou de mocks novos
+  (`InvestimentoCdbService` no `ObjetivoService`, `ObjetivoRepository` no
+  `InvestimentoCdbService`).
+- DTOs: `ObjetivoResponse`/`InvestimentoCdbResponse` ganharam os campos de
+  vínculo no final (não reordenei os existentes, pra minimizar risco). Novo
+  `VincularInvestimentoRequest({investimentoCdbId})`.
+- Endpoints novos: `PUT /api/objetivos/{id}/investimento-cdb` (vincula),
+  `DELETE /api/objetivos/{id}/investimento-cdb` (desvincula).
+- Testes novos: 8 no total (`ObjetivoServiceTest` — vincular, vincular já
+  vinculado a outro → 409, desvincular, aportar bloqueado quando vinculado,
+  listar usa posição do CDB; `InvestimentoCdbServiceTest` — excluir desvincula
+  o objetivo, vincular investimento já resgatado falha, `valorAtual` calcula
+  certo). **151 testes verdes no total** (143 + 8 novos).
+
+### Frontend
+- `types/financas.ts`: `Objetivo` ganhou `investimentoCdbId`/
+  `investimentoCdbDescricao`; `InvestimentoCdb` ganhou `objetivoId`/
+  `objetivoDescricao`.
+- `api/objetivos.ts`: `vincularInvestimento(id, investimentoCdbId)`,
+  `desvincularInvestimento(id)`.
+- `components/VincularInvestimentoModal.tsx` (novo): se o objetivo já estiver
+  vinculado, mostra a qual investimento + botão "Desvincular"; senão, um
+  select só com investimentos **ativos** e **não vinculados a outro
+  objetivo** (filtra por `dataResgate === null` e `objetivoId == null ||
+  objetivoId === objetivo.id`) + botão "Vincular".
+- `pages/ObjetivosPage.tsx`: busca `listarInvestimentosCdb()` também no
+  `carregar()`; cada card ganhou um badge "🔗 Vinculado a X" (quando
+  vinculado) e um botão "Vincular investimento"/"Gerenciar vínculo com
+  investimento" que abre o modal; o botão **"Aportar" some** quando
+  `investimentoCdbId != null` (o backend já bloqueia, mas a UI não oferece a
+  ação). O termômetro/progresso e o bloco "Como chegar à meta" não mudaram —
+  já usam `obj.valorAtual`, que agora vem calculado ao vivo pelo backend
+  quando vinculado.
+- `pages/HomePage.tsx`: cada linha da seção "Investimento CDB" ganhou um badge
+  "🔗 Vinculado ao objetivo X" quando `inv.objetivoId != null` (só leitura,
+  sem ação nova aqui — gerenciar o vínculo é sempre pela ObjetivosPage).
+
+### Verificação
+Backend: `mvnw test` → **151 testes verdes**. Frontend: `npm run build`/`npm
+run lint` limpos. **Falta testar ponta a ponta no navegador** (fluxo: criar
+CDB → ir em Objetivos → "Vincular investimento" → progresso do termômetro
+passa a refletir a posição do CDB → tentar aportar manualmente deve estar
+escondido → "Gerenciar vínculo" → "Desvincular" → aportar volta a aparecer;
+também testar excluir o CDB vinculado e confirmar que o objetivo volta a ficar
+livre, sem erro).

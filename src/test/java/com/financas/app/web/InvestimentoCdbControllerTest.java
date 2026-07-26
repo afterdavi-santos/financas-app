@@ -60,7 +60,7 @@ class InvestimentoCdbControllerTest {
 
     private static InvestimentoCdbResponse investimento(Long id) {
         return new InvestimentoCdbResponse(id, "CDB Banco XP", new BigDecimal("1000.00"),
-                new BigDecimal("100"), LocalDate.of(2026, 6, 1), null);
+                new BigDecimal("100"), LocalDate.of(2026, 6, 1), null, null, null);
     }
 
     @Test
@@ -173,7 +173,7 @@ class InvestimentoCdbControllerTest {
     @Test
     void deveInvestirMais() throws Exception {
         InvestimentoCdbResponse atualizado = new InvestimentoCdbResponse(10L, "CDB Banco XP",
-                new BigDecimal("1250.00"), new BigDecimal("100"), LocalDate.of(2026, 6, 1), null);
+                new BigDecimal("1250.00"), new BigDecimal("100"), LocalDate.of(2026, 6, 1), null, null, null);
         when(investimentoService.investirMais(eq(1L), eq(10L), eq(new BigDecimal("200.00")))).thenReturn(atualizado);
 
         mockMvc.perform(post("/api/investimentos-cdb/10/investir-mais")

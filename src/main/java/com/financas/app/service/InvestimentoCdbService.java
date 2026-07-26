@@ -7,11 +7,13 @@ import com.financas.app.exception.OperacaoInvalidaException;
 import com.financas.app.exception.RecursoNaoEncontradoException;
 import com.financas.app.model.AporteCdb;
 import com.financas.app.model.InvestimentoCdb;
+import com.financas.app.model.Objetivo;
 import com.financas.app.model.Renda;
 import com.financas.app.model.Usuario;
 import com.financas.app.model.enums.TipoRenda;
 import com.financas.app.repository.AporteCdbRepository;
 import com.financas.app.repository.InvestimentoCdbRepository;
+import com.financas.app.repository.ObjetivoRepository;
 import com.financas.app.repository.RendaRepository;
 import com.financas.app.repository.UsuarioRepository;
 import com.financas.app.util.ImpostosCdb;
@@ -41,15 +43,17 @@ public class InvestimentoCdbService {
     private final AporteCdbRepository aporteRepository;
     private final RendaRepository rendaRepository;
     private final UsuarioRepository usuarioRepository;
+    private final ObjetivoRepository objetivoRepository;
     private final CdiService cdiService;
 
     public InvestimentoCdbService(InvestimentoCdbRepository investimentoRepository, AporteCdbRepository aporteRepository,
                                   RendaRepository rendaRepository, UsuarioRepository usuarioRepository,
-                                  CdiService cdiService) {
+                                  ObjetivoRepository objetivoRepository, CdiService cdiService) {
         this.investimentoRepository = investimentoRepository;
         this.aporteRepository = aporteRepository;
         this.rendaRepository = rendaRepository;
         this.usuarioRepository = usuarioRepository;
+        this.objetivoRepository = objetivoRepository;
         this.cdiService = cdiService;
     }
 
@@ -94,8 +98,39 @@ public class InvestimentoCdbService {
 
     public void excluir(Long usuarioId, Long investimentoId) {
         InvestimentoCdb investimento = buscarOuFalhar(investimentoId, usuarioId);
+        // Desvincula qualquer meta que dependesse deste investimento antes de
+        // excluí-lo — sem isso, a meta ficaria referenciando um id inexistente.
+        objetivoRepository.findByInvestimentoCdbId(investimentoId).ifPresent(objetivo -> {
+            objetivo.setInvestimentoCdb(null);
+            objetivoRepository.save(objetivo);
+        });
         aporteRepository.deleteAll(lotesDe(investimento));
         investimentoRepository.delete(investimento);
+    }
+
+    // --- Vínculo com Objetivo --------------------------------------------------
+
+    // Usado pelo ObjetivoService para validar e obter a entidade ao vincular
+    // um investimento a uma meta. Investimento já resgatado não pode ser
+    // vinculado (a posição ficaria travada em zero para sempre).
+    public InvestimentoCdb buscarParaVinculo(Long usuarioId, Long investimentoId) {
+        InvestimentoCdb investimento = buscarOuFalhar(investimentoId, usuarioId);
+        if (investimento.getDataResgate() != null) {
+            throw new OperacaoInvalidaException("Este investimento já foi resgatado e não pode ser vinculado a uma meta.");
+        }
+        return investimento;
+    }
+
+    // Posição atual (aplicado + rendimento), somando só os lotes ainda ativos.
+    // Usado pelo ObjetivoService para calcular o progresso de metas vinculadas.
+    public BigDecimal valorAtual(Long usuarioId, Long investimentoId) {
+        InvestimentoCdb investimento = buscarOuFalhar(investimentoId, usuarioId);
+        LocalDate hoje = LocalDate.now();
+        BigDecimal total = BigDecimal.ZERO;
+        for (AporteCdb lote : lotesAtivos(investimento)) {
+            total = total.add(calcularValorAtualLote(investimento, lote, hoje));
+        }
+        return arredondar(total);
     }
 
     public PosicaoCdbResponse posicao(Long usuarioId, Long investimentoId) {
@@ -359,9 +394,12 @@ public class InvestimentoCdbService {
                 .map(AporteCdb::getValorAplicado)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         LocalDate dataMaisAntiga = dataMaisAntiga(lotes, LocalDate.now());
+        Objetivo objetivoVinculado = objetivoRepository.findByInvestimentoCdbId(investimento.getId()).orElse(null);
         return new InvestimentoCdbResponse(investimento.getId(), investimento.getDescricao(),
                 arredondar(valorAplicadoTotal), investimento.getPercentualCdi(), dataMaisAntiga,
-                investimento.getDataResgate());
+                investimento.getDataResgate(),
+                objetivoVinculado != null ? objetivoVinculado.getId() : null,
+                objetivoVinculado != null ? objetivoVinculado.getDescricao() : null);
     }
 
     private Usuario buscarUsuarioOuFalhar(Long usuarioId) {
