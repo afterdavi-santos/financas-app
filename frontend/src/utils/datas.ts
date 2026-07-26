@@ -28,6 +28,12 @@ export function ultimoDiaDoMesISO(): string {
   return paraISO(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0));
 }
 
+// Primeiro dia do mês SEGUINTE ao atual, ex.: em jul/2026 -> "2026-08-01".
+export function primeiroDiaDoProximoMesISO(): string {
+  const hoje = new Date();
+  return paraISO(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1));
+}
+
 // Primeiro dia do mês N meses atrás, ex.: n=5 em jul/2026 -> "2026-02-01".
 // Usado para montar o intervalo dos gráficos (ex.: "últimos 6 meses").
 export function primeiroDiaMesesAtrasISO(n: number): string {

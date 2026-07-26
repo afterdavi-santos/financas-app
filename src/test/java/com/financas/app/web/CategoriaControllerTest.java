@@ -89,12 +89,34 @@ class CategoriaControllerTest {
     @Test
     void deveRetornar404QuandoCategoriaNaoPertenceAoUsuario() throws Exception {
         org.mockito.Mockito.doThrow(new RecursoNaoEncontradoException("Categoria", 99L))
-                .when(categoriaService).excluir(1L, 99L);
+                .when(categoriaService).excluir(1L, 99L, false);
 
         mockMvc.perform(delete("/api/categorias/99")
                         .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
                         .with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void deveRecusarExclusaoDeCategoriaEmUsoSemCascata() throws Exception {
+        org.mockito.Mockito.doThrow(new com.financas.app.exception.CategoriaEmUsoException())
+                .when(categoriaService).excluir(1L, 10L, false);
+
+        mockMvc.perform(delete("/api/categorias/10")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf()))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void deveExcluirCategoriaEmUsoComCascataConfirmada() throws Exception {
+        mockMvc.perform(delete("/api/categorias/10")
+                        .param("cascata", "true")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf()))
+                .andExpect(status().isNoContent());
+
+        org.mockito.Mockito.verify(categoriaService).excluir(1L, 10L, true);
     }
 
     @Test

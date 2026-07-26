@@ -488,3 +488,172 @@ relatado, e um caso de resgate parcial cruzando 2 lotes via FIFO).
 `npm run build` limpo. Verificado ponta a ponta via `curl` a cada reinício do
 backend (criar investimento, investir mais, simular/confirmar resgate parcial e
 total) e depois confirmado pelo usuário no navegador real.
+
+## Parte 6 — Plano de contenção (CONSTRUÍDA e VERIFICADA em 2026-07-25)
+
+Nova seção **FIXA na Home** (sempre visível, mesmo quando não há nada a fazer):
+avisa quanto da renda do mês veio de fontes NÃO garantidas no mês seguinte
+(freela + retorno de investimentos) e sugere um corte proporcional nas despesas
+extraordinárias para não fechar o próximo mês no negativo. Só frontend — nenhuma
+mudança de backend.
+
+### Arquivos
+- `utils/contencaoRendaVariavel.ts` (novo) — função pura `planoContencao`.
+- `utils/datas.ts` — novo helper `primeiroDiaDoProximoMesISO()` (usado só para
+  o rótulo do mês no título da seção, via `mesCurtoBR` que já existia).
+- `pages/HomePage.tsx` — busca `listarRendas()` (novo fetch no `carregar()`),
+  deriva os valores abaixo e renderiza a seção entre as 3 StatCards e
+  "Investimento CDB".
+
+### Regra de negócio (evoluiu bastante durante a sessão — o que ficou valendo)
+- **Valor a reduzir** = `max(0, totalDespesas - rendaFixaMes)`, onde
+  `totalDespesas` já soma despesas FIXA + EXTRAORDINARIA do mês. Importante:
+  isso **já contabiliza despesas fixas** automaticamente (a sobra da renda
+  fixa sobre as despesas fixas entra no cálculo agregado) — não precisa somar
+  despesas fixas à parte. Confirmado com o usuário via exemplo numérico.
+  Tentativa anterior (`freela + retorno de investimentos`, sem olhar despesas)
+  foi **descartada**: só dispara a sugestão de corte quando a renda FIXA
+  sozinha não cobriria as despesas do mês (ou seja, o mês só fechou graças à
+  renda variável) — se a renda fixa já cobre tudo, a seção mostra uma
+  mensagem verde de "nada a reduzir", nunca desaparece.
+- **Seleção de categorias extraordinárias** (múltiplas iterações, regra final):
+  começa só na maior categoria; só chama a próxima se o valor a reduzir for
+  **>= 30% da soma já selecionada** (mesmo limite em todos os saltos, não só
+  no primeiro); limite de **10 categorias** (`MAX_CATEGORIAS`). Se travar em
+  10 e ainda não cobrir o valor, o corte por categoria vai naturalmente se
+  aproximando de 100% (não pode passar disso) e aparece um aviso âmbar com o
+  valor exato que falta. (Versões descartadas no caminho: sempre começar com
+  Top 5; limite de 50% a partir da 2ª categoria — o usuário achou que 50%
+  "ainda ficava muito grande".)
+- **Distribuição**: proporcional LINEAR ao peso do gasto de cada categoria
+  selecionada (`reduçãoCategoria = gastoCategoria / somaSelecionada * valorAlvo`).
+  Alternativas consideradas e descartadas (documentadas em comentário no
+  código): proporcional ao excedente sobre a menor categoria; water-filling.
+- **Economia do mês já negativa**: não força 100% de corte (a fórmula acima já
+  escala proporcionalmente com a gravidade — confirmado com contraexemplo
+  numérico que economia negativa não implica matematicamente 100%). Em vez
+  disso, ganhou um aviso vermelho **adicional** (distinto do aviso âmbar de
+  "não cobre") quando `economia < 0`, só para deixar a gravidade mais clara na
+  mensagem — sem mexer no cálculo.
+
+### UI
+- Título dinâmico: "Plano de contenção — {mês seguinte, ex.: ago/26}".
+- Sempre 3 estados possíveis: (1) nada a reduzir (mensagem verde); (2) precisa
+  reduzir, com lista de categorias e % de corte cada uma (+ aviso vermelho
+  extra se a economia do mês já é negativa); (3) mesmo os itens 1/2, mais o
+  aviso âmbar se nem reduzindo tudo cobre o valor.
+- Textos de aviso ficam todos inline em `HomePage.tsx` (não há arquivo de
+  mensagens/i18n separado).
+
+### Verificação
+`npm run build`/`npm run lint` limpos a cada iteração. Testado ponta a ponta no
+navegador várias vezes, incluindo cenários simulados via `fetch` direto à API
+(criar categorias/despesas/rendas de teste, conferir o cálculo, reverter depois)
+para cobrir: nenhuma renda variável no mês, corte pequeno (1 categoria), corte
+cruzando o limite de 30% (2 categorias), 12 categorias com corte grande
+(parou exatamente em 10, cada uma a 100%, aviso de faltante certo), renda fixa
+cobrindo tudo (mensagem verde) e economia do mês negativa (aviso vermelho).
+
+## Parte 7 — Seleção múltipla + exclusão de categoria em uso (CONSTRUÍDA e VERIFICADA em 2026-07-25)
+
+Duas frentes pedidas pelo usuário: (1) marcar vários itens e excluir em lote nas
+telas de listagem; (2) um bug sério — excluir uma categoria já usada em despesas
+ou limites deslogava o usuário em vez de mostrar um erro.
+
+### Seleção múltipla + exclusão em lote
+- `hooks/useSelecao.ts` (novo) — Set de ids selecionados. Expõe `alternar(id)`,
+  `limpar()`, `selecionarTodos(ids)` (faz **merge** no Set, não substitui — importante
+  pra permitir mais de um "selecionar todos" na mesma página sem apagar seleção de
+  outra seção), `desselecionarTodos(ids)` (remove só esses ids) e
+  `todosSelecionados(ids)`.
+- `components/BarraSelecao.tsx` (novo) — barra "N selecionados" + Cancelar/Excluir,
+  só aparece quando há seleção.
+- `components/SelecionarTodos.tsx` (novo) — checkbox "Selecionar todos" reutilizável.
+- Aplicado com checkbox por item + `BarraSelecao` + `SelecionarTodos` em **todas as
+  6 listas**: `CategoriasPage`, `RendasPage`, `DespesasPage`, `ObjetivosPage`,
+  `LimitesPage` e a seção "Investimento CDB" da `HomePage`.
+- Em `RendasPage` (3 seções por tipo: Fixa/Variável/Retorno), o usuário pediu
+  **um "Selecionar todos" por seção**, não um único pra página toda — por isso
+  `selecionarTodos` faz merge em vez de substituir (cada seção some/some só os
+  ids do seu tipo, sem mexer na seleção das outras).
+- Exclusão em lote das 5 telas sem regra de "em uso" (Rendas, Despesas, Objetivos,
+  Limites, CDB) usa `Promise.allSettled` sobre os ids marcados e reporta quantos
+  falharam. Categorias tem fluxo próprio (ver abaixo) porque pode estar em uso.
+- **Bug encontrado e corrigido**: excluir um item pelo botão individual da própria
+  linha **não tirava o id da seleção** — se ele já estivesse marcado, ficava "só"
+  no Set mesmo após sumir da lista, inflando a contagem da `BarraSelecao` e
+  quebrando a exclusão em lote seguinte (tentava excluir um id que já não existe
+  mais). Corrigido chamando `desselecionarTodos([id])` logo após cada exclusão
+  individual bem-sucedida, nas 6 telas.
+
+### Excluir categoria em uso: bug do deslogamento + cascata com aviso
+Fluxo problemático original: excluir uma `Categoria` referenciada por `Despesa`/
+`LimiteCategoria` (FK sem cascade) causava `DataIntegrityViolationException`
+**não tratada**, que o Spring Boot encaminhava pro `/error` interno; como
+`SecurityConfig` tinha `.anyRequest().authenticated()` sem liberar `/error`, o
+`HttpStatusEntryPoint(401)` interceptava esse forward e devolvia **401** em vez do
+status real — e o interceptor do axios (`api/client.ts`) trata qualquer 401 fora
+de `/auth/*` como sessão expirada, deslogando o usuário sem motivo real.
+
+**Decisão do usuário**: em vez de só bloquear a exclusão, permitir **excluir em
+cascata** (categoria + despesas + limites vinculados), com aviso reforçado
+avisando que isso afeta relatórios, e a opção de editar a categoria em vez de
+excluir (edição de categoria **não existia** no frontend até esta sessão — o
+backend já tinha `PUT /api/categorias/{id}` pronto, só faltava usar).
+
+Backend (`CategoriaService.java`, `CategoriaController.java`):
+- `excluir(usuarioId, categoriaId)` (2 args, mantido p/ compat) delega pra
+  `excluir(usuarioId, categoriaId, cascata)` (novo overload). Sem `cascata`,
+  continua lançando `CategoriaEmUsoException` (409) se a categoria estiver em uso
+  (`despesaRepository.existsByCategoriaId` / `limiteCategoriaRepository.existsByCategoriaId`).
+  Com `cascata=true`, chama `deleteByCategoriaId` (novo, nos dois repositórios)
+  antes de excluir a categoria.
+- `DELETE /api/categorias/{id}?cascata=true` (query param, default `false`).
+- `SecurityConfig.java` — `.requestMatchers("/error").permitAll()` adicionado
+  como defesa em profundidade (evita que qualquer exceção não tratada futura
+  vire 401 disfarçado).
+- **Bug real encontrado só em teste manual (não pego pelos testes unitários com
+  mock)**: o método `excluir(..., cascata=true)` dava **500**, não 409 nem 204.
+  Causa: `deleteByCategoriaId` é um "query method" derivado do Spring Data, que
+  roda em transação **somente leitura** por padrão quando não há transação
+  explícita ao redor — e uma query de DELETE dentro de uma transação read-only
+  falha. Fix: `@Transactional` em `CategoriaService.excluir(usuarioId, categoriaId,
+  cascata)`. Validado subindo uma instância temporária do backend numa porta
+  separada (8099, sem mexer na instância normal do usuário na 8080) e reproduzindo
+  o cenário real via `curl` (categoria com despesa E limite vinculados → 409 sem
+  cascata, 204 com cascata e sumiu de fato).
+- Testes novos em `CategoriaServiceTest` (cascata chama os dois `deleteByCategoriaId`
+  antes de `categoriaRepository.delete`; sem uso não chama nenhum) e
+  `CategoriaControllerTest` (`cascata=true` → 204, sem cascata em uso → 409).
+  Suíte total: **143 testes verdes**.
+
+Frontend:
+- `NovaCategoriaModal.tsx` ganhou modo edição (prop opcional `categoria`, mesmo
+  padrão do `NovaRendaModal`): prefill do nome + `atualizarCategoria` (novo em
+  `api/categorias.ts`) em vez de `criarCategoria`.
+- `api/categorias.ts` — `excluirCategoria(id, cascata = false)` manda
+  `?cascata=true` quando `cascata`.
+- **Sem `confirm()`/`alert()` nativo do navegador** para excluir categoria (pedido
+  explícito do usuário) — dois popups novos, com um estágio que só escala se o
+  backend recusar com 409 (ou seja, só pede o aviso forte quando a categoria
+  realmente está em uso):
+  - `components/ExcluirCategoriaModal.tsx` (exclusão individual): abre como
+    confirmação simples "Excluir a categoria X?"; só se a tentativa sem cascata
+    voltar 409 é que muda pra um segundo estágio com aviso âmbar (despesas E
+    limites serão apagados, afeta relatórios), campo pra digitar **EXCLUIR** (o
+    botão destrutivo só habilita com a palavra exata) e botão "Editar categoria".
+  - `components/ExcluirCategoriasSelecionadasModal.tsx` (exclusão em lote): mesma
+    ideia, mas sobre uma lista de ids — tenta excluir todos sem cascata; os que
+    falharem (em uso) entram num segundo estágio único (não um popup por item)
+    pedindo EXCLUIR pra cascatear só esses; os que não estavam em uso já foram
+    excluídos no primeiro passo.
+- `CategoriasPage.tsx` — botão "Editar" novo por linha; "Excluir" (individual e em
+  lote) abre os popups acima em vez de `excluirCategoria` direto na página.
+
+### Verificação
+Backend: `mvnw test` → **143 testes verdes**. Frontend: `npm run build`/`npm run
+lint` limpos a cada mudança. Bug do 500 em cascata reproduzido e corrigido via
+teste manual com `curl` contra uma instância descartável do backend (documentado
+acima). **Falta o usuário testar ponta a ponta no navegador** com o backend
+reiniciado (o fix do `@Transactional` só vale depois de reiniciar — `mvnw
+spring-boot:run` não faz hot-reload, gotcha já conhecido do projeto).

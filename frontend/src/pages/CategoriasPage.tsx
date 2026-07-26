@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { NovaCategoriaModal } from "../components/NovaCategoriaModal";
-import { listarCategorias, excluirCategoria } from "../api/categorias";
+import { ExcluirCategoriaModal } from "../components/ExcluirCategoriaModal";
+import { ExcluirCategoriasSelecionadasModal } from "../components/ExcluirCategoriasSelecionadasModal";
+import { BarraSelecao } from "../components/BarraSelecao";
+import { SelecionarTodos } from "../components/SelecionarTodos";
+import { useSelecao } from "../hooks/useSelecao";
+import { listarCategorias } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
 import type { Categoria } from "../types/financas";
 
@@ -10,6 +15,30 @@ export function CategoriasPage() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
+  // Categoria em edição (null com modal aberto = criação de uma nova).
+  const [editando, setEditando] = useState<Categoria | null>(null);
+  // Categoria selecionada para excluir (abre o popup de exclusão individual).
+  const [categoriaParaExcluir, setCategoriaParaExcluir] = useState<Categoria | null>(null);
+  // Popup de exclusão em lote aberto?
+  const [modalLoteAberto, setModalLoteAberto] = useState(false);
+  const {
+    selecionados,
+    alternar,
+    limpar,
+    selecionarTodos,
+    desselecionarTodos,
+    todosSelecionados,
+  } = useSelecao();
+
+  function abrirNova() {
+    setEditando(null);
+    setModalAberto(true);
+  }
+
+  function abrirEdicao(cat: Categoria) {
+    setEditando(cat);
+    setModalAberto(true);
+  }
 
   async function carregar() {
     setErro(null);
@@ -27,27 +56,27 @@ export function CategoriasPage() {
     carregar();
   }, []);
 
-  async function excluir(cat: Categoria) {
-    if (!confirm(`Excluir a categoria "${cat.nome}"?`)) return;
-    try {
-      await excluirCategoria(cat.id);
-      carregar();
-    } catch (e) {
-      // Ex.: categoria com despesas vinculadas -> backend recusa.
-      setErro(mensagemDeErro(e));
-    }
+  function pedirExclusao(cat: Categoria) {
+    setCategoriaParaExcluir(cat);
   }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader titulo="Categorias">
         <button
-          onClick={() => setModalAberto(true)}
+          onClick={abrirNova}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           + Adicionar categoria
         </button>
       </PageHeader>
+
+      <BarraSelecao
+        quantidade={selecionados.size}
+        texto={`${selecionados.size} categoria${selecionados.size > 1 ? "s" : ""} selecionada${selecionados.size > 1 ? "s" : ""}`}
+        onExcluir={() => setModalLoteAberto(true)}
+        onCancelar={limpar}
+      />
 
       {erro && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -64,31 +93,85 @@ export function CategoriasPage() {
               Nenhuma categoria criada ainda.
             </p>
           ) : (
-            <ul className="divide-y divide-slate-100">
+            <>
+              <div className="mb-3">
+                <SelecionarTodos
+                  marcado={todosSelecionados(categorias.map((c) => c.id))}
+                  onAlternar={() =>
+                    todosSelecionados(categorias.map((c) => c.id))
+                      ? limpar()
+                      : selecionarTodos(categorias.map((c) => c.id))
+                  }
+                />
+              </div>
+              <ul className="divide-y divide-slate-100">
               {categorias.map((cat) => (
                 <li
                   key={cat.id}
                   className="flex items-center justify-between py-3"
                 >
-                  <span className="font-medium text-slate-800">{cat.nome}</span>
-                  <button
-                    onClick={() => excluir(cat)}
-                    className="text-sm font-medium text-red-600 hover:text-red-700"
-                  >
-                    Excluir
-                  </button>
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selecionados.has(cat.id)}
+                      onChange={() => alternar(cat.id)}
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="font-medium text-slate-800">{cat.nome}</span>
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => abrirEdicao(cat)}
+                      className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => pedirExclusao(cat)}
+                      className="text-sm font-medium text-red-600 hover:text-red-700"
+                    >
+                      Excluir
+                    </button>
+                  </div>
                 </li>
               ))}
-            </ul>
+              </ul>
+            </>
           )}
         </section>
       )}
 
       <NovaCategoriaModal
         aberto={modalAberto}
+        categoria={editando}
         onClose={() => setModalAberto(false)}
         onCriada={() => {
           setModalAberto(false);
+          carregar();
+        }}
+      />
+
+      <ExcluirCategoriaModal
+        categoria={categoriaParaExcluir}
+        onClose={() => setCategoriaParaExcluir(null)}
+        onEditar={(cat) => {
+          setCategoriaParaExcluir(null);
+          abrirEdicao(cat);
+        }}
+        onExcluida={() => {
+          if (categoriaParaExcluir) desselecionarTodos([categoriaParaExcluir.id]);
+          setCategoriaParaExcluir(null);
+          carregar();
+        }}
+      />
+
+      <ExcluirCategoriasSelecionadasModal
+        ids={Array.from(selecionados)}
+        aberto={modalLoteAberto}
+        onClose={() => setModalLoteAberto(false)}
+        onConcluido={() => {
+          setModalLoteAberto(false);
+          limpar();
           carregar();
         }}
       />

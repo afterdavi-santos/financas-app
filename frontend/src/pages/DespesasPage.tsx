@@ -3,6 +3,9 @@ import { PageHeader } from "../components/PageHeader";
 import { StatCard } from "../components/StatCard";
 import { NovaDespesaModal } from "../components/NovaDespesaModal";
 import { DetalheDespesasModal } from "../components/DetalheDespesasModal";
+import { BarraSelecao } from "../components/BarraSelecao";
+import { SelecionarTodos } from "../components/SelecionarTodos";
+import { useSelecao } from "../hooks/useSelecao";
 import { listarDespesas, excluirDespesa } from "../api/despesas";
 import { listarCategorias } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
@@ -45,6 +48,14 @@ export function DespesasPage() {
     titulo: string;
     despesas: Despesa[];
   } | null>(null);
+  const {
+    selecionados,
+    alternar,
+    limpar,
+    selecionarTodos,
+    desselecionarTodos,
+    todosSelecionados,
+  } = useSelecao();
 
   // Busca as despesas do mês selecionado E do mês anterior (para a comparação).
   async function carregar() {
@@ -103,10 +114,24 @@ export function DespesasPage() {
     if (!confirm(`Excluir a despesa "${despesa.descricao}"?`)) return;
     try {
       await excluirDespesa(despesa.id);
+      desselecionarTodos([despesa.id]);
       carregar();
     } catch (e) {
       setErro(mensagemDeErro(e));
     }
+  }
+
+  async function excluirSelecionadas() {
+    const ids = Array.from(selecionados);
+    const plural = ids.length > 1;
+    if (!confirm(`Excluir ${ids.length} despesa${plural ? "s" : ""} selecionada${plural ? "s" : ""}?`)) return;
+    const resultados = await Promise.allSettled(ids.map((id) => excluirDespesa(id)));
+    const falhas = resultados.filter((r) => r.status === "rejected").length;
+    if (falhas > 0) {
+      setErro(`${falhas} de ${ids.length} despesa(s) não puderam ser excluídas.`);
+    }
+    limpar();
+    carregar();
   }
 
   // Mais recentes primeiro (por data).
@@ -122,7 +147,10 @@ export function DespesasPage() {
         <input
           type="month"
           value={mes}
-          onChange={(e) => setMes(e.target.value)}
+          onChange={(e) => {
+            limpar(); // seleção era da lista do mês anterior
+            setMes(e.target.value);
+          }}
           className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <button
@@ -132,6 +160,13 @@ export function DespesasPage() {
           + Adicionar despesa
         </button>
       </PageHeader>
+
+      <BarraSelecao
+        quantidade={selecionados.size}
+        texto={`${selecionados.size} despesa${selecionados.size > 1 ? "s" : ""} selecionada${selecionados.size > 1 ? "s" : ""}`}
+        onExcluir={excluirSelecionadas}
+        onCancelar={limpar}
+      />
 
       {erro && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -243,9 +278,21 @@ export function DespesasPage() {
 
           {/* Lista completa das despesas do mês (com excluir). */}
           <section className="rounded-xl bg-white p-5 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-slate-700">
-              Todas as despesas do mês
-            </h2>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-700">
+                Todas as despesas do mês
+              </h2>
+              {ordenadas.length > 0 && (
+                <SelecionarTodos
+                  marcado={todosSelecionados(ordenadas.map((d) => d.id))}
+                  onAlternar={() =>
+                    todosSelecionados(ordenadas.map((d) => d.id))
+                      ? limpar()
+                      : selecionarTodos(ordenadas.map((d) => d.id))
+                  }
+                />
+              )}
+            </div>
             {ordenadas.length === 0 ? (
               <p className="text-sm text-slate-500">
                 Nenhuma despesa lançada neste mês ainda.
@@ -257,15 +304,23 @@ export function DespesasPage() {
                     key={d.id}
                     className="flex items-center justify-between py-3"
                   >
-                    <div>
-                      <p className="font-medium text-slate-800">
-                        {d.descricao}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {d.categoria.nome} · {rotuloTipoDespesa[d.tipo]} ·{" "}
-                        {dataBR(d.data)}
-                      </p>
-                    </div>
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selecionados.has(d.id)}
+                        onChange={() => alternar(d.id)}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div>
+                        <p className="font-medium text-slate-800">
+                          {d.descricao}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {d.categoria.nome} · {rotuloTipoDespesa[d.tipo]} ·{" "}
+                          {dataBR(d.data)}
+                        </p>
+                      </div>
+                    </label>
                     <div className="flex items-center gap-4">
                       <span className="font-semibold text-slate-800">
                         {formatarBRL(d.valor)}

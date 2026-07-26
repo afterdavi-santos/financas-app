@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -54,8 +55,9 @@ public class CategoriaController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> excluir(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado,
-                                         @PathVariable Long id) {
-        categoriaService.excluir(usuarioAutenticado.getId(), id);
+                                         @PathVariable Long id,
+                                         @RequestParam(defaultValue = "false") boolean cascata) {
+        categoriaService.excluir(usuarioAutenticado.getId(), id, cascata);
         return ResponseEntity.noContent().build();
     }
 

@@ -3,6 +3,9 @@ import { PageHeader } from "../components/PageHeader";
 import { NovoObjetivoModal } from "../components/NovoObjetivoModal";
 import { AportarModal } from "../components/AportarModal";
 import { LinhaTempoAportesModal } from "../components/LinhaTempoAportesModal";
+import { BarraSelecao } from "../components/BarraSelecao";
+import { SelecionarTodos } from "../components/SelecionarTodos";
+import { useSelecao } from "../hooks/useSelecao";
 import { listarObjetivos, excluirObjetivo } from "../api/objetivos";
 import { listarRendas } from "../api/rendas";
 import { mensagemDeErro } from "../api/erros";
@@ -24,6 +27,14 @@ export function ObjetivosPage() {
   const [aportando, setAportando] = useState<Objetivo | null>(null);
   // Objetivo cuja linha do tempo de aportes está aberta (null = fechada).
   const [linhaTempo, setLinhaTempo] = useState<Objetivo | null>(null);
+  const {
+    selecionados,
+    alternar,
+    limpar,
+    selecionarTodos,
+    desselecionarTodos,
+    todosSelecionados,
+  } = useSelecao();
 
   function abrirNovo() {
     setEditando(null);
@@ -68,10 +79,24 @@ export function ObjetivosPage() {
     if (!confirm(`Excluir o objetivo "${obj.descricao}"?`)) return;
     try {
       await excluirObjetivo(obj.id);
+      desselecionarTodos([obj.id]);
       carregar();
     } catch (e) {
       setErro(mensagemDeErro(e));
     }
+  }
+
+  async function excluirSelecionados() {
+    const ids = Array.from(selecionados);
+    const plural = ids.length > 1;
+    if (!confirm(`Excluir ${ids.length} objetivo${plural ? "s" : ""} selecionado${plural ? "s" : ""}?`)) return;
+    const resultados = await Promise.allSettled(ids.map((id) => excluirObjetivo(id)));
+    const falhas = resultados.filter((r) => r.status === "rejected").length;
+    if (falhas > 0) {
+      setErro(`${falhas} de ${ids.length} objetivo(s) não puderam ser excluídos.`);
+    }
+    limpar();
+    carregar();
   }
 
   return (
@@ -84,6 +109,24 @@ export function ObjetivosPage() {
           + Adicionar objetivo
         </button>
       </PageHeader>
+
+      <BarraSelecao
+        quantidade={selecionados.size}
+        texto={`${selecionados.size} objetivo${selecionados.size > 1 ? "s" : ""} selecionado${selecionados.size > 1 ? "s" : ""}`}
+        onExcluir={excluirSelecionados}
+        onCancelar={limpar}
+      />
+
+      {objetivos.length > 0 && (
+        <SelecionarTodos
+          marcado={todosSelecionados(objetivos.map((o) => o.id))}
+          onAlternar={() =>
+            todosSelecionados(objetivos.map((o) => o.id))
+              ? limpar()
+              : selecionarTodos(objetivos.map((o) => o.id))
+          }
+        />
+      )}
 
       {erro && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -106,7 +149,14 @@ export function ObjetivosPage() {
             return (
               <div key={obj.id} className="rounded-xl bg-white p-5 shadow-sm">
                 <div className="flex items-start justify-between gap-2">
-                  <div>
+                  <label className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selecionados.has(obj.id)}
+                      onChange={() => alternar(obj.id)}
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
                     <p className="font-semibold text-slate-800">
                       {obj.descricao}
                     </p>
@@ -118,7 +168,8 @@ export function ObjetivosPage() {
                     <p className="mt-0.5 text-xs text-slate-500">
                       Meta: {dataBR(obj.dataAlvo)}
                     </p>
-                  </div>
+                    </div>
+                  </label>
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => abrirEdicao(obj)}

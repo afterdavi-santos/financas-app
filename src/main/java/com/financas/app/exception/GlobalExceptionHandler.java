@@ -29,6 +29,12 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(HttpStatus.CONFLICT.value(), ex.getMessage()));
     }
 
+    @ExceptionHandler(CategoriaEmUsoException.class)
+    public ResponseEntity<ErrorResponse> tratarCategoriaEmUso(CategoriaEmUsoException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse(HttpStatus.CONFLICT.value(), ex.getMessage()));
+    }
+
     @ExceptionHandler(OperacaoInvalidaException.class)
     public ResponseEntity<ErrorResponse> tratarOperacaoInvalida(OperacaoInvalidaException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

@@ -8,9 +8,12 @@ import { SimularDespesaModal } from "../components/SimularDespesaModal";
 import { NovoInvestimentoCdbModal } from "../components/NovoInvestimentoCdbModal";
 import { ResgatarCdbModal } from "../components/ResgatarCdbModal";
 import { InvestirMaisModal } from "../components/InvestirMaisModal";
+import { BarraSelecao } from "../components/BarraSelecao";
+import { SelecionarTodos } from "../components/SelecionarTodos";
+import { useSelecao } from "../hooks/useSelecao";
 import { listarCategorias } from "../api/categorias";
 import { listarDespesas } from "../api/despesas";
-import { totalRenda } from "../api/rendas";
+import { totalRenda, listarRendas } from "../api/rendas";
 import {
   listarInvestimentosCdb,
   posicaoInvestimentoCdb,
@@ -18,9 +21,21 @@ import {
 } from "../api/investimentosCdb";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
-import { rotuloTipoDespesa, dataBR } from "../utils/rotulos";
-import { mesAtualYYYYMM, primeiroDiaDoMesISO, ultimoDiaDoMesISO } from "../utils/datas";
-import type { Categoria, Despesa, InvestimentoCdb, PosicaoCdb } from "../types/financas";
+import { rotuloTipoDespesa, dataBR, mesCurtoBR } from "../utils/rotulos";
+import {
+  mesAtualYYYYMM,
+  primeiroDiaDoMesISO,
+  ultimoDiaDoMesISO,
+  primeiroDiaDoProximoMesISO,
+} from "../utils/datas";
+import { planoContencao } from "../utils/contencaoRendaVariavel";
+import type {
+  Categoria,
+  Despesa,
+  InvestimentoCdb,
+  PosicaoCdb,
+  Renda,
+} from "../types/financas";
 
 // Guardamos no localStorage o último mês em que o usuário já viu o lembrete de
 // redefinir limites, para mostrá-lo uma vez por mês (ao entrar no mês novo).
@@ -30,6 +45,7 @@ export function HomePage() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [renda, setRenda] = useState(0);
+  const [rendas, setRendas] = useState<Renda[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -46,6 +62,14 @@ export function HomePage() {
   const [editandoInvestimento, setEditandoInvestimento] = useState<InvestimentoCdb | null>(null);
   const [resgatando, setResgatando] = useState<InvestimentoCdb | null>(null);
   const [investindoMaisEm, setInvestindoMaisEm] = useState<InvestimentoCdb | null>(null);
+  const {
+    selecionados: cdbSelecionados,
+    alternar: alternarCdb,
+    limpar: limparCdb,
+    selecionarTodos: selecionarTodosCdb,
+    desselecionarTodos: desselecionarTodosCdb,
+    todosSelecionados: todosSelecionadosCdb,
+  } = useSelecao();
 
   const navigate = useNavigate();
 
@@ -69,15 +93,17 @@ export function HomePage() {
     try {
       const inicio = primeiroDiaDoMesISO();
       const fim = ultimoDiaDoMesISO();
-      const [cats, desps, tot, invs] = await Promise.all([
+      const [cats, desps, tot, rds, invs] = await Promise.all([
         listarCategorias(),
         listarDespesas({ inicio, fim }),
         totalRenda(inicio), // mesReferencia = 1º dia do mês
+        listarRendas(),
         listarInvestimentosCdb(),
       ]);
       setCategorias(cats);
       setDespesas(desps);
       setRenda(tot);
+      setRendas(rds);
       // Só os ativos aparecem na home (os encerrados já viraram Renda do mês do resgate).
       setInvestimentos(invs.filter((i) => i.dataResgate === null));
     } catch (e) {
@@ -116,6 +142,25 @@ export function HomePage() {
     .sort((a, b) => b.data.localeCompare(a.data))
     .slice(0, 3);
 
+  // Plano de contenção: só faz sentido reduzir despesas se a renda FIXA sozinha
+  // não bastaria para cobrir as despesas deste mês (ou seja, o mês só "fechou"
+  // graças à renda variável). Se a renda fixa já cobre tudo, não há risco real
+  // para o mês seguinte — a seção continua visível, mas sem sugestão de corte.
+  const rendasDoMes = rendas.filter(
+    (r) => r.mesReferencia === primeiroDiaDoMesISO(),
+  );
+  const rendaFixaMes = rendasDoMes
+    .filter((r) => r.tipo === "FIXA")
+    .reduce((soma, r) => soma + r.valor, 0);
+  const rendaVariavelMes = rendasDoMes
+    .filter((r) => r.tipo === "FREELA" || r.tipo === "RETORNO_INVESTIMENTOS")
+    .reduce((soma, r) => soma + r.valor, 0);
+  const valorNecessarioReduzir = Math.max(0, totalDespesas - rendaFixaMes);
+  const despesasExtraordinarias = despesas.filter(
+    (d) => d.tipo === "EXTRAORDINARIA",
+  );
+  const plano = planoContencao(despesasExtraordinarias, valorNecessarioReduzir);
+
   // Chamado quando um modal salva com sucesso: fecha e recarrega os dados.
   function aoSalvar() {
     setModalDespesa(false);
@@ -138,10 +183,24 @@ export function HomePage() {
     if (!confirm(`Excluir o investimento "${investimento.descricao}"?`)) return;
     try {
       await excluirInvestimentoCdb(investimento.id);
+      desselecionarTodosCdb([investimento.id]);
       carregar();
     } catch (e) {
       setErro(mensagemDeErro(e));
     }
+  }
+
+  async function excluirInvestimentosSelecionados() {
+    const ids = Array.from(cdbSelecionados);
+    const plural = ids.length > 1;
+    if (!confirm(`Excluir ${ids.length} investimento${plural ? "s" : ""} selecionado${plural ? "s" : ""}?`)) return;
+    const resultados = await Promise.allSettled(ids.map((id) => excluirInvestimentoCdb(id)));
+    const falhas = resultados.filter((r) => r.status === "rejected").length;
+    if (falhas > 0) {
+      setErro(`${falhas} de ${ids.length} investimento(s) não puderam ser excluídos.`);
+    }
+    limparCdb();
+    carregar();
   }
 
   return (
@@ -227,6 +286,70 @@ export function HomePage() {
             />
           </div>
 
+          {/* Plano de contenção: seção FIXA na home (sempre visível). Só mostra
+              sugestão de corte quando a renda fixa sozinha não cobriria as
+              despesas deste mês — ou seja, quando o mês só "fechou" com a
+              ajuda da renda variável. Caso contrário, mostra que está tudo bem. */}
+          <section className="space-y-3 rounded-xl bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-800">
+              Plano de contenção — {mesCurtoBR(primeiroDiaDoProximoMesISO())}
+            </h2>
+            {plano ? (
+              <>
+                {economia < 0 && (
+                  <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+                    Atenção: mesmo com a ajuda da renda variável, este mês já
+                    fechou no negativo (economia de {formatarBRL(economia)}).
+                    Isso torna ainda mais urgente reduzir estas despesas.
+                  </p>
+                )}
+                <p className="text-sm text-slate-600">
+                  {rendaVariavelMes > 0
+                    ? `Sua renda fixa (${formatarBRL(rendaFixaMes)}) não seria suficiente para cobrir as despesas deste mês (${formatarBRL(totalDespesas)}) sem a ajuda de ${formatarBRL(rendaVariavelMes)} em renda variável (freelas e retornos de investimento) — valores sem garantia de se repetir.`
+                    : `As despesas deste mês (${formatarBRL(totalDespesas)}) já superam sua renda fixa (${formatarBRL(rendaFixaMes)}), mesmo sem nenhuma renda variável este mês.`}
+                </p>
+                <p className="text-sm text-slate-700">
+                  Para não fechar o próximo mês no negativo, considere reduzir
+                  estas despesas extraordinárias em{" "}
+                  {formatarBRL(plano.totalReducaoSugerida)}:
+                </p>
+                <ul className="divide-y divide-slate-100">
+                  {plano.categorias.map((c) => (
+                    <li
+                      key={c.nome}
+                      className="flex items-center justify-between py-2 text-sm"
+                    >
+                      <span className="text-slate-700">
+                        {c.nome}{" "}
+                        <span className="text-slate-400">
+                          ({formatarBRL(c.gastoAtual)})
+                        </span>
+                      </span>
+                      <span className="font-medium text-red-600">
+                        -{formatarBRL(c.reducaoSugerida)} (
+                        {c.percentualReducao.toFixed(0)}%)
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {!plano.cobreQueda && (
+                  <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    Mesmo reduzindo todas as despesas extraordinárias a zero,
+                    ainda faltariam {formatarBRL(plano.faltante)} para fechar o
+                    próximo mês só com a renda fixa. Vale revisar despesas
+                    fixas ou buscar reforçar a renda fixa.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+                {rendaVariavelMes > 0
+                  ? `Este mês você teve ${formatarBRL(rendaVariavelMes)} em renda variável, mas sua renda fixa (${formatarBRL(rendaFixaMes)}) já cobre sozinha as despesas do mês (${formatarBRL(totalDespesas)}) — nada precisa ser reduzido.`
+                  : `Sua renda fixa (${formatarBRL(rendaFixaMes)}) cobre as despesas deste mês (${formatarBRL(totalDespesas)}) — nada precisa ser reduzido.`}
+              </p>
+            )}
+          </section>
+
           {/* Investimento CDB: só o que dá pra calcular automaticamente.
               Só conta como renda no mês em que for resgatado. */}
           <section className="rounded-xl bg-white p-5 shadow-sm">
@@ -246,23 +369,48 @@ export function HomePage() {
                 Nenhum investimento CDB ativo.
               </p>
             ) : (
-              <ul className="divide-y divide-slate-100">
+              <>
+                <BarraSelecao
+                  quantidade={cdbSelecionados.size}
+                  texto={`${cdbSelecionados.size} investimento${cdbSelecionados.size > 1 ? "s" : ""} selecionado${cdbSelecionados.size > 1 ? "s" : ""}`}
+                  onExcluir={excluirInvestimentosSelecionados}
+                  onCancelar={limparCdb}
+                />
+                <div className="mb-3">
+                  <SelecionarTodos
+                    marcado={todosSelecionadosCdb(investimentos.map((i) => i.id))}
+                    onAlternar={() =>
+                      todosSelecionadosCdb(investimentos.map((i) => i.id))
+                        ? limparCdb()
+                        : selecionarTodosCdb(investimentos.map((i) => i.id))
+                    }
+                  />
+                </div>
+                <ul className="divide-y divide-slate-100">
                 {investimentos.map((inv) => {
                   const posicao = posicoesCdb[inv.id];
                   return (
                     <li key={inv.id} className="py-3">
                       <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="font-medium text-slate-800">
-                            {inv.descricao}{" "}
-                            <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
-                              {inv.percentualCdi}% do CDI
-                            </span>
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            Aplicado em {dataBR(inv.dataAplicacao)}
-                          </p>
-                        </div>
+                        <label className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={cdbSelecionados.has(inv.id)}
+                            onChange={() => alternarCdb(inv.id)}
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div>
+                            <p className="font-medium text-slate-800">
+                              {inv.descricao}{" "}
+                              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                                {inv.percentualCdi}% do CDI
+                              </span>
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              Aplicado em {dataBR(inv.dataAplicacao)}
+                            </p>
+                          </div>
+                        </label>
                         <div className="flex items-center gap-3">
                           <span className="font-semibold text-indigo-700">
                             {formatarBRL(posicao ? posicao.valorAtual : inv.valorAplicado)}
@@ -302,7 +450,8 @@ export function HomePage() {
                     </li>
                   );
                 })}
-              </ul>
+                </ul>
+              </>
             )}
           </section>
 

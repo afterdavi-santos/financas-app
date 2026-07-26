@@ -1,29 +1,44 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Modal } from "./Modal";
-import { criarCategoria } from "../api/categorias";
+import { criarCategoria, atualizarCategoria } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
+import type { Categoria } from "../types/financas";
 
-// Modal com o form de nova categoria (só o campo `nome`).
-// `onCriada` avisa a home para fechar o modal e recarregar os dados.
+// Modal com o form de categoria (só o campo `nome`).
+// `categoria` (opcional) coloca o modal em modo EDIÇÃO — prefill + PUT em vez de POST.
+// `onCriada` avisa a página para fechar o modal e recarregar os dados.
 interface Props {
   aberto: boolean;
   onClose: () => void;
   onCriada: () => void;
+  categoria?: Categoria | null;
 }
 
-export function NovaCategoriaModal({ aberto, onClose, onCriada }: Props) {
+export function NovaCategoriaModal({ aberto, onClose, onCriada, categoria }: Props) {
+  const editando = !!categoria;
   const [nome, setNome] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
+
+  // Ao abrir, sincroniza o campo: com categoria -> prefill; sem -> limpa.
+  useEffect(() => {
+    if (!aberto) return;
+    setErro(null);
+    setNome(categoria?.nome ?? "");
+  }, [aberto, categoria]);
 
   async function aoEnviar(evento: FormEvent) {
     evento.preventDefault();
     setErro(null);
     setCarregando(true);
     try {
-      await criarCategoria({ nome });
-      setNome(""); // limpa para o próximo uso
+      if (editando) {
+        await atualizarCategoria(categoria.id, { nome });
+      } else {
+        await criarCategoria({ nome });
+        setNome(""); // limpa para o próximo uso
+      }
       onCriada();
     } catch (e) {
       setErro(mensagemDeErro(e));
@@ -33,7 +48,11 @@ export function NovaCategoriaModal({ aberto, onClose, onCriada }: Props) {
   }
 
   return (
-    <Modal titulo="Nova categoria" aberto={aberto} onClose={onClose}>
+    <Modal
+      titulo={editando ? "Editar categoria" : "Nova categoria"}
+      aberto={aberto}
+      onClose={onClose}
+    >
       <form onSubmit={aoEnviar} className="space-y-4">
         {erro && (
           <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">

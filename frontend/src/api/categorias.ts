@@ -15,7 +15,21 @@ export async function criarCategoria(
   return data;
 }
 
+// PUT /api/categorias/{id} body {nome} -> categoria atualizada.
+export async function atualizarCategoria(
+  id: number,
+  req: CategoriaRequest,
+): Promise<Categoria> {
+  const { data } = await api.put<Categoria>(`/categorias/${id}`, req);
+  return data;
+}
+
 // DELETE /api/categorias/{id} -> 204 (sem corpo).
-export async function excluirCategoria(id: number): Promise<void> {
-  await api.delete(`/categorias/${id}`);
+// cascata=true também apaga despesas e limites vinculados (backend recusa com
+// 409 se cascata=false e a categoria estiver em uso).
+export async function excluirCategoria(
+  id: number,
+  cascata = false,
+): Promise<void> {
+  await api.delete(`/categorias/${id}`, { params: cascata ? { cascata: true } : undefined });
 }

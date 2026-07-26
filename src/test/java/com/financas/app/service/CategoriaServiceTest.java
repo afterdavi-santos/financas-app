@@ -1,9 +1,12 @@
 package com.financas.app.service;
 
+import com.financas.app.exception.CategoriaEmUsoException;
 import com.financas.app.exception.RecursoNaoEncontradoException;
 import com.financas.app.model.Categoria;
 import com.financas.app.model.Usuario;
 import com.financas.app.repository.CategoriaRepository;
+import com.financas.app.repository.DespesaRepository;
+import com.financas.app.repository.LimiteCategoriaRepository;
 import com.financas.app.repository.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,11 +33,18 @@ class CategoriaServiceTest {
     @Mock
     private UsuarioRepository usuarioRepository;
 
+    @Mock
+    private DespesaRepository despesaRepository;
+
+    @Mock
+    private LimiteCategoriaRepository limiteCategoriaRepository;
+
     private CategoriaService categoriaService;
 
     @BeforeEach
     void setUp() {
-        categoriaService = new CategoriaService(categoriaRepository, usuarioRepository);
+        categoriaService = new CategoriaService(
+                categoriaRepository, usuarioRepository, despesaRepository, limiteCategoriaRepository);
     }
 
     private Usuario usuarioComId(Long id) {
@@ -125,6 +135,55 @@ class CategoriaServiceTest {
 
         assertThatThrownBy(() -> categoriaService.excluir(1L, 10L))
                 .isInstanceOf(RecursoNaoEncontradoException.class);
+    }
+
+    @Test
+    void deveFalharAoExcluirCategoriaComDespesaVinculada() {
+        Categoria existente = categoriaDoUsuario(10L, 1L);
+        when(categoriaRepository.findById(10L)).thenReturn(Optional.of(existente));
+        when(despesaRepository.existsByCategoriaId(10L)).thenReturn(true);
+
+        assertThatThrownBy(() -> categoriaService.excluir(1L, 10L))
+                .isInstanceOf(CategoriaEmUsoException.class);
+
+        verify(categoriaRepository, never()).delete(any());
+    }
+
+    @Test
+    void deveFalharAoExcluirCategoriaComLimiteVinculado() {
+        Categoria existente = categoriaDoUsuario(10L, 1L);
+        when(categoriaRepository.findById(10L)).thenReturn(Optional.of(existente));
+        when(limiteCategoriaRepository.existsByCategoriaId(10L)).thenReturn(true);
+
+        assertThatThrownBy(() -> categoriaService.excluir(1L, 10L))
+                .isInstanceOf(CategoriaEmUsoException.class);
+
+        verify(categoriaRepository, never()).delete(any());
+    }
+
+    @Test
+    void deveExcluirEmCascataCategoriaComDespesaVinculadaQuandoConfirmado() {
+        Categoria existente = categoriaDoUsuario(10L, 1L);
+        when(categoriaRepository.findById(10L)).thenReturn(Optional.of(existente));
+        when(despesaRepository.existsByCategoriaId(10L)).thenReturn(true);
+
+        categoriaService.excluir(1L, 10L, true);
+
+        verify(despesaRepository).deleteByCategoriaId(10L);
+        verify(limiteCategoriaRepository).deleteByCategoriaId(10L);
+        verify(categoriaRepository).delete(existente);
+    }
+
+    @Test
+    void naoDeveApagarDespesasELimitesQuandoCategoriaNaoEstaEmUso() {
+        Categoria existente = categoriaDoUsuario(10L, 1L);
+        when(categoriaRepository.findById(10L)).thenReturn(Optional.of(existente));
+
+        categoriaService.excluir(1L, 10L, true);
+
+        verify(despesaRepository, never()).deleteByCategoriaId(any());
+        verify(limiteCategoriaRepository, never()).deleteByCategoriaId(any());
+        verify(categoriaRepository).delete(existente);
     }
 
 }

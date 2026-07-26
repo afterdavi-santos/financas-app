@@ -10,4 +10,8 @@ public interface DespesaRepository extends JpaRepository<Despesa, Long>, JpaSpec
 
     List<Despesa> findByUsuarioId(Long usuarioId);
 
+    boolean existsByCategoriaId(Long categoriaId);
+
+    void deleteByCategoriaId(Long categoriaId);
+
 }

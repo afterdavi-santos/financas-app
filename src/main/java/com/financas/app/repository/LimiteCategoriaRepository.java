@@ -12,4 +12,8 @@ public interface LimiteCategoriaRepository extends JpaRepository<LimiteCategoria
 
     Optional<LimiteCategoria> findByUsuarioIdAndCategoriaId(Long usuarioId, Long categoriaId);
 
+    boolean existsByCategoriaId(Long categoriaId);
+
+    void deleteByCategoriaId(Long categoriaId);
+
 }
