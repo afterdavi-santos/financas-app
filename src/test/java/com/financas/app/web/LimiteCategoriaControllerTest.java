@@ -64,7 +64,6 @@ class LimiteCategoriaControllerTest {
         LimiteCategoria limite = new LimiteCategoria();
         limite.setId(id);
         limite.setValorLimite(new BigDecimal("500.00"));
-        limite.setMesReferencia(LocalDate.of(2026, 7, 1));
         limite.setCategoria(categoria);
         return limite;
     }
@@ -78,7 +77,7 @@ class LimiteCategoriaControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"valorLimite":500.00,"mesReferencia":"2026-07-01","categoriaId":5}
+                                {"valorLimite":500.00,"categoriaId":5}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(50))
@@ -86,12 +85,11 @@ class LimiteCategoriaControllerTest {
     }
 
     @Test
-    void deveListarLimitesPorMes() throws Exception {
-        when(limiteCategoriaService.listarPorMes(1L, LocalDate.of(2026, 7, 1)))
+    void deveListarLimites() throws Exception {
+        when(limiteCategoriaService.listar(1L))
                 .thenReturn(List.of(limiteCategoria(50L)));
 
         mockMvc.perform(get("/api/limites-categoria")
-                        .param("mesReferencia", "2026-07-01")
                         .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(50));
@@ -118,14 +116,14 @@ class LimiteCategoriaControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"valorLimite":-1,"mesReferencia":"2026-07-01","categoriaId":5}
+                                {"valorLimite":-1,"categoriaId":5}
                                 """))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void deveRecusarRequisicaoSemAutenticacao() throws Exception {
-        mockMvc.perform(get("/api/limites-categoria").param("mesReferencia", "2026-07-01"))
+        mockMvc.perform(get("/api/limites-categoria"))
                 .andExpect(status().isUnauthorized());
     }
 

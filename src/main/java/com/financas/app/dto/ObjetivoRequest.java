@@ -9,6 +9,7 @@ import java.time.LocalDate;
 
 public record ObjetivoRequest(
         @NotBlank String descricao,
+        String incentivo,
         @NotNull @Positive BigDecimal valorAlvo,
         @NotNull LocalDate dataAlvo
 ) {

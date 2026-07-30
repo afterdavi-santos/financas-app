@@ -4,6 +4,7 @@ import com.financas.app.exception.GlobalExceptionHandler;
 import com.financas.app.exception.RecursoNaoEncontradoException;
 import com.financas.app.model.Renda;
 import com.financas.app.model.Usuario;
+import com.financas.app.model.enums.TipoRenda;
 import com.financas.app.security.JwtAuthenticationFilter;
 import com.financas.app.security.UsuarioAutenticado;
 import com.financas.app.service.RendaService;
@@ -62,6 +63,7 @@ class RendaControllerTest {
         renda.setDescricao("Salário");
         renda.setValor(new BigDecimal("3000.00"));
         renda.setMesReferencia(LocalDate.of(2026, 7, 1));
+        renda.setTipo(TipoRenda.FIXA);
         return renda;
     }
 
@@ -74,10 +76,11 @@ class RendaControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"descricao":"Salário","valor":3000.00,"mesReferencia":"2026-07-01"}
+                                {"descricao":"Salário","valor":3000.00,"mesReferencia":"2026-07-01","tipo":"FIXA"}
                                 """))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(30));
+                .andExpect(jsonPath("$.id").value(30))
+                .andExpect(jsonPath("$.tipo").value("FIXA"));
     }
 
     @Test

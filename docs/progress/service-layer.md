@@ -18,7 +18,7 @@ Testes: `src/test/java/com/financas/app/service/` — unitários com Mockito + A
    - **Atenção**: `Specification.where(spec)` está deprecado desde Spring Data JPA 3.5 (remoção prevista na 4.0). Usar a spec base diretamente: `DespesaSpecification.comUsuario(id).and(...)` em vez de `Specification.where(comUsuario(id))`.
 4. **RendaService** — CRUD + `calcularTotalMes`. Decisão confirmada com o usuário: **múltiplas rendas no mesmo mês são permitidas** (ex: salário + freela na mesma referência). Por isso `RendaRepository.findByUsuarioIdAndMesReferencia` retorna `List<Renda>`, não `Optional<Renda>`.
 5. **ObjetivoService** — CRUD + `aportar` (incrementa `valorAtual`). `valorAtual` começa em zero se não informado na criação.
-6. **LimiteCategoriaService** — CRUD + `verificarLimite` (compara o gasto do mês na categoria, via `DespesaService`, contra `valorLimite`; retorna o record `StatusLimiteCategoria`: `valorLimite`, `valorGasto`, `estourado`).
+6. **LimiteCategoriaService** — CRUD + `verificarLimite`. O limite é **fixo por categoria** (a entidade não tem mais `mesReferencia`): `criar` recusa um segundo limite na mesma categoria (`LimiteJaExisteException`); `listar(usuarioId)` traz todos. `verificarLimite(usuarioId, categoriaId, mesReferencia)` acha o limite pela categoria, mas compara contra o gasto **do mês informado** (via `DespesaService`) — retorna o record `StatusLimiteCategoria`: `valorLimite`, `valorGasto`, `estourado`.
 7. **RelatorioService** — sem entidade própria, junta `RendaService` + `DespesaService`:
    - `calcularEconomiaDoMes` (renda − despesas de um mês)
    - `compararMeses` (lista de `ResumoMensal` por mês num intervalo)
@@ -26,7 +26,7 @@ Testes: `src/test/java/com/financas/app/service/` — unitários com Mockito + A
 
 ## Estado dos testes
 
-49 testes unitários, todos passando.
+50 testes unitários, todos passando.
 
 ## Ambiente local (rodar `mvnw` depois de um /clear)
 

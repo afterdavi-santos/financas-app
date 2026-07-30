@@ -13,7 +13,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 
 @Entity
 @Table(name = "limite_categoria")
@@ -27,12 +26,8 @@ public class LimiteCategoria {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // Teto de gasto FIXO da categoria (não é vinculado a um mês; vale sempre).
     private BigDecimal valorLimite;
-
-    /**
-     * Primeiro dia do mês de referência (ex: 2026-07-01 para julho/2026).
-     */
-    private LocalDate mesReferencia;
 
     @ManyToOne
     @JoinColumn(name = "categoria_id", nullable = false)

@@ -24,22 +24,26 @@ realmente foi gasto.
 
 ## 4. Escopo do MVP
 
-Funcionalidades que entram na primeira versão utilizável:
+Funcionalidades que entram na primeira versão utilizável (status em 2026-07-24 —
+backend + frontend React consumindo a API, ver `docs/progress/`):
 
-- [ ] **Login/sessão** por usuário (autenticação), preparando terreno para múltiplos
-      usuários futuramente, cada um com seus dados isolados.
-- [ ] **Registro de despesas fixas** (ex: aluguel, internet, assinaturas).
-- [ ] **Registro de despesas extraordinárias** (gastos pontuais/variáveis do mês).
-- [ ] **Categorias personalizáveis** — usuário cria/edita categorias (mercado,
-      transporte, lazer...) para nunca mais esquecer o que foi o gasto.
-- [ ] **Registro de renda variável** — opção de lançar um valor de salário/entrada
-      diferente a cada mês (em vez de assumir um valor fixo recorrente).
-- [ ] **Cálculo de quanto foi guardado/economizado no mês** (receita - despesas).
-- [ ] **Metas/limite de orçamento por categoria**, com algum tipo de alerta ao se
-      aproximar ou ultrapassar o limite definido.
-- [ ] **Gráficos**:
-  - Visão do mês atual (gastos por categoria, fixo x extraordinário).
-  - Comparativo mês a mês / ano a ano (evolução de gastos e economia ao longo do tempo).
+- [x] **Login/sessão** por usuário (autenticação JWT), com dados isolados por usuário.
+- [x] **Registro de despesas fixas** (ex: aluguel, internet, assinaturas).
+- [x] **Registro de despesas extraordinárias** (gastos pontuais/variáveis do mês).
+- [x] **Categorias personalizáveis** — criar/excluir categorias (edição de nome
+      ainda não implementada).
+- [x] **Registro de renda variável** — renda por mês de referência, com `tipo`
+      (FIXA/FREELA/RETORNO_INVESTIMENTOS); múltiplas rendas no mesmo mês permitidas.
+- [x] **Cálculo de quanto foi guardado/economizado no mês** (renda - despesas).
+- [x] **Metas/limite de orçamento por categoria**, com alertas: aviso ao lançar uma
+      despesa que estoura o teto, "simular despesa" e status (barra + "estourou") na
+      tela de Limites. **Limite é fixo por categoria** (não por mês — ver seção 8).
+- [x] **Gráficos**:
+  - Tela de Despesas: fixo × extraordinário, top categorias, comparação com o mês
+    anterior (maior alta/baixa).
+  - Relatórios: comparativo mês a mês / ano a ano (renda, despesas e economia).
+- [x] **Objetivos de economia** (extra ao escopo original): meta com termômetro de
+      progresso e cálculo dinâmico do aporte mensal necessário (% da renda fixa).
 
 ## 5. Backlog / Futuro (fora do MVP)
 
@@ -74,8 +78,11 @@ Rascunho inicial de entidades — será refinado quando começarmos a modelagem:
 - **Usuario**: dados de login/autenticação.
 - **Categoria**: pertence a um usuário, nome, tipo (fixa/extraordinária como sugestão de default, mas personalizável).
 - **Registro/Lançamento**: valor, data, categoria, tipo (fixa/extraordinária), descrição, usuário.
-- **RendaMensal**: valor de entrada/salário daquele mês, usuário.
-- **MetaOrcamento**: categoria, valor limite, mês/período, usuário.
+- **RendaMensal**: valor de entrada/salário daquele mês, usuário, tipo (fixa/freela/retorno).
+- **MetaOrcamento** (`LimiteCategoria`): categoria, valor limite, usuário. **Limite
+  fixo por categoria** (um por categoria, sem mês); o gasto é avaliado sempre no mês
+  corrente contra esse teto.
+- **Objetivo**: descrição, valor-alvo, valor-atual, data-alvo, usuário.
 
 ## 9. Fora de Escopo (explicitamente, por ora)
 
@@ -85,6 +92,7 @@ Rascunho inicial de entidades — será refinado quando começarmos a modelagem:
 
 ## 10. Perguntas em Aberto
 
-- PostgreSQL ou MySQL? Postgre
-- Formato exato dos alertas de orçamento (in-app? e-mail?) — definir quando chegarmos nessa funcionalidade.
-- Estrutura de autenticação: JWT via Spring Security é o caminho mais comum — validar quando chegarmos na implementação do login.
+- PostgreSQL ou MySQL? **PostgreSQL** (definido).
+- Formato dos alertas de orçamento: **in-app** (definido) — aviso ao lançar despesa
+  que estoura, simulador de despesa e status na tela de Limites. E-mail fica no backlog.
+- Estrutura de autenticação: **JWT via Spring Security** (implementado).

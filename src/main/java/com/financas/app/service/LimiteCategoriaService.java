@@ -1,5 +1,6 @@
 package com.financas.app.service;
 
+import com.financas.app.exception.LimiteJaExisteException;
 import com.financas.app.exception.RecursoNaoEncontradoException;
 import com.financas.app.model.Categoria;
 import com.financas.app.model.LimiteCategoria;
@@ -31,19 +32,23 @@ public class LimiteCategoriaService {
     }
 
     public LimiteCategoria criar(Long usuarioId, LimiteCategoria limiteCategoria) {
+        Long categoriaId = limiteCategoria.getCategoria().getId();
+        // Limite é fixo por categoria: no máximo um por (usuário, categoria).
+        if (limiteCategoriaRepository.findByUsuarioIdAndCategoriaId(usuarioId, categoriaId).isPresent()) {
+            throw new LimiteJaExisteException();
+        }
         limiteCategoria.setUsuario(buscarUsuarioOuFalhar(usuarioId));
-        limiteCategoria.setCategoria(buscarCategoriaOuFalhar(limiteCategoria.getCategoria().getId(), usuarioId));
+        limiteCategoria.setCategoria(buscarCategoriaOuFalhar(categoriaId, usuarioId));
         return limiteCategoriaRepository.save(limiteCategoria);
     }
 
-    public List<LimiteCategoria> listarPorMes(Long usuarioId, LocalDate mesReferencia) {
-        return limiteCategoriaRepository.findByUsuarioIdAndMesReferencia(usuarioId, mesReferencia);
+    public List<LimiteCategoria> listar(Long usuarioId) {
+        return limiteCategoriaRepository.findByUsuarioId(usuarioId);
     }
 
     public LimiteCategoria atualizar(Long usuarioId, Long limiteId, LimiteCategoria dadosAtualizados) {
         LimiteCategoria limiteCategoria = buscarOuFalhar(limiteId, usuarioId);
         limiteCategoria.setValorLimite(dadosAtualizados.getValorLimite());
-        limiteCategoria.setMesReferencia(dadosAtualizados.getMesReferencia());
         return limiteCategoriaRepository.save(limiteCategoria);
     }
 
@@ -51,9 +56,11 @@ public class LimiteCategoriaService {
         limiteCategoriaRepository.delete(buscarOuFalhar(limiteId, usuarioId));
     }
 
+    // O limite é fixo, mas o "gasto vs. teto" é sempre avaliado em um mês (o mês
+    // que o front pede — normalmente o atual). mesReferencia define essa janela.
     public StatusLimiteCategoria verificarLimite(Long usuarioId, Long categoriaId, LocalDate mesReferencia) {
         LimiteCategoria limiteCategoria = limiteCategoriaRepository
-                .findByUsuarioIdAndCategoriaIdAndMesReferencia(usuarioId, categoriaId, mesReferencia)
+                .findByUsuarioIdAndCategoriaId(usuarioId, categoriaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("LimiteCategoria", categoriaId));
 
         LocalDate inicio = mesReferencia.withDayOfMonth(1);

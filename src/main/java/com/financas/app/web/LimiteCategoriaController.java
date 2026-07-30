@@ -44,9 +44,8 @@ public class LimiteCategoriaController {
     }
 
     @GetMapping
-    public List<LimiteCategoriaResponse> listarPorMes(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado,
-                                                        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate mesReferencia) {
-        return limiteCategoriaService.listarPorMes(usuarioAutenticado.getId(), mesReferencia).stream()
+    public List<LimiteCategoriaResponse> listar(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado) {
+        return limiteCategoriaService.listar(usuarioAutenticado.getId()).stream()
                 .map(LimiteCategoriaController::toResponse)
                 .toList();
     }
@@ -77,7 +76,6 @@ public class LimiteCategoriaController {
     private static LimiteCategoria toEntity(LimiteCategoriaRequest request) {
         LimiteCategoria limiteCategoria = new LimiteCategoria();
         limiteCategoria.setValorLimite(request.valorLimite());
-        limiteCategoria.setMesReferencia(request.mesReferencia());
         Categoria categoria = new Categoria();
         categoria.setId(request.categoriaId());
         limiteCategoria.setCategoria(categoria);
@@ -88,7 +86,7 @@ public class LimiteCategoriaController {
         var categoria = limiteCategoria.getCategoria();
         var categoriaResponse = new CategoriaResponse(categoria.getId(), categoria.getNome());
         return new LimiteCategoriaResponse(limiteCategoria.getId(), limiteCategoria.getValorLimite(),
-                limiteCategoria.getMesReferencia(), categoriaResponse);
+                categoriaResponse);
     }
 
 }

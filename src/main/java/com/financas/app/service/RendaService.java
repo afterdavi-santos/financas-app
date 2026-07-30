@@ -36,6 +36,7 @@ public class RendaService {
         renda.setDescricao(dadosAtualizados.getDescricao());
         renda.setValor(dadosAtualizados.getValor());
         renda.setMesReferencia(dadosAtualizados.getMesReferencia());
+        renda.setTipo(dadosAtualizados.getTipo());
         return rendaRepository.save(renda);
     }
 
