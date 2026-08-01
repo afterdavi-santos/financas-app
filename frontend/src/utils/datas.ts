@@ -65,3 +65,20 @@ export function mesAnteriorYYYYMM(mes: string): string {
   const d = new Date(ano, m - 2, 1); // m-1 = mês atual (0-based); m-2 = anterior
   return paraISO(d).slice(0, 7);
 }
+
+// "2026-07" -> "2026-08" (mês seguinte; vira o ano corretamente em dezembro).
+export function mesSeguinteYYYYMM(mes: string): string {
+  const [ano, m] = mes.split("-").map(Number);
+  const d = new Date(ano, m, 1); // m (1-based, mês atual) vira 0-based do mês seguinte
+  return paraISO(d).slice(0, 7);
+}
+
+// Primeiro dia do mês N meses ANTES do mês informado (formato "YYYY-MM"),
+// ex.: mes="2026-07", n=5 -> "2026-02-01". Igual a `primeiroDiaMesesAtrasISO`,
+// mas ancorado num mês escolhido em vez de sempre no mês atual — usado pra
+// gráficos que seguem o mês em foco de um filtro (ex.: "últimos 6 meses" a
+// partir do mês selecionado em Despesas).
+export function primeiroDiaMesesAtrasDoMes(mes: string, n: number): string {
+  const [ano, m] = mes.split("-").map(Number);
+  return paraISO(new Date(ano, m - 1 - n, 1)); // m-1 = mês (0-based); -n volta n meses
+}

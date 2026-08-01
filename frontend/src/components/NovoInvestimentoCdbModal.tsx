@@ -78,20 +78,20 @@ export function NovoInvestimentoCdbModal({
     >
       <form onSubmit={aoEnviar} className="space-y-4">
         {erro && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p className="rounded-md border-l-4 border-black bg-black/5 px-3 py-2 text-sm text-grouper-ink">
             {erro}
           </p>
         )}
 
         {cdi && (
-          <p className="rounded-md bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+          <p className="rounded-md border-l-4 border-grouper-sky bg-grouper-mist px-3 py-2 text-xs text-grouper-navy">
             CDI atual: {cdi.taxaDiariaPercentual.toFixed(4)}% ao dia (~
             {cdi.taxaAnualizadaPercentual.toFixed(2)}% ao ano, ref.{" "}
             {dataBR(cdi.data)})
           </p>
         )}
         {cdiErro && (
-          <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <p className="rounded-md border-l-4 border-black bg-black/5 px-3 py-2 text-xs text-grouper-ink">
             Não consegui buscar o CDI atual agora. Você ainda pode salvar; o
             rendimento é calculado depois.
           </p>
@@ -100,7 +100,7 @@ export function NovoInvestimentoCdbModal({
         <div className="space-y-1">
           <label
             htmlFor="cdb-descricao"
-            className="text-sm font-medium text-slate-700"
+            className="text-sm font-medium text-grouper-navy"
           >
             Descrição
           </label>
@@ -112,7 +112,7 @@ export function NovoInvestimentoCdbModal({
             value={descricao}
             onChange={(e) => setDescricao(e.target.value)}
             placeholder="Ex.: CDB Banco XP"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
           />
         </div>
 
@@ -124,7 +124,7 @@ export function NovoInvestimentoCdbModal({
             <div className="space-y-1">
               <label
                 htmlFor="cdb-valor"
-                className="text-sm font-medium text-slate-700"
+                className="text-sm font-medium text-grouper-navy"
               >
                 Valor aplicado (R$)
               </label>
@@ -137,14 +137,14 @@ export function NovoInvestimentoCdbModal({
                 value={valorAplicado}
                 onChange={(e) => setValorAplicado(e.target.value)}
                 placeholder="0,00"
-                className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
               />
             </div>
 
             <div className="space-y-1">
               <label
                 htmlFor="cdb-data"
-                className="text-sm font-medium text-slate-700"
+                className="text-sm font-medium text-grouper-navy"
               >
                 Data de aplicação
               </label>
@@ -155,7 +155,7 @@ export function NovoInvestimentoCdbModal({
                 max={hojeISO()}
                 value={dataAplicacao}
                 onChange={(e) => setDataAplicacao(e.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
               />
             </div>
           </>
@@ -164,7 +164,7 @@ export function NovoInvestimentoCdbModal({
         <div className="space-y-1">
           <label
             htmlFor="cdb-percentual"
-            className="text-sm font-medium text-slate-700"
+            className="text-sm font-medium text-grouper-navy"
           >
             % do CDI
           </label>
@@ -177,7 +177,7 @@ export function NovoInvestimentoCdbModal({
             value={percentualCdi}
             onChange={(e) => setPercentualCdi(e.target.value)}
             placeholder="Ex.: 105"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
           />
         </div>
 
@@ -185,14 +185,14 @@ export function NovoInvestimentoCdbModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+            className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={carregando}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+            className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep disabled:opacity-60"
           >
             {carregando ? "Salvando..." : "Salvar"}
           </button>

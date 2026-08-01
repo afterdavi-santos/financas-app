@@ -4,9 +4,8 @@ import { useAuth } from "../context/AuthContext";
 // Itens de navegação do menu lateral.
 const itens = [
   { rotulo: "Início", para: "/", ativo: true },
-  { rotulo: "Despesas", para: "/despesas", ativo: true },
+  { rotulo: "Movimentações", para: "/movimentacoes", ativo: true },
   { rotulo: "Categorias", para: "/categorias", ativo: true },
-  { rotulo: "Rendas", para: "/rendas", ativo: true },
   { rotulo: "Objetivos", para: "/objetivos", ativo: true },
   { rotulo: "Limites", para: "/limites", ativo: true },
   { rotulo: "Relatórios", para: "/relatorios", ativo: true },
@@ -22,9 +21,13 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-60 shrink-0 bg-slate-900 text-slate-100 flex flex-col min-h-screen">
-      <div className="px-6 py-5 text-lg font-bold border-b border-slate-800">
-        Finanças
+    <aside className="w-60 shrink-0 bg-grouper-ink text-white flex flex-col min-h-screen">
+      <div className="flex items-center px-6 py-6 border-b border-white/10">
+        <img
+          src="/brand/logomarca-branca.svg"
+          alt="Logo"
+          className="h-16 w-auto shrink-0"
+        />
       </div>
 
       <nav className="flex-1 p-3 space-y-1">
@@ -36,10 +39,10 @@ export function Sidebar() {
               to={item.para}
               end
               className={({ isActive }) =>
-                `block rounded-md px-3 py-2 text-sm font-medium ${
+                `block rounded-md px-3 py-2 font-body text-sm font-medium transition-colors ${
                   isActive
-                    ? "bg-blue-600 text-white"
-                    : "text-slate-300 hover:bg-slate-800"
+                    ? "bg-grouper-mid text-white"
+                    : "text-white/70 hover:bg-white/10 hover:text-white"
                 }`
               }
             >
@@ -48,11 +51,11 @@ export function Sidebar() {
           ) : (
             <span
               key={item.rotulo}
-              className="flex items-center justify-between rounded-md px-3 py-2 text-sm text-slate-500 cursor-not-allowed"
+              className="flex items-center justify-between rounded-md px-3 py-2 text-sm text-white/30 cursor-not-allowed"
               title="Em breve"
             >
               {item.rotulo}
-              <span className="text-[10px] uppercase tracking-wide text-slate-600">
+              <span className="text-[10px] uppercase tracking-wide text-white/20">
                 em breve
               </span>
             </span>
@@ -60,10 +63,10 @@ export function Sidebar() {
         )}
       </nav>
 
-      <div className="p-3 border-t border-slate-800">
+      <div className="p-3 border-t border-white/10">
         <button
           onClick={sair}
-          className="w-full rounded-md px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 text-left"
+          className="w-full rounded-md px-3 py-2 font-body text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white text-left"
         >
           Sair
         </button>

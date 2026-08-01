@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Modal } from "./Modal";
-import { criarDespesa } from "../api/despesas";
+import { criarDespesa, atualizarDespesa } from "../api/despesas";
 import { statusLimiteOuNulo } from "../api/limites";
 import { criarCategoria } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { hojeISO } from "../utils/datas";
-import type { Categoria, StatusLimite, TipoDespesa } from "../types/financas";
+import type { Categoria, Despesa, StatusLimite, TipoDespesa } from "../types/financas";
 
 // Valor especial do <select> que abre o campo de "nova categoria" inline.
 const OPCAO_NOVA_CATEGORIA = "__nova__";
@@ -16,12 +16,14 @@ const OPCAO_NOVA_CATEGORIA = "__nova__";
 // já carregada pela home, evitando uma segunda requisição aqui.
 // `dataPadrao` (opcional) define a data inicial do form — a tela de Despesas
 // passa uma data do mês em foco para lançar direto nele; sem ela, usa hoje.
+// `despesa` (opcional) coloca o modal em modo EDIÇÃO — prefill + PUT em vez de POST.
 interface Props {
   aberto: boolean;
   onClose: () => void;
   onCriada: () => void;
   categorias: Categoria[];
   dataPadrao?: string; // "YYYY-MM-DD"
+  despesa?: Despesa | null;
 }
 
 export function NovaDespesaModal({
@@ -30,18 +32,27 @@ export function NovaDespesaModal({
   onCriada,
   categorias,
   dataPadrao,
+  despesa,
 }: Props) {
+  const editando = !!despesa;
   const dataInicial = dataPadrao ?? hojeISO();
   const [descricao, setDescricao] = useState("");
   const [valor, setValor] = useState(""); // string no input; convertida ao enviar
   const [data, setData] = useState(dataInicial);
-
-  // Ao (re)abrir o modal, sincroniza a data com o mês em foco atual.
-  useEffect(() => {
-    if (aberto) setData(dataInicial);
-  }, [aberto, dataInicial]);
   const [tipo, setTipo] = useState<TipoDespesa>("EXTRAORDINARIA");
   const [categoriaId, setCategoriaId] = useState("");
+
+  // Ao (re)abrir o modal, sincroniza os campos: com despesa -> prefill (edição);
+  // sem -> limpa, usando a data do mês em foco atual.
+  useEffect(() => {
+    if (!aberto) return;
+    setDescricao(despesa?.descricao ?? "");
+    setValor(despesa ? String(despesa.valor) : "");
+    setData(despesa?.data ?? dataInicial);
+    setTipo(despesa?.tipo ?? "EXTRAORDINARIA");
+    setCategoriaId(despesa ? String(despesa.categoria.id) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aberto, despesa, dataInicial]);
   const [novaCategoriaNome, setNovaCategoriaNome] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -100,20 +111,25 @@ export function NovaDespesaModal({
         ? (await criarCategoria({ nome: novaCategoriaNome })).id
         : Number(categoriaId);
 
-      await criarDespesa({
+      const req = {
         descricao,
         valor: Number(valor), // <input> devolve string; backend espera número
         data,
         tipo,
         categoriaId: idCategoria,
-      });
-      // limpa os campos para o próximo uso
-      setDescricao("");
-      setValor("");
-      setData(dataInicial);
-      setTipo("EXTRAORDINARIA");
-      setCategoriaId("");
-      setNovaCategoriaNome("");
+      };
+      if (editando) {
+        await atualizarDespesa(despesa.id, req);
+      } else {
+        await criarDespesa(req);
+        // limpa os campos para o próximo uso (só faz sentido ao criar)
+        setDescricao("");
+        setValor("");
+        setData(dataInicial);
+        setTipo("EXTRAORDINARIA");
+        setCategoriaId("");
+        setNovaCategoriaNome("");
+      }
       onCriada();
     } catch (e) {
       setErro(mensagemDeErro(e));
@@ -123,10 +139,10 @@ export function NovaDespesaModal({
   }
 
   return (
-    <Modal titulo="Nova despesa" aberto={aberto} onClose={onClose}>
+    <Modal titulo={editando ? "Editar despesa" : "Nova despesa"} aberto={aberto} onClose={onClose}>
         <form onSubmit={aoEnviar} className="space-y-4">
           {erro && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            <p className="rounded-md border-l-4 border-black bg-black/5 px-3 py-2 text-sm text-grouper-ink">
               {erro}
             </p>
           )}
@@ -134,7 +150,7 @@ export function NovaDespesaModal({
           <div className="space-y-1">
             <label
               htmlFor="descricao"
-              className="text-sm font-medium text-slate-700"
+              className="text-sm font-medium text-grouper-navy"
             >
               Descrição
             </label>
@@ -146,7 +162,7 @@ export function NovaDespesaModal({
               value={descricao}
               onChange={(e) => setDescricao(e.target.value)}
               placeholder="Ex.: Mercado"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
             />
           </div>
 
@@ -154,7 +170,7 @@ export function NovaDespesaModal({
             <div className="space-y-1">
               <label
                 htmlFor="valor"
-                className="text-sm font-medium text-slate-700"
+                className="text-sm font-medium text-grouper-navy"
               >
                 Valor (R$)
               </label>
@@ -167,14 +183,14 @@ export function NovaDespesaModal({
                 value={valor}
                 onChange={(e) => setValor(e.target.value)}
                 placeholder="0,00"
-                className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
               />
             </div>
 
             <div className="space-y-1">
               <label
                 htmlFor="data"
-                className="text-sm font-medium text-slate-700"
+                className="text-sm font-medium text-grouper-navy"
               >
                 Data
               </label>
@@ -184,7 +200,7 @@ export function NovaDespesaModal({
                 required
                 value={data}
                 onChange={(e) => setData(e.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
               />
             </div>
           </div>
@@ -193,7 +209,7 @@ export function NovaDespesaModal({
             <div className="space-y-1">
               <label
                 htmlFor="tipo"
-                className="text-sm font-medium text-slate-700"
+                className="text-sm font-medium text-grouper-navy"
               >
                 Tipo
               </label>
@@ -201,9 +217,9 @@ export function NovaDespesaModal({
                 id="tipo"
                 value={tipo}
                 onChange={(e) => setTipo(e.target.value as TipoDespesa)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
               >
-                <option value="EXTRAORDINARIA">Extraordinária</option>
+                <option value="EXTRAORDINARIA">Variável</option>
                 <option value="FIXA">Fixa</option>
               </select>
             </div>
@@ -211,7 +227,7 @@ export function NovaDespesaModal({
             <div className="space-y-1">
               <label
                 htmlFor="categoria"
-                className="text-sm font-medium text-slate-700"
+                className="text-sm font-medium text-grouper-navy"
               >
                 Categoria
               </label>
@@ -220,7 +236,7 @@ export function NovaDespesaModal({
                 required
                 value={categoriaId}
                 onChange={(e) => setCategoriaId(e.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
               >
                 <option value="" disabled>
                   Selecione...
@@ -241,7 +257,7 @@ export function NovaDespesaModal({
             <div className="space-y-1">
               <label
                 htmlFor="despesa-nova-categoria"
-                className="text-sm font-medium text-slate-700"
+                className="text-sm font-medium text-grouper-navy"
               >
                 Nome da nova categoria
               </label>
@@ -253,7 +269,7 @@ export function NovaDespesaModal({
                 value={novaCategoriaNome}
                 onChange={(e) => setNovaCategoriaNome(e.target.value)}
                 placeholder="Ex.: Alimentação"
-                className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
               />
             </div>
           )}
@@ -261,13 +277,13 @@ export function NovaDespesaModal({
           {/* Aviso de limite: só aparece se a categoria tem teto no mês. */}
           {previsao &&
             (previsao.estoura ? (
-              <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-                ⚠️ Esta despesa vai <strong>estourar o limite</strong> da
+              <p className="rounded-md border-l-4 border-black bg-black/5 px-3 py-2 text-sm text-grouper-ink">
+                ⚠ Esta despesa vai <strong>estourar o limite</strong> da
                 categoria: {formatarBRL(previsao.novoTotal)} de{" "}
                 {formatarBRL(previsao.limite)}.
               </p>
             ) : (
-              <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+              <p className="rounded-md border-l-4 border-grouper-mid bg-grouper-mist px-3 py-2 text-sm text-grouper-ink">
                 Dentro do limite: ficará em {formatarBRL(previsao.novoTotal)} de{" "}
                 {formatarBRL(previsao.limite)}.
               </p>
@@ -277,14 +293,14 @@ export function NovaDespesaModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+              className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={carregando}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+              className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep disabled:opacity-60"
             >
               {carregando ? "Salvando..." : "Salvar"}
             </button>

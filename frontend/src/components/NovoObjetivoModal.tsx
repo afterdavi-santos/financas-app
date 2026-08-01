@@ -71,7 +71,7 @@ export function NovoObjetivoModal({
     >
       <form onSubmit={aoEnviar} className="space-y-4">
         {erro && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p className="rounded-md border-l-4 border-black bg-black/5 px-3 py-2 text-sm text-grouper-ink">
             {erro}
           </p>
         )}
@@ -79,7 +79,7 @@ export function NovoObjetivoModal({
         <div className="space-y-1">
           <label
             htmlFor="obj-descricao"
-            className="text-sm font-medium text-slate-700"
+            className="text-sm font-medium text-grouper-navy"
           >
             Descrição
           </label>
@@ -91,16 +91,16 @@ export function NovoObjetivoModal({
             value={descricao}
             onChange={(e) => setDescricao(e.target.value)}
             placeholder="Ex.: Reserva de emergência"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
           />
         </div>
 
         <div className="space-y-1">
           <label
             htmlFor="obj-incentivo"
-            className="text-sm font-medium text-slate-700"
+            className="text-sm font-medium text-grouper-navy"
           >
-            Incentivo <span className="text-slate-400">(opcional)</span>
+            Incentivo <span className="text-grouper-navy/50">(opcional)</span>
           </label>
           <textarea
             id="obj-incentivo"
@@ -108,7 +108,7 @@ export function NovoObjetivoModal({
             value={incentivo}
             onChange={(e) => setIncentivo(e.target.value)}
             placeholder="Um lembrete de por que essa meta importa. Ex.: 6 meses de tranquilidade."
-            className="w-full resize-none rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full resize-none rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
           />
         </div>
 
@@ -116,7 +116,7 @@ export function NovoObjetivoModal({
           <div className="space-y-1">
             <label
               htmlFor="obj-valor"
-              className="text-sm font-medium text-slate-700"
+              className="text-sm font-medium text-grouper-navy"
             >
               Valor-alvo (R$)
             </label>
@@ -129,14 +129,14 @@ export function NovoObjetivoModal({
               value={valorAlvo}
               onChange={(e) => setValorAlvo(e.target.value)}
               placeholder="0,00"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
             />
           </div>
 
           <div className="space-y-1">
             <label
               htmlFor="obj-data"
-              className="text-sm font-medium text-slate-700"
+              className="text-sm font-medium text-grouper-navy"
             >
               Data-alvo
             </label>
@@ -146,7 +146,7 @@ export function NovoObjetivoModal({
               required
               value={dataAlvo}
               onChange={(e) => setDataAlvo(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
             />
           </div>
         </div>
@@ -155,14 +155,14 @@ export function NovoObjetivoModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+            className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={carregando}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+            className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep disabled:opacity-60"
           >
             {carregando ? "Salvando..." : "Salvar"}
           </button>

@@ -44,12 +44,12 @@ export function Modal({
         className={`max-h-[90vh] w-full ${largura} overflow-y-auto rounded-xl bg-white shadow-xl`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-slate-800">{titulo}</h2>
+        <div className="flex items-center justify-between border-b border-grouper-sky/20 px-6 py-4">
+          <h2 className="font-display text-xl font-semibold text-grouper-ink">{titulo}</h2>
           <button
             onClick={onClose}
             aria-label="Fechar"
-            className="text-slate-400 hover:text-slate-600 text-xl leading-none"
+            className="text-xl leading-none text-grouper-navy/50 hover:text-grouper-ink"
           >
             &times;
           </button>

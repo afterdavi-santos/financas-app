@@ -26,16 +26,16 @@ export function DetalheDespesasModal({
   return (
     <Modal titulo={titulo} aberto={aberto} onClose={onClose}>
       {despesas.length === 0 ? (
-        <p className="text-sm text-slate-500">Nenhuma despesa.</p>
+        <p className="text-sm text-grouper-navy/60">Nenhuma despesa.</p>
       ) : (
         <div className="max-h-96 space-y-4 overflow-y-auto">
           {grupos.map((grupo) => (
             <div key={grupo.nome}>
-              <div className="flex items-center justify-between border-b border-slate-100 pb-1">
-                <span className="text-sm font-semibold text-slate-700">
+              <div className="flex items-center justify-between border-b border-grouper-sky/20 pb-1">
+                <span className="text-sm font-semibold text-grouper-ink">
                   {grupo.nome}
                 </span>
-                <span className="text-sm font-semibold text-slate-700">
+                <span className="text-sm font-semibold text-grouper-ink">
                   {formatarBRL(grupo.total)}
                 </span>
               </div>
@@ -48,13 +48,13 @@ export function DetalheDespesasModal({
                       key={d.id}
                       className="flex items-center justify-between py-1 text-sm"
                     >
-                      <span className="text-slate-600">
+                      <span className="text-grouper-navy">
                         {d.descricao}{" "}
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-grouper-navy/50">
                           · {dataBR(d.data)}
                         </span>
                       </span>
-                      <span className="text-slate-800">
+                      <span className="text-grouper-ink">
                         {formatarBRL(d.valor)}
                       </span>
                     </li>

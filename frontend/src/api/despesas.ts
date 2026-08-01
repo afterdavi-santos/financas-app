@@ -19,6 +19,12 @@ export async function criarDespesa(req: DespesaRequest): Promise<Despesa> {
   return data;
 }
 
+// PUT /api/despesas/{id} -> despesa atualizada.
+export async function atualizarDespesa(id: number, req: DespesaRequest): Promise<Despesa> {
+  const { data } = await api.put<Despesa>(`/despesas/${id}`, req);
+  return data;
+}
+
 // DELETE /api/despesas/{id} -> 204 (sem corpo).
 export async function excluirDespesa(id: number): Promise<void> {
   await api.delete(`/despesas/${id}`);

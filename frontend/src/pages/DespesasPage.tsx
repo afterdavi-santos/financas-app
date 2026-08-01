@@ -1,32 +1,45 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { PageHeader } from "../components/PageHeader";
 import { StatCard } from "../components/StatCard";
 import { NovaDespesaModal } from "../components/NovaDespesaModal";
 import { DetalheDespesasModal } from "../components/DetalheDespesasModal";
 import { BarraSelecao } from "../components/BarraSelecao";
 import { SelecionarTodos } from "../components/SelecionarTodos";
+import { IconeEditar, IconeExcluir } from "../components/IconesInvestimento";
+import { GraficoDespesasMensal, type PontoDespesa } from "../components/GraficoDespesasMensal";
 import { useSelecao } from "../hooks/useSelecao";
 import { listarDespesas, excluirDespesa } from "../api/despesas";
 import { listarCategorias } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
-import { rotuloTipoDespesa, dataBR } from "../utils/rotulos";
+import { rotuloTipoDespesa, dataBR, mesCurtoBR } from "../utils/rotulos";
 import {
   hojeISO,
   mesAtualYYYYMM,
   primeiroDiaDoMes,
   ultimoDiaDoMes,
   mesAnteriorYYYYMM,
+  primeiroDiaMesesAtrasDoMes,
 } from "../utils/datas";
 import {
   somaPorTipo,
-  topCategorias,
+  totalPorCategoria,
   variacaoCategorias,
   maiorAlta,
   maiorBaixa,
 } from "../utils/despesasResumo";
 import type { VariacaoCategoria } from "../utils/despesasResumo";
-import type { Categoria, Despesa } from "../types/financas";
+import type { Categoria, Despesa, TipoDespesa } from "../types/financas";
+
+// Filtro da lista "Todas as despesas do mês" (canto direito do cabeçalho da
+// seção, no lugar de "Selecionar todos").
+type FiltroTipo = "TODAS" | TipoDespesa;
+const FILTROS: { chave: FiltroTipo; rotulo: string }[] = [
+  { chave: "TODAS", rotulo: "Todas" },
+  { chave: "FIXA", rotulo: "Fixas" },
+  { chave: "EXTRAORDINARIA", rotulo: "Variáveis" },
+];
 
 // Formata o % de variação (ou "nova" quando não havia gasto no mês anterior).
 function textoPct(v: VariacaoCategoria): string {
@@ -35,14 +48,31 @@ function textoPct(v: VariacaoCategoria): string {
   return `${sinal}${Math.round(v.deltaPct)}%`;
 }
 
-export function DespesasPage() {
+interface Props {
+  // Nó onde os controles do cabeçalho (mês + adicionar) são portados, pra
+  // ficarem na mesma linha horizontal do seletor de aba (MovimentacoesPage).
+  headerSlot?: HTMLDivElement | null;
+  // Nó onde o gráfico de despesas mensais é portado, pra aparecer na coluna
+  // direita (MovimentacoesPage) em vez de dentro da coluna principal.
+  graficoSlot?: HTMLDivElement | null;
+}
+
+export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [despesasAnterior, setDespesasAnterior] = useState<Despesa[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
+  // Últimos 6 meses de despesas, para o gráfico da coluna direita.
+  const [historicoDespesas, setHistoricoDespesas] = useState<PontoDespesa[]>([]);
   const [mes, setMes] = useState(mesAtualYYYYMM()); // "YYYY-MM"
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
+  // Despesa em edição (null = modal em modo "nova despesa").
+  const [editando, setEditando] = useState<Despesa | null>(null);
+  // Filtro da lista completa por tipo (Todas/Fixas/Variáveis).
+  const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>("TODAS");
+  // Filtro (independente) da seção "Despesas por categoria".
+  const [filtroCategoria, setFiltroCategoria] = useState<FiltroTipo>("TODAS");
   // Um único estado controla qual detalhamento está aberto (null = fechado).
   const [detalhe, setDetalhe] = useState<{
     titulo: string;
@@ -63,7 +93,7 @@ export function DespesasPage() {
     setCarregando(true);
     try {
       const anterior = mesAnteriorYYYYMM(mes);
-      const [desps, despsAnterior, cats] = await Promise.all([
+      const [desps, despsAnterior, cats, despesasHistorico] = await Promise.all([
         listarDespesas({
           inicio: primeiroDiaDoMes(mes),
           fim: ultimoDiaDoMes(mes),
@@ -73,10 +103,37 @@ export function DespesasPage() {
           fim: ultimoDiaDoMes(anterior),
         }),
         listarCategorias(),
+        // Últimos 6 meses a partir do mês em foco (o selecionado no filtro,
+        // não necessariamente hoje), pro gráfico "Despesas dos últimos
+        // meses" da coluna direita — busca tudo de uma vez e agrupa por
+        // mês/tipo no cliente (igual ao histórico de renda).
+        listarDespesas({
+          inicio: primeiroDiaMesesAtrasDoMes(mes, 5),
+          fim: ultimoDiaDoMes(mes),
+        }),
       ]);
       setDespesas(desps);
       setDespesasAnterior(despsAnterior);
       setCategorias(cats);
+
+      const meses: string[] = [];
+      let mesIterado = mes;
+      for (let i = 0; i < 6; i++) {
+        meses.unshift(mesIterado);
+        mesIterado = mesAnteriorYYYYMM(mesIterado);
+      }
+      setHistoricoDespesas(
+        meses.map((m) => {
+          let fixa = 0;
+          let variavel = 0;
+          for (const d of despesasHistorico) {
+            if (d.data.slice(0, 7) !== m) continue;
+            if (d.tipo === "FIXA") fixa += d.valor;
+            else variavel += d.valor;
+          }
+          return { rotulo: mesCurtoBR(`${m}-01`), Fixa: fixa, Variavel: variavel };
+        }),
+      );
     } catch (e) {
       setErro(mensagemDeErro(e));
     } finally {
@@ -95,7 +152,11 @@ export function DespesasPage() {
   const resumo = useMemo(() => {
     const totalFixas = somaPorTipo(despesas, "FIXA");
     const totalExtra = somaPorTipo(despesas, "EXTRAORDINARIA");
-    const top5 = topCategorias(despesas, 5, "EXTRAORDINARIA");
+    // Todas as categorias (não só as 5 maiores) — a lista tem rolagem própria.
+    const porCategoria = totalPorCategoria(
+      despesas,
+      filtroCategoria === "TODAS" ? undefined : filtroCategoria,
+    );
     // Atenção/parabéns comparam APENAS despesas extraordinárias entre os meses.
     const variacoes = variacaoCategorias(
       despesas.filter((d) => d.tipo === "EXTRAORDINARIA"),
@@ -104,11 +165,11 @@ export function DespesasPage() {
     return {
       totalFixas,
       totalExtra,
-      top5,
+      porCategoria,
       alta: maiorAlta(variacoes),
       baixa: maiorBaixa(variacoes),
     };
-  }, [despesas, despesasAnterior]);
+  }, [despesas, despesasAnterior, filtroCategoria]);
 
   async function excluir(despesa: Despesa) {
     if (!confirm(`Excluir a despesa "${despesa.descricao}"?`)) return;
@@ -134,206 +195,318 @@ export function DespesasPage() {
     carregar();
   }
 
-  // Mais recentes primeiro (por data).
-  const ordenadas = [...despesas].sort((a, b) => b.data.localeCompare(a.data));
+  // Mais recentes primeiro (por data), já filtradas pelo tipo escolhido.
+  const ordenadas = despesas
+    .filter((d) => filtroTipo === "TODAS" || d.tipo === filtroTipo)
+    .sort((a, b) => b.data.localeCompare(a.data));
 
   // Nova despesa cai no mês em foco: hoje se for o mês atual; senão, dia 1 dele.
   const dataPadraoNova =
     mes === mesAtualYYYYMM() ? hojeISO() : primeiroDiaDoMes(mes);
 
-  return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <PageHeader titulo="Despesas">
-        <input
-          type="month"
-          value={mes}
-          onChange={(e) => {
-            limpar(); // seleção era da lista do mês anterior
-            setMes(e.target.value);
-          }}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button
-          onClick={() => setModalAberto(true)}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          + Adicionar despesa
-        </button>
-      </PageHeader>
+  function abrirNovaDespesa() {
+    setEditando(null);
+    setModalAberto(true);
+  }
 
-      <BarraSelecao
-        quantidade={selecionados.size}
-        texto={`${selecionados.size} despesa${selecionados.size > 1 ? "s" : ""} selecionada${selecionados.size > 1 ? "s" : ""}`}
-        onExcluir={excluirSelecionadas}
-        onCancelar={limpar}
+  function abrirEdicaoDespesa(despesa: Despesa) {
+    setEditando(despesa);
+    setModalAberto(true);
+  }
+
+  // Troca o mês em foco — usada tanto pelo seletor de mês quanto ao clicar
+  // numa coluna do gráfico "Despesas dos últimos meses" (mesmo efeito).
+  function selecionarMes(novoMes: string) {
+    limpar(); // seleção era da lista do mês anterior
+    setMes(novoMes);
+  }
+
+  const controlesCabecalho = (
+    <>
+      <input
+        type="month"
+        value={mes}
+        onChange={(e) => selecionarMes(e.target.value)}
+        // O navegador só abre o seletor nativo ao clicar no ícone do
+        // calendário; showPicker() faz o clique em qualquer parte do "botão"
+        // abrir o mesmo seletor.
+        onClick={(e) => e.currentTarget.showPicker?.()}
+        className="cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-4 py-2 font-display text-sm font-semibold text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid"
       />
+      <button
+        onClick={abrirNovaDespesa}
+        className="rounded-md bg-grouper-ink px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-black"
+      >
+        + Adicionar despesa
+      </button>
+    </>
+  );
+
+  const graficoDespesas = (
+    <section className="rounded-lg border border-grouper-sky/20 bg-white p-4 shadow-sm">
+      <h2 className="mb-2 font-display text-lg font-semibold text-grouper-ink">
+        Despesas dos últimos meses
+      </h2>
+      <GraficoDespesasMensal dados={historicoDespesas} />
+    </section>
+  );
+
+  return (
+    <div className="w-full space-y-6">
+      {headerSlot ? (
+        createPortal(controlesCabecalho, headerSlot)
+      ) : (
+        <PageHeader>{controlesCabecalho}</PageHeader>
+      )}
+
+      {graficoSlot && createPortal(graficoDespesas, graficoSlot)}
 
       {erro && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-          {erro}
+        <p className="rounded-md border-l-4 border-black bg-black/5 px-3 py-2 text-sm text-grouper-ink">
+          ⚠ {erro}
         </p>
       )}
 
       {carregando ? (
-        <p className="text-slate-500">Carregando...</p>
+        <p className="text-grouper-navy/60">Carregando...</p>
       ) : (
         <>
-          {/* Dois cards-resumo clicáveis: abrem o detalhamento por tipo. */}
-          <div className="grid gap-4 sm:grid-cols-2">
+          {/* Dois cards-resumo (sem clique: a lista completa embaixo já
+              permite ver/filtrar por tipo). Mesmo grid-cols-2 (sem
+              breakpoint) do StatCard de Renda/Despesas do mês na Home, pra
+              ficarem exatamente do mesmo tamanho. */}
+          <div className="grid grid-cols-2 gap-4">
             <StatCard
               titulo="Despesas fixas"
               valor={resumo.totalFixas}
-              onClick={() =>
-                setDetalhe({
-                  titulo: "Despesas fixas do mês",
-                  despesas: despesas.filter((d) => d.tipo === "FIXA"),
-                })
-              }
+              destaque="negativo"
             />
             <StatCard
-              titulo="Despesas extraordinárias"
+              titulo="Despesas variáveis"
               valor={resumo.totalExtra}
-              onClick={() =>
-                setDetalhe({
-                  titulo: "Despesas extraordinárias do mês",
-                  despesas: despesas.filter((d) => d.tipo === "EXTRAORDINARIA"),
-                })
-              }
+              destaque="negativo"
             />
           </div>
 
-          {/* Top 5 categorias (só extraordinárias): cada linha abre o detalhe. */}
-          <section className="rounded-xl bg-white p-5 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-slate-700">
-              Top 5 categorias (extraordinárias)
-            </h2>
-            {resumo.top5.length === 0 ? (
-              <p className="text-sm text-slate-500">
-                Nenhuma despesa extraordinária neste mês.
-              </p>
-            ) : (
-              <ul className="divide-y divide-slate-100">
-                {resumo.top5.map((c) => (
-                  <li key={c.nome}>
+          {/* "Despesas por categoria" (2/3 da largura, à esquerda) lado a
+              lado com Ponto de atenção + Parabéns (insights vs. mês
+              anterior, 1/3 restante, à direita). Ponto de atenção/Parabéns
+              dividem essa coluna, empilhados; `items-stretch` (padrão do
+              grid) faz a coluna esticar pra soma das duas bater com a altura
+              de "Despesas por categoria" no tamanho máximo dela (5
+              categorias, antes de vir a rolagem). */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {/* Despesas por categoria (todas, não só as 5 maiores): cada
+                linha abre o detalhe. Filtro Todas/Fixas/Variáveis próprio,
+                independente do filtro da lista completa abaixo. */}
+            <section className="rounded-lg border border-grouper-sky/20 bg-white p-4 shadow-sm sm:col-span-2">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-display text-lg font-semibold text-grouper-ink">
+                  Despesas por categoria
+                </h2>
+                <div className="flex items-center gap-1">
+                  {FILTROS.map((f) => (
                     <button
-                      onClick={() =>
-                        setDetalhe({
-                          titulo: `${c.nome} — extraordinárias`,
-                          despesas: despesas.filter(
-                            (d) =>
-                              d.categoria.nome === c.nome &&
-                              d.tipo === "EXTRAORDINARIA",
-                          ),
-                        })
-                      }
-                      className="flex w-full items-center justify-between py-2 text-left hover:text-blue-700"
+                      key={f.chave}
+                      onClick={() => setFiltroCategoria(f.chave)}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                        filtroCategoria === f.chave
+                          ? "bg-grouper-sky/40 text-grouper-ink"
+                          : "text-grouper-navy/60 hover:bg-grouper-sky/25 hover:text-grouper-ink"
+                      }`}
                     >
-                      <span className="text-sm text-slate-700">{c.nome}</span>
-                      <span className="text-sm font-semibold text-slate-800">
-                        {formatarBRL(c.total)}
-                      </span>
+                      {f.rotulo}
                     </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          {/* Insights vs. mês anterior: atenção (subiu) e parabéns (caiu). */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <section className="rounded-xl border border-amber-200 bg-amber-50 p-5">
-              <h2 className="text-sm font-semibold text-amber-800">
-                ⚠️ Ponto de atenção (extraordinárias)
-              </h2>
-              {resumo.alta ? (
-                <p className="mt-2 text-sm text-amber-900">
-                  <strong>{resumo.alta.nome}</strong> subiu{" "}
-                  <strong>+{formatarBRL(resumo.alta.deltaRs)}</strong> (
-                  {textoPct(resumo.alta)}) vs. o mês anterior.
+                  ))}
+                </div>
+              </div>
+              {resumo.porCategoria.length === 0 ? (
+                <p className="text-sm text-grouper-navy/60">
+                  {filtroCategoria === "TODAS"
+                    ? "Nenhuma despesa neste mês."
+                    : `Nenhuma despesa ${filtroCategoria === "FIXA" ? "fixa" : "variável"} neste mês.`}
                 </p>
               ) : (
-                <p className="mt-2 text-sm text-amber-900">
-                  Nenhuma categoria aumentou em relação ao mês anterior.
-                </p>
+                <ul
+                  className={`divide-y divide-grouper-sky/15 ${
+                    resumo.porCategoria.length > 5 ? "max-h-40 overflow-y-auto pr-1" : ""
+                  }`}
+                >
+                  {resumo.porCategoria.map((c) => (
+                    <li key={c.nome}>
+                      <button
+                        onClick={() =>
+                          setDetalhe({
+                            titulo:
+                              filtroCategoria === "TODAS"
+                                ? c.nome
+                                : `${c.nome} — ${filtroCategoria === "FIXA" ? "fixas" : "variáveis"}`,
+                            despesas: despesas.filter(
+                              (d) =>
+                                d.categoria.nome === c.nome &&
+                                (filtroCategoria === "TODAS" || d.tipo === filtroCategoria),
+                            ),
+                          })
+                        }
+                        className="flex w-full items-center justify-between py-2 text-left hover:text-grouper-mid"
+                      >
+                        <span className="text-sm text-grouper-ink">{c.nome}</span>
+                        <span className="text-sm font-semibold text-grouper-ink">
+                          {formatarBRL(c.total)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </section>
 
-            <section className="rounded-xl border border-green-200 bg-green-50 p-5">
-              <h2 className="text-sm font-semibold text-green-800">
-                🎉 Parabéns (extraordinárias)
-              </h2>
-              {resumo.baixa ? (
-                <p className="mt-2 text-sm text-green-900">
-                  <strong>{resumo.baixa.nome}</strong> caiu{" "}
-                  <strong>{formatarBRL(resumo.baixa.deltaRs)}</strong> (
-                  {textoPct(resumo.baixa)}) vs. o mês anterior.
-                </p>
-              ) : (
-                <p className="mt-2 text-sm text-green-900">
-                  Nenhuma categoria diminuiu em relação ao mês anterior.
-                </p>
-              )}
-            </section>
+            <div className="flex flex-col gap-4">
+              <section className="flex-1 rounded-lg border-l-4 border-amber-400 bg-white p-4 shadow-md">
+                <h2 className="font-display text-sm font-semibold tracking-wide text-amber-800">
+                  Ponto de atenção 
+                </h2>
+                {resumo.alta ? (
+                  <p className="mt-2 text-sm text-amber-900"> As despesas com a categoria 
+                  <strong> {resumo.alta.nome}</strong> subiram {" "}
+                    <strong>{formatarBRL(resumo.alta.deltaRs)}</strong> em relação ao mês anterior.
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm text-amber-900">
+                    Parabéns, Nenhuma categoria aumentou de valor em relação ao mês anterior.
+                  </p>
+                )}
+              </section>
+
+              <section className="flex-1 rounded-lg border-l-4 border-grouper-green bg-white p-4 shadow-md">
+                <h2 className="font-display text-sm font-semibold tracking-wide text-grouper-green">
+                  Ponto de motivação
+                </h2>
+                {resumo.baixa ? (
+                  <p className="mt-2 text-sm text-grouper-ink"> As despesas com a categoria
+                    <strong> {resumo.baixa.nome}</strong> caíram{" "}
+                    <strong> {formatarBRL(Math.abs(resumo.baixa.deltaRs))}</strong> (
+                    {textoPct(resumo.baixa)}) em relação ao mês anterior.
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm text-grouper-ink">
+                    Nenhuma categoria diminuiu em relação ao mês anterior.
+                  </p>
+                )}
+              </section>
+            </div>
           </div>
 
-          {/* Lista completa das despesas do mês (com excluir). */}
-          <section className="rounded-xl bg-white p-5 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-700">
+          {/* Lista completa das despesas do mês (com filtro por tipo, editar
+              e excluir). */}
+          <section className="rounded-lg border border-grouper-sky/20 bg-white p-5 shadow-sm">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-display text-lg font-semibold text-grouper-ink">
                 Todas as despesas do mês
               </h2>
-              {ordenadas.length > 0 && (
-                <SelecionarTodos
-                  marcado={todosSelecionados(ordenadas.map((d) => d.id))}
-                  onAlternar={() =>
-                    todosSelecionados(ordenadas.map((d) => d.id))
-                      ? limpar()
-                      : selecionarTodos(ordenadas.map((d) => d.id))
-                  }
-                />
-              )}
+              {/* Filtro Todas/Fixas/Variáveis — mesmo tratamento de hover
+                  (azul mais escuro pra indicar que é clicável) das linhas
+                  de Investimento CDB na Home. */}
+              <div className="flex items-center gap-1">
+                {FILTROS.map((f) => (
+                  <button
+                    key={f.chave}
+                    onClick={() => setFiltroTipo(f.chave)}
+                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                      filtroTipo === f.chave
+                        ? "bg-grouper-sky/40 text-grouper-ink"
+                        : "text-grouper-navy/60 hover:bg-grouper-sky/25 hover:text-grouper-ink"
+                    }`}
+                  >
+                    {f.rotulo}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* Barra de seleção múltipla e "Selecionar todos" só aparecem
+                quando pelo menos 1 item está selecionado — mesmo padrão do
+                Investimento CDB na Home. */}
+            {selecionados.size > 0 && (
+              <>
+                <BarraSelecao
+                  quantidade={selecionados.size}
+                  texto={`${selecionados.size} despesa${selecionados.size > 1 ? "s" : ""} selecionada${selecionados.size > 1 ? "s" : ""}`}
+                  onExcluir={excluirSelecionadas}
+                  onCancelar={limpar}
+                />
+                <div className="my-3">
+                  <SelecionarTodos
+                    marcado={todosSelecionados(ordenadas.map((d) => d.id))}
+                    onAlternar={() =>
+                      todosSelecionados(ordenadas.map((d) => d.id))
+                        ? limpar()
+                        : selecionarTodos(ordenadas.map((d) => d.id))
+                    }
+                  />
+                </div>
+              </>
+            )}
+
             {ordenadas.length === 0 ? (
-              <p className="text-sm text-slate-500">
-                Nenhuma despesa lançada neste mês ainda.
+              <p className="text-sm text-grouper-navy/60">
+                {filtroTipo === "TODAS"
+                  ? "Nenhuma despesa lançada neste mês ainda."
+                  : `Nenhuma despesa ${filtroTipo === "FIXA" ? "fixa" : "variável"} neste mês.`}
               </p>
             ) : (
-              <ul className="divide-y divide-slate-100">
-                {ordenadas.map((d) => (
-                  <li
-                    key={d.id}
-                    className="flex items-center justify-between py-3"
-                  >
-                    <label className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={selecionados.has(d.id)}
-                        onChange={() => alternar(d.id)}
-                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <p className="font-medium text-slate-800">
-                          {d.descricao}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {d.categoria.nome} · {rotuloTipoDespesa[d.tipo]} ·{" "}
-                          {dataBR(d.data)}
-                        </p>
-                      </div>
-                    </label>
-                    <div className="flex items-center gap-4">
-                      <span className="font-semibold text-slate-800">
-                        {formatarBRL(d.valor)}
-                      </span>
-                      <button
-                        onClick={() => excluir(d)}
-                        className="text-sm font-medium text-red-600 hover:text-red-700"
+              <ul
+                className={`divide-y divide-grouper-sky/15 ${
+                  ordenadas.length > 3 ? "max-h-49 overflow-y-auto pr-1" : ""
+                }`}
+              >
+                {ordenadas.map((d) => {
+                  const selecionado = selecionados.has(d.id);
+                  return (
+                    <li key={d.id}>
+                      <div
+                        onClick={() => alternar(d.id)}
+                        className={`flex cursor-pointer items-center justify-between rounded-md px-3 py-3 transition-colors ${
+                          selecionado ? "bg-grouper-sky/30" : "hover:bg-grouper-sky/20"
+                        }`}
                       >
-                        Excluir
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                        <div>
+                          <p className="text-grouper-ink">
+                            {d.descricao}
+                          </p>
+                          <p className="text-xs text-grouper-navy/60">
+                            {d.categoria.nome} · {rotuloTipoDespesa[d.tipo]} ·{" "}
+                            {dataBR(d.data)}
+                          </p>
+                        </div>
+                        <div
+                          className="flex items-center gap-3"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span className="font-semibold text-grouper-ink">
+                            {formatarBRL(d.valor)}
+                          </span>
+                          <button
+                            onClick={() => abrirEdicaoDespesa(d)}
+                            aria-label="Editar"
+                            title="Editar"
+                            className="rounded-md border border-grouper-mid/30 bg-white p-1 text-grouper-mid hover:bg-grouper-mist"
+                          >
+                            <IconeEditar className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => excluir(d)}
+                            aria-label="Excluir"
+                            title="Excluir"
+                            className="rounded-md border border-red-300 bg-white p-1 text-red-600 hover:bg-red-50"
+                          >
+                            <IconeExcluir className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
@@ -342,13 +515,18 @@ export function DespesasPage() {
 
       <NovaDespesaModal
         aberto={modalAberto}
-        onClose={() => setModalAberto(false)}
+        onClose={() => {
+          setModalAberto(false);
+          setEditando(null);
+        }}
         onCriada={() => {
           setModalAberto(false);
+          setEditando(null);
           carregar();
         }}
         categorias={categorias}
         dataPadrao={dataPadraoNova}
+        despesa={editando}
       />
 
       <DetalheDespesasModal

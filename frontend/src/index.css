@@ -1,1 +1,20 @@
 @import "tailwindcss";
+
+/* Identidade visual "Grouper": paleta e tipografia extraídas do brandbook. */
+@theme {
+  --color-grouper-ink: #102241; /* navy mais escuro — texto principal, superfícies escuras */
+  --color-grouper-navy: #1c4562; /* texto secundário sobre claro */
+  --color-grouper-deep: #244c7e; /* acento profundo — investimentos, links secundários */
+  --color-grouper-mid: #5399cd; /* acento primário — ações, positivo */
+  --color-grouper-sky: #86c3eb; /* tom claro — realces, bordas sutis */
+  --color-grouper-mist: #eef5fb; /* tinta quase branca derivada do sky — fundos */
+  --color-grouper-green: #005E2F; /* paleta verde→amarelo — positivo (renda, economia) */
+  --color-grouper-red: #ba0000; /* paleta vermelho→amarelo — negativo (despesa) */
+
+  --font-display: "Khand", sans-serif;
+  --font-body: "Hind", sans-serif;
+}
+
+body {
+  font-family: var(--font-body);
+}

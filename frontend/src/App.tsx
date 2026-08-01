@@ -5,9 +5,8 @@ import { Layout } from "./components/Layout";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { HomePage } from "./pages/HomePage";
-import { DespesasPage } from "./pages/DespesasPage";
+import { MovimentacoesPage } from "./pages/MovimentacoesPage";
 import { CategoriasPage } from "./pages/CategoriasPage";
-import { RendasPage } from "./pages/RendasPage";
 import { ObjetivosPage } from "./pages/ObjetivosPage";
 import { LimitesPage } from "./pages/LimitesPage";
 import { RelatoriosPage } from "./pages/RelatoriosPage";
@@ -28,9 +27,8 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route index element={<HomePage />} /> {/* "/" */}
-              <Route path="despesas" element={<DespesasPage />} />
+              <Route path="movimentacoes" element={<MovimentacoesPage />} />
               <Route path="categorias" element={<CategoriasPage />} />
-              <Route path="rendas" element={<RendasPage />} />
               <Route path="objetivos" element={<ObjetivosPage />} />
               <Route path="limites" element={<LimitesPage />} />
               <Route path="relatorios" element={<RelatoriosPage />} />
