@@ -164,7 +164,7 @@ export function PlanejamentoObjetivos() {
                   <li key={obj.id}>
                     <div
                       onClick={() => alternar(obj.id)}
-                      className={`cursor-pointer rounded-md px-2.5 py-2 transition-colors ${
+                      className={`cursor-pointer rounded-md px-2.5 py-2.5 transition-colors ${
                         selecionado ? "bg-grouper-sky/30" : "hover:bg-grouper-sky/20"
                       }`}
                     >
