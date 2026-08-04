@@ -234,11 +234,11 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
         // calendário; showPicker() faz o clique em qualquer parte do "botão"
         // abrir o mesmo seletor.
         onClick={(e) => e.currentTarget.showPicker?.()}
-        className="w-36 cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-3 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid"
+        className="w-full cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-3 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid lg:w-36"
       />
       <button
         onClick={abrirNovaDespesa}
-        className="rounded-md bg-grouper-ink px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-black"
+        className="w-full rounded-md bg-grouper-ink px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-black lg:w-auto"
       >
         + Adicionar despesa
       </button>

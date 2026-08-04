@@ -20,9 +20,17 @@ export function MovimentacoesPage() {
 
   return (
     <div className="w-full space-y-2">
-      <h1 className="font-display text-3xl font-semibold tracking-tight text-grouper-ink">
-        Movimentações
-      </h1>
+      {/* No mobile, título e avatar dividem a mesma linha — mesmo padrão da
+          Home. Em lg+ o avatar sai daqui e volta pra ponta direita da linha
+          das abas, como sempre foi (ver mais abaixo). */}
+      <div className="flex items-center justify-between gap-3 lg:block">
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-grouper-ink">
+          Movimentações
+        </h1>
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-grouper-ink font-display text-sm font-semibold text-white lg:hidden">
+          <span className="sr-only">Perfil do usuário</span>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Linha das abas + controles ocupa a largura toda da página (3
@@ -44,10 +52,16 @@ export function MovimentacoesPage() {
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-3 pb-3">
-            <div ref={setHeaderSlot} className="flex flex-wrap items-center gap-2" />
-            {/* Placeholder do avatar do usuário — mesmo padrão da Home. */}
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-grouper-ink font-display text-sm font-semibold text-white">
+          <div className="flex w-full flex-col gap-2 pb-3 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:gap-3">
+            {/* No mobile o seletor de mês e o botão de adicionar (portados
+                por DespesasPage/RendasPage) empilham em largura total —
+                mesmo padrão da Home (ver classes deles nos dois arquivos). */}
+            <div
+              ref={setHeaderSlot}
+              className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:gap-2"
+            />
+            {/* Avatar desktop: volta pra ponta direita da linha das abas. */}
+            <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-grouper-ink font-display text-sm font-semibold text-white lg:flex">
               <span className="sr-only">Perfil do usuário</span>
             </div>
           </div>
