@@ -403,7 +403,12 @@ e o pop-up de Plano de contenção.
 
 *(observação neutra — não são decisões, só o que notei explorando o código)*
 
-- O menu lateral **não tem versão mobile** (não colapsa, não vira menu inferior/hambúrguer) — se algum dia você for usar em celular, isso vai doer.
+- ~~O menu lateral não tem versão mobile~~ **Resolvido**: abaixo de `md`
+  (768px) a sidebar vira um drawer off-canvas acionado por uma barra
+  superior com botão de hambúrguer (`Layout.tsx`), com backdrop, fecha por
+  Esc/clique fora/clique num link, foco move pro primeiro link ao abrir e
+  volta pro hambúrguer ao fechar, e o conteúdo principal fica `inert`
+  enquanto o drawer está aberto. Ver `docs/design/a11y-e-responsividade.md`.
 - Movimentações já ganhou o mesmo grid full-width da Home (ver `movimentacoes-layout-atual.md`); Planejamento usa um layout próprio de 3 blocos com altura fixa (ver seção 6 daquele contexto) — nenhuma página ficou no wrapper antigo `mx-auto max-w-4xl`.
 - Alguns modais ainda não foram repaginados: `ResgatarCdbModal`, `InvestirMaisModal`, `VincularInvestimentoModal` (ver 4.6).
 - `frontend/src/components/SimularDespesaModal.tsx` continua **órfão** (sem nenhum caller) desde que o botão "Simular despesa" saiu da Home — considerar remover o arquivo ou religar a função em outro lugar.
