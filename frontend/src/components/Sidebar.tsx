@@ -29,7 +29,7 @@ export function Sidebar() {
 
       <nav className="relative flex-1 overflow-hidden p-3">
         <img
-          src="/brand/47e601e3-b81f-4cf0-a040-e5b103c84221.jpeg"
+          src="/brand/garoupas_fundo.jpeg"
           alt=""
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-15"

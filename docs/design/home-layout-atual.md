@@ -63,7 +63,7 @@ Arquivos principais:
 | `frontend/src/index.css` | Tokens de cor (`grouper-*`, incluindo `grouper-green`/`grouper-red`) e fonte (`font-display`/`font-body`) |
 | `frontend/public/brand/` | SVGs da logomarca (branca e preta) e `brandbook.pptx` (fonte oficial dos 5 tons de azul) |
 | `frontend/public/brand/palettes/` | Duas paletas de referência (imagens) vermelho→amarelo e verde→amarelo, 7 tons cada — fonte das cores usadas em `utils/cores.ts` |
-| `frontend/public/brand/47e601e3-b81f-4cf0-a040-e5b103c84221.jpeg` | Ilustração de garoupas (tema "Grouper") usada como fundo decorativo do bloco de navegação da Sidebar (ver seção 3) |
+| `frontend/public/brand/garoupas_fundo.jpeg` | Ilustração de garoupas estilo gravura de cédula (tema "Grouper") usada como fundo decorativo do bloco de navegação da Sidebar (ver seção 3) |
 | `frontend/src/components/Layout.tsx` | Casca da aplicação (menu + área de conteúdo) |
 | `frontend/src/components/Sidebar.tsx` | Menu lateral |
 | `frontend/src/pages/HomePage.tsx` | Tela Home |
@@ -120,7 +120,7 @@ De cima para baixo:
    lado), com uma linha separadora abaixo.
 2. **Bloco de navegação** (`<nav>`), com um elemento a mais desde a última
    repaginação:
-   - **Imagem de fundo decorativa**: `frontend/public/brand/47e601e3-b81f-4cf0-a040-e5b103c84221.jpeg`
+   - **Imagem de fundo decorativa**: `frontend/public/brand/garoupas_fundo.jpeg`
      (ilustração de garoupas estilo cédula, ecoando o nome "Grouper"),
      posicionada `absolute inset-0` dentro do `<nav>` (`position: relative`),
      `object-cover`, opacidade 15% (`opacity-15`), `pointer-events-none` (não
