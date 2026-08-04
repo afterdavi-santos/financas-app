@@ -104,7 +104,64 @@ por breakpoint, em vez de dois componentes separados (`SidebarDesktop`
 Sair) é idêntico nos dois casos, só a apresentação muda; duplicar o
 componente duplicaria também toda futura mudança de conteúdo do menu.
 
-### 2.2 O que já estava bem resolvido (não mexemos)
+### 2.2 Home — reordenação e seletor de abas no mobile
+
+Numa segunda rodada (já com viewport mobile real verificada via Chrome,
+376×922/DPR 2 — o `resize_window` do Claude in Chrome não funciona neste
+ambiente, então a verificação foi feita com o device emulation configurado
+manualmente no navegador), a Home ganhou ajustes específicos abaixo de `lg`:
+
+- **Título + avatar** dividem a mesma linha (`Layout` de header em
+  `flex justify-between` no mobile, `lg:block` no resto) — antes o avatar
+  ficava "perdido" lá embaixo, na mesma linha dos controles que quebravam
+  por `flex-wrap`.
+- **Seletor de mês e botões "+ Adicionar renda/despesa"** empilham em
+  largura total (`w-full flex-col`, revertendo pra `lg:w-auto
+  lg:flex-row`) — mesmo padrão aplicado depois em Movimentações (ver
+  `movimentacoes-layout-atual.md`).
+- **Renda do mês / Despesas do mês / Economia do mês** viram um seletor de
+  3 abas (Renda | Despesas | Economia) no lugar dos 3 cards sempre
+  visíveis — mostra só o card da aba selecionada. Reaproveita `StatCard` e
+  `EconomiaDestaque` sem duplicar lógica de exibição.
+- **Reordenação**: Objetivos → Últimas despesas → Investimento CDB →
+  "Economia nos últimos meses" (agora **por último**, era o 5º de 6 antes
+  do CDB). Como as duas colunas do desktop (`space-y-4`, alturas
+  independentes) não são blocos de grid comuns, `order-*` sozinho não
+  helpava — os wrappers de coluna viraram `contents lg:block` (mobile: a
+  div "some" da árvore de layout e os filhos são promovidos a itens soltos
+  do flex externo, onde `order-*` funciona; desktop: a div volta a ser um
+  bloco normal e os filhos empilham em ordem de DOM, `order` fica inerte).
+  Essa técnica evita duplicar JSX (uma cópia "mobile" e outra "desktop" do
+  mesmo bloco) e evita forçar CSS Grid a sincronizar a altura das duas
+  colunas (o que quebraria a independência de altura entre elas — grid
+  nativo não faz "masonry" sem o valor experimental `masonry`, ainda não
+  suportado nos browsers estáveis).
+
+### 2.3 Movimentações — mesmo padrão do 2.2
+
+`MovimentacoesPage.tsx`: avatar sobe pra linha do título (mesma técnica);
+o seletor de mês e o botão de adicionar — que `DespesasPage`/`RendasPage`
+portam via `headerSlot` (`createPortal`) — ganharam `w-full lg:w-auto`
+igual à Home, e o próprio `headerSlot` virou `flex-col lg:flex-row` pra
+empilhá-los. Não precisou duplicar nada: como o conteúdo é portado, mudar
+a classe uma vez nos dois arquivos (`DespesasPage`/`RendasPage`) já
+resolve pras duas abas.
+
+### 2.4 Planejamento — altura fixa só a partir de `lg`
+
+Os blocos de Objetivos/Limites/Categorias apareciam espremidos no mobile:
+a página usa altura de viewport fixa (`h-[calc(100vh-...)]`) com rolagem
+interna, pensada pro grid de 3 colunas do desktop — mas essa altura fixa
+também se aplicava empilhada em 1 coluna (abaixo de `lg`), forçando 3
+blocos a caber na fração de tela pensada pra caber só 1 (a coluna da
+esquerda) ou 2 (Objetivos+Limites dividindo a metade de cima). Fix: a
+altura fixa (`lg:h-[calc(100vh-4rem)]`) e o `grid-rows-2` que forçava
+Objetivos/Limites a dividir a metade da altura (`lg:grid-rows-2`) só
+existem a partir de `lg` agora — no mobile os blocos têm altura natural
+(baseada no conteúdo) e a página inteira rola normalmente, em vez de cada
+bloco rolar internamente numa altura espremida.
+
+### 2.5 O que já estava bem resolvido (não mexemos)
 
 - Home e Movimentações: grid `grid-cols-1 lg:grid-cols-3` — empilha em 1
   coluna abaixo de `lg`, sem overflow horizontal.
@@ -112,15 +169,18 @@ componente duplicaria também toda futura mudança de conteúdo do menu.
 - Textos grandes usam `rem` via classes Tailwind (`text-3xl` etc.), não
   `px` cravado.
 
-### 2.3 Pontos que ficaram de fora deste ajuste (candidatos a próxima rodada)
+### 2.6 Pontos que ficaram de fora deste ajuste (candidatos a próxima rodada)
 
 - `StatCard`s (Renda/Despesas do mês) usam `grid-cols-2` fixo, sem
   breakpoint — em telas muito estreitas (<360px) os dois cards ficam
   espremidos. Deixado assim porque é proposital (mesmo tamanho em Home e
-  Despesas/Rendas, ver `home-layout-atual.md` 4.4.1); se migrar mereceria
-  decisão própria, não algo a reboque desta tarefa.
-- Página de Planejamento usa 3 blocos com altura fixa (`h-[calc(100vh-3rem)]`)
-  pensados pra desktop — não testado abaixo de `md`.
+  Despesas/Rendas, ver `home-layout-atual.md` 4.4.1); no mobile a Home já
+  nem usa mais esse grid diretamente (virou o seletor de abas, ver 2.2),
+  mas o desktop continua igual. Se migrar mereceria decisão própria, não
+  algo a reboque desta tarefa.
+- Botão "+ Novo investimento" (card de Investimento CDB, Home) quebra em
+  duas linhas no mobile — o card fica estreito de mais pro texto do botão.
+  Cosmético, não tratado ainda.
 - Nenhum teste automatizado de acessibilidade (ex.: `eslint-plugin-jsx-a11y`,
   `@axe-core/react`) foi adicionado — ficou fora do escopo por ser uma
   mudança de tooling/CI, não de código de produto.

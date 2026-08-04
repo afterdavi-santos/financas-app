@@ -186,6 +186,18 @@ telas estreitas (`grid-cols-1` abaixo do breakpoint `lg`).
   topo da coluna esquerda (ver 4.4.1) — mostram o mês em foco, não sempre o
   mês atual.
 
+#### 4.1.1 No mobile (abaixo de `lg`) o cabeçalho muda de forma
+
+- **Título + avatar** dividem a mesma linha (avatar ao lado de "Início",
+  não mais isolado lá embaixo) — em `lg`+ o avatar volta pra ponta direita
+  da página, como descrito acima.
+- **Seletor de mês + os 2 botões** empilham em largura total, cada um numa
+  linha — em `lg`+ voltam a ficar lado a lado.
+
+Detalhes técnicos e o "porquê" em `docs/design/a11y-e-responsividade.md`
+(seção 2.2) — o mesmo padrão foi replicado em Movimentações (ver
+`movimentacoes-layout-atual.md`).
+
 ### 4.2 Banner de lembrete mensal *(aparece só uma vez por mês)*
 - Faixa `grouper-mist` com borda `grouper-sky`/50: "O mês virou! Deseja redefinir seus limites de despesas?"
 - Botões: "Sim, redefinir" (`grouper-mid` sólido, leva para Planejamento, onde vive o bloco de Limites) / "Agora não" (texto `grouper-navy`, dispensa).
@@ -197,12 +209,26 @@ telas estreitas (`grid-cols-1` abaixo do breakpoint `lg`).
 
 ### 4.4 Coluna esquerda (mais larga) — de cima para baixo
 
+> **No mobile (abaixo de `lg`) a ordem muda**: seletor de abas (4.4.1)
+> → Objetivos → Últimas despesas → Investimento CDB (4.5.3) → gráfico
+> "Economia nos últimos meses" (4.5.2, por último) — ou seja, abaixo de
+> `lg` as colunas esquerda/direita deixam de existir como agrupamento
+> visual e os blocos intercalam livremente numa ordem própria. Detalhes
+> técnicos em `docs/design/a11y-e-responsividade.md` (seção 2.2); em
+> `lg`+ nada disso se aplica, o desktop é exatamente o descrito abaixo.
+
 #### 4.4.1 Cards "Renda do mês" / "Despesas do mês" (`StatCard`)
 - Topo da coluna esquerda: grid de 2 colunas com os `StatCard`s de Renda
   (borda `grouper-green`) e Despesas (borda `grouper-red`) — as duas únicas
   exceções de verde/vermelho fora das escalas por degraus (ver seção 0).
 - Rótulo (`text-sm`, `grouper-ink`, maiúsculo, `font-semibold`) e valor
   (`text-3xl` Khand `font-bold`) — ambos em negrito.
+- **No mobile** esses 2 cards (e o de Economia do mês, 4.5.1) somem daqui
+  e viram um **seletor de 3 abas** ("Renda" / "Despesas" / "Economia"),
+  logo abaixo do cabeçalho (ver 4.1.1): abas em linha, mostrando o card da
+  aba selecionada (reaproveitando o mesmo `StatCard`/`EconomiaDestaque`)
+  numa faixa abaixo delas. Em `lg`+ os 3 cards voltam a ficar sempre
+  visíveis, como sempre foi.
 
 #### 4.4.2 Seção "Objetivos" (`ObjetivosResumoHome`)
 - Card branco. Cabeçalho com título "Objetivos" (`font-semibold`, negrito) **e**,
@@ -285,6 +311,9 @@ telas estreitas (`grid-cols-1` abaixo do breakpoint `lg`).
 - Abaixo do valor: variação percentual vs mês anterior (seta ↑/↓ + %), calculada
   a partir do histórico de `compararMeses` (últimos 6 meses). Some quando não há
   mês anterior para comparar.
+- **No mobile** esse card não fica fixo aqui — é a aba "Economia" do
+  seletor descrito em 4.4.1 (mesmo componente `EconomiaDestaque`, sem
+  duplicação de lógica).
 
 #### 4.5.2 Gráfico "Economia nos últimos meses" (`GraficoEconomiaHome`)
 - Cabeçalho do card tem o título "Economia nos últimos meses" (`font-semibold`,
