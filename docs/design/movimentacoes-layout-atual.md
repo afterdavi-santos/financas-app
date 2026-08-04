@@ -151,9 +151,19 @@ compartilhados), já com a identidade da marca aplicada:
     `totalPorCategoria`, não mais `topCategorias`), com **filtro próprio**
     Todas/Fixas/Variáveis (mesmo estilo de chip da lista completa — ver
     abaixo —, porém com estado independente, default "Todas"). Lista
-    clicável, abre `DetalheDespesasModal` filtrado por categoria + tipo.
+    clicável, abre `DetalheDespesasModal` filtrado por categoria + tipo —
+    cada linha agora tem `cursor-pointer`, `rounded-md` e o mesmo hover do
+    Investimento CDB da Home (`hover:bg-grouper-sky/20` **+
+    `hover:shadow-md`**), sinalizando visualmente que é clicável (antes só
+    tinha `hover:text-grouper-mid`, sem indicação de área clicável).
+    **Divisórias**: `divide-grouper-sky/45` (era `/15`, quase invisível).
     **Rolagem**: com mais de 5 categorias (a partir da 6ª), vira
     `max-h-40 overflow-y-auto`.
+  - **Dentro do `DetalheDespesasModal`**, a lista de despesas de cada
+    categoria também ganhou rolagem própria: a partir de 8 despesas na
+    mesma categoria (`length > 7`), vira `max-h-52 overflow-y-auto` em vez
+    de esticar o modal — antes a única rolagem era a do modal inteiro
+    (`max-h-96`, ainda existe, envolvendo todos os grupos).
 - Lista "Todas as despesas do mês":
   - Cabeçalho da seção tem, no canto direito, um filtro **Todas/Fixas/
     Variáveis** (botões tipo chip): ativo com fundo `bg-grouper-sky/40`;
@@ -175,6 +185,12 @@ compartilhados), já com a identidade da marca aplicada:
     da linha. Mesmo componente `IconesInvestimento.tsx` e o mesmo estilo de
     botão (contorno colorido, `p-1`, `rounded-md`) já usados no card de
     Investimento CDB da Home.
+  - **Subtexto de cada item** (categoria · tipo · data) em `text-xs
+    font-medium text-grouper-deep` (era `text-grouper-navy/60`, cinza-azulado
+    apagado) — mesmo ajuste replicado na Home (ver `home-layout-atual.md`
+    4.4.2/4.4.3) e na lista de Rendas (ver abaixo). Nome da despesa continua
+    `text-grouper-ink` puro, sem negrito.
+  - **Divisórias**: `divide-grouper-sky/45` (era `/15`).
   - **Rolagem**: a partir de mais itens que cabem na altura definida
     (`max-h-49 overflow-y-auto`, ajustada manualmente), a lista rola em vez
     de esticar o card — mesmo padrão já usado em Objetivos e Investimento CDB
@@ -200,15 +216,24 @@ compartilhados), já com a identidade da marca aplicada:
   mês escolhido em vez de sempre hoje). Recalculado dentro do `carregar()` do
   `DespesasPage` (que já roda de novo a cada troca de mês) e portado
   (`graficoSlot`) pra 3ª coluna da página (ver seção 2).
+  - **Cor dos rótulos dos eixos**: `#102241` (`grouper-ink` — era
+    `#1C4562`/`grouper-navy`, mais claro). Mesmo ajuste no gráfico de renda
+    (abaixo) e no de Economia da Home.
 
 **Seletor de mês** (Despesas e Rendas): o `<input type="month">` do
 cabeçalho ganhou "cara de botão" — borda `border-2 border-grouper-mid`,
-fundo branco, `font-display font-semibold`, sombra leve e hover
+fundo branco, `font-display font-semibold` **caixa alta com tracking**
+(`uppercase tracking-wide`, largura fixa `w-36` — igualado ao seletor de mês
+da Home, que era o único com esse tratamento até agora), sombra leve e hover
 `hover:bg-grouper-mist` — em vez da borda fina `grouper-sky/40` genérica de
 campo de formulário. Também ganhou `onClick` chamando
 `e.currentTarget.showPicker?.()`, pra abrir o seletor nativo clicando em
 qualquer parte do campo — antes só o ícone do calendário (a parte clicável
-nativa do navegador) abria.
+nativa do navegador) abria. O "x" nativo de limpar
+(`::-webkit-clear-button`) é escondido via CSS global (`index.css`,
+Chrome/Edge); mesmo assim, se o usuário limpar pelo popup do calendário (não
+estilizável), `selecionarMes` ignora string vazia em vez de deixar o mês em
+foco quebrar (mesmo guard da Home).
 
 **Rendas** (`RendasPage.tsx`) — agora com o mesmo tratamento dado à lista de
 Despesas (ver acima):
@@ -232,7 +257,10 @@ Despesas (ver acima):
   - Como as 3 seções por tipo viraram uma lista só, o subtexto de cada item
     ganhou o tipo (`rotuloTipoRenda[renda.tipo]}` — "Fixa"/"Renda
     variável"/"Retorno de investimentos") antes do mês de referência, pra não
-    perder essa informação que antes vinha do cabeçalho da seção.
+    perder essa informação que antes vinha do cabeçalho da seção. Esse
+    subtexto está em `text-xs font-medium text-grouper-deep` (era
+    `text-grouper-navy/60`) — mesmo ajuste da lista de Despesas (ver acima).
+  - **Divisórias**: `divide-grouper-sky/45` (era `/15`).
 - "Variação de renda nos últimos meses" (`GraficoRendaMensal`, componente
   novo — mesmo formato de gráfico de barras do `GraficoDespesasMensal`, mas
   **empilhado**: cada coluna do mês é dividida em Renda fixa (metade de
@@ -248,6 +276,8 @@ Despesas (ver acima):
   Ancorado no mês em foco igual ao gráfico de Despesas (6 meses terminando
   no mês escolhido, ele incluso). Portado (`graficoSlot`) pra 3ª coluna da
   página (ver seção 2).
+  - **Cor dos rótulos dos eixos**: `#102241` (`grouper-ink` — era
+    `#1C4562`/`grouper-navy`), mesmo ajuste do gráfico de Despesas (acima).
 
 ## 7. Pontos que já pulam aos olhos como possíveis melhorias
 

@@ -157,6 +157,9 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
   // numa coluna do gráfico "Variação de renda nos últimos meses" (mesmo
   // efeito).
   function selecionarMes(novoMes: string) {
+    // O "Limpar" do seletor nativo manda "" — mês em foco não pode ficar
+    // vazio (quebraria os cálculos do mês), então ignora.
+    if (!novoMes) return;
     limpar(); // seleção era da lista do mês anterior
     setMes(novoMes);
   }
@@ -171,7 +174,7 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
         // calendário; showPicker() faz o clique em qualquer parte do "botão"
         // abrir o mesmo seletor.
         onClick={(e) => e.currentTarget.showPicker?.()}
-        className="cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-4 py-2 font-display text-sm font-semibold text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid"
+        className="w-36 cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-3 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid"
       />
       <button
         onClick={abrirNova}
@@ -278,7 +281,7 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
             </p>
           ) : (
             <ul
-              className={`divide-y divide-grouper-sky/15 ${
+              className={`divide-y divide-grouper-sky/45 ${
                 ordenadas.length > 3 ? "max-h-49 overflow-y-auto pr-1" : ""
               }`}
             >
@@ -296,7 +299,7 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
                         <p className="text-grouper-ink">
                           {renda.descricao}
                         </p>
-                        <p className="text-xs text-grouper-navy/60">
+                        <p className="text-xs font-medium text-grouper-deep">
                           {rotuloTipoRenda[renda.tipo]} · {mesBR(renda.mesReferencia)}
                         </p>
                       </div>

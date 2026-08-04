@@ -52,7 +52,10 @@ O app já passou por uma repaginação baseada num brandbook próprio. A identid
 - **Framework:** React 19 + Vite + TypeScript
 - **Estilo:** Tailwind CSS v4 (tokens customizados via `@theme` — ver seção 0 — sem biblioteca de componentes tipo MUI/Chakra)
 - **Roteamento:** react-router-dom
-- **Gráficos:** Recharts (usado só na página de Relatórios — a Home hoje não tem nenhum gráfico fora do card "Economia nos últimos meses")
+- **Gráficos:** Recharts — usado no card "Economia nos últimos meses" da Home
+  e nos gráficos "Despesas dos últimos meses"/"Variação de renda" de
+  Movimentações (ver `movimentacoes-layout-atual.md`). A página de
+  Relatórios, que também usava Recharts, foi removida (ver seção 1.1)
 
 Arquivos principais:
 | Arquivo | O que é |
@@ -60,19 +63,30 @@ Arquivos principais:
 | `frontend/src/index.css` | Tokens de cor (`grouper-*`, incluindo `grouper-green`/`grouper-red`) e fonte (`font-display`/`font-body`) |
 | `frontend/public/brand/` | SVGs da logomarca (branca e preta) e `brandbook.pptx` (fonte oficial dos 5 tons de azul) |
 | `frontend/public/brand/palettes/` | Duas paletas de referência (imagens) vermelho→amarelo e verde→amarelo, 7 tons cada — fonte das cores usadas em `utils/cores.ts` |
+| `frontend/public/brand/47e601e3-b81f-4cf0-a040-e5b103c84221.jpeg` | Ilustração de garoupas (tema "Grouper") usada como fundo decorativo do bloco de navegação da Sidebar (ver seção 3) |
 | `frontend/src/components/Layout.tsx` | Casca da aplicação (menu + área de conteúdo) |
 | `frontend/src/components/Sidebar.tsx` | Menu lateral |
 | `frontend/src/pages/HomePage.tsx` | Tela Home |
 | `frontend/src/components/StatCard.tsx` | Card de estatística compartilhado — usado em Despesas **e** na Home (Renda do mês / Despesas do mês) |
 | `frontend/src/components/EconomiaDestaque.tsx` | Card grande da Economia do mês na Home (valor + variação % vs mês anterior + borda de cor variável — ver 4.5.1) |
 | `frontend/src/components/GraficoEconomiaHome.tsx` | Gráfico de barras (Recharts) da economia dos últimos 6 meses, na Home |
-| `frontend/src/components/ObjetivosResumoHome.tsx` | Lista condensada de objetivos da Home, com barra de progresso (escala de azul), rolagem (>2 itens), fixar (pin) até 2 objetivos, data da meta e botão "+ Adicionar objetivo" |
+| `frontend/src/components/ObjetivosResumoHome.tsx` | Lista condensada de objetivos da Home, com barra de progresso (escala de azul), seleção/edição/exclusão (mesmo padrão do Investimento CDB), rolagem (>2 itens), fixar (pin) até 2 objetivos, data da meta e botão "+ Adicionar objetivo" |
 | `frontend/src/components/IconesInvestimento.tsx` | Ícones SVG (editar/excluir) usados nas ações do card de Investimento CDB da Home |
 | `frontend/src/components/Modal.tsx` | Modal genérico reaproveitável (título Khand + `grouper-ink` + conteúdo + fechar por X/backdrop/Esc) — usado por todos os popups de formulário e pelo pop-up de Plano de contenção |
 | `frontend/src/utils/cores.ts` | `corEscalaDificuldade()`, `corEscalaEconomia()` e `corEscalaProgresso()` — as três escalas de cor por degraus da Home (ver seção 0) |
 | `frontend/src/utils/contencaoRendaVariavel.ts` | `planoContencao()` (cálculo do plano) + `dificuldadeContencao()` (0 a 1, usada por `corEscalaDificuldade`) |
 | `frontend/src/components/PageHeader.tsx` | Cabeçalho padrão de outras páginas (Home tem o seu próprio, inline) |
 | `frontend/src/components/SimularDespesaModal.tsx` | **Órfão no momento** — não é mais chamado por nenhuma página (o botão "Simular despesa" foi removido da Home); o componente continua no repo mas sem callers |
+
+## 1.1 Menu lateral — item "Relatórios" removido
+
+A página de Relatórios (comparação mês a mês / ano a ano) foi **removida por
+completo** — front (`RelatoriosPage.tsx`, rota `/relatorios`, item do menu,
+`compararAnos`/`ResumoAnual`) e back (`GET /comparar-anos`,
+`RelatorioService.compararAnos`, `ResumoAnual`). O endpoint `comparar-meses`
+(`compararMeses`/`ResumoMensal`) **continua existindo** — é usado pelo
+gráfico "Economia nos últimos meses" da Home (ver 4.5.2). O menu lateral
+agora tem só 3 itens: Início, Movimentações, Planejamento.
 
 ## 2. Estrutura geral da tela
 
@@ -91,10 +105,9 @@ Arquivos principais:
 - Layout em flex: sidebar fixa à esquerda + área principal ocupando o resto.
 - Fundo da página: `grouper-mist` (quase branco, com leve tingimento azul).
 - **A sidebar não é responsiva**: não colapsa, não vira menu hambúrguer, não some no celular. Está sempre visível e ocupa sempre 240px.
-- **A Home é full-width** (`w-full`, sem `mx-auto`/`max-w`) — as outras páginas
-  (Despesas, Categorias, Rendas, Objetivos, Limites, Relatórios) ainda usam o
-  wrapper antigo `mx-auto max-w-4xl` centralizado; só a Home foi convertida para
-  o layout em grid de 2 colunas descrito na seção 4.
+- **A Home é full-width** (`w-full`, sem `mx-auto`/`max-w`) — Movimentações
+  também usa o grid de colunas (ver `movimentacoes-layout-atual.md`);
+  Planejamento usa um grid de 3 blocos próprio com altura fixa (ver seção 6).
 
 ## 3. Menu lateral (Sidebar)
 
@@ -102,15 +115,25 @@ Tipo: barra vertical fixa à esquerda, fundo `grouper-ink` (navy bem escuro), te
 
 De cima para baixo:
 
-1. **Bloco de marca** — logomarca branca (`logomarca-branca.svg`), `h-16`, sozinha (sem texto ao lado), com uma linha separadora abaixo.
-2. **Lista de navegação**, nesta ordem:
-   1. Início
-   2. Despesas
-   3. Categorias
-   4. Rendas
-   5. Objetivos
-   6. Limites
-   7. Relatórios
+1. **Bloco de marca** — logomarca branca (`logomarca-branca.svg`), `h-16`,
+   **centralizada horizontalmente** (`justify-center`), sozinha (sem texto ao
+   lado), com uma linha separadora abaixo.
+2. **Bloco de navegação** (`<nav>`), com um elemento a mais desde a última
+   repaginação:
+   - **Imagem de fundo decorativa**: `frontend/public/brand/47e601e3-b81f-4cf0-a040-e5b103c84221.jpeg`
+     (ilustração de garoupas estilo cédula, ecoando o nome "Grouper"),
+     posicionada `absolute inset-0` dentro do `<nav>` (`position: relative`),
+     `object-cover`, opacidade 15% (`opacity-15`), `pointer-events-none` (não
+     interfere no clique dos links). Cobre a largura toda da sidebar (240px)
+     e a altura toda do bloco de nav — do fim do bloco do logo até o início
+     do bloco do "Sair" (ver 3 abaixo), que fica de fora (é uma `<div>`
+     separada, fora do `<nav>`). Como a sidebar é `min-h-screen` e o nav é
+     `flex-1`, essa altura varia com a tela do usuário (não é um valor fixo).
+   - **Lista de navegação**, em `z-10` acima da imagem (senão ela ficaria por
+     cima do texto), nesta ordem:
+     1. Início
+     2. Movimentações
+     3. Planejamento
    - Item ativo (página atual): fundo `grouper-mid` (azul médio), texto branco.
    - Itens inativos: texto branco 70% opaco, fica branco sólido com fundo branco 10% ao passar o mouse.
    - (O código já tem suporte para itens desabilitados/"em breve", mas hoje todos estão ativos.)
@@ -136,12 +159,18 @@ telas estreitas (`grid-cols-1` abaixo do breakpoint `lg`).
     abaixo, e o avatar (ver abaixo) fica na borda direita da página.
 - **Seletor de mês + 2 botões de ação**, nesta ordem:
   1. **Seletor de mês** (`<input type="month">`, "cara de botão" — borda
-     dupla `grouper-mid`, fundo branco, Khand `font-semibold`, sombra leve,
-     hover `grouper-mist`, `onClick` chama `showPicker()` pra abrir o
-     seletor clicando em qualquer parte do campo, não só no ícone do
-     calendário — mesmo tratamento usado em Despesas/Rendas, ver
-     `movimentacoes-layout-atual.md`). Define o **mês em foco** (estado
-     `mes`, padrão o mês atual): todos os cards, a lista e o gráfico da Home
+     dupla `grouper-mid`, fundo branco, Khand `font-semibold` **caixa alta
+     com tracking** (`uppercase tracking-wide`, mesmo tratamento Khand dos
+     botões "+ Adicionar" ao lado), sombra leve, hover `grouper-mist`,
+     `onClick` chama `showPicker()` pra abrir o seletor clicando em qualquer
+     parte do campo, não só no ícone do calendário — mesmo tratamento usado
+     em Despesas/Rendas, ver `movimentacoes-layout-atual.md`. O "x" nativo de
+     limpar o campo (`::-webkit-clear-button`) é escondido via CSS global em
+     `index.css` (Chrome/Edge) — e, mesmo que o usuário limpe pelo popup do
+     calendário nativo (ainda possível, não é estilizável), o handler
+     `selecionarMes` ignora valor vazio (`if (!novoMes) return`) em vez de
+     quebrar os cálculos do mês. Define o **mês em foco** (estado `mes`,
+     padrão o mês atual): todos os cards, a lista e o gráfico da Home
      mostram dados desse mês, não necessariamente "hoje". Largura fixa
      `w-36` (144px) — encaixado no espaço que já era reservado como padding
      vazio antes dos botões (`pl-44` virou `pl-6`: 24px + 144px do input +
@@ -159,7 +188,7 @@ telas estreitas (`grid-cols-1` abaixo do breakpoint `lg`).
 
 ### 4.2 Banner de lembrete mensal *(aparece só uma vez por mês)*
 - Faixa `grouper-mist` com borda `grouper-sky`/50: "O mês virou! Deseja redefinir seus limites de despesas?"
-- Botões: "Sim, redefinir" (`grouper-mid` sólido, leva para Limites) / "Agora não" (texto `grouper-navy`, dispensa).
+- Botões: "Sim, redefinir" (`grouper-mid` sólido, leva para Planejamento, onde vive o bloco de Limites) / "Agora não" (texto `grouper-navy`, dispensa).
 - Continua full-width, acima do grid de 2 colunas.
 
 ### 4.3 Banner de erro *(só se der erro ao carregar dados)*
@@ -177,35 +206,67 @@ telas estreitas (`grid-cols-1` abaixo do breakpoint `lg`).
 
 #### 4.4.2 Seção "Objetivos" (`ObjetivosResumoHome`)
 - Card branco. Cabeçalho com título "Objetivos" (`font-semibold`, negrito) **e**,
-  à direita, o botão **"+ Adicionar objetivo"** (`grouper-deep`, texto normal —
-  sem caixa alta/Khand/negrito, ao contrário dos botões do cabeçalho da Home;
-  mesmo padrão visual do botão "+ Novo investimento" do card de CDB). Abre o
-  `NovoObjetivoModal` (o mesmo componente usado na página Objetivos) e recarrega
+  à direita, o botão **"+ Adicionar objetivo"** (`grouper-deep` sólido,
+  hover `grouper-ink`, Khand caixa alta com tracking em `text-[13px]` — sem
+  negrito; mesmo tratamento dos botões "+ Novo investimento" e "Plano de
+  contenção" da coluna direita, ver 4.5.3/4.5.4). Abre o `NovoObjetivoModal`
+  (o mesmo componente usado no bloco Objetivos de Planejamento) e recarrega
   a lista da Home ao salvar.
 - Se vazio: "Nenhum objetivo cadastrado."
-- Lista condensada (sem os botões de gestão da página dedicada): por objetivo,
-  descrição (texto normal, sem negrito) + percentual de progresso + **ícone de
-  fixar (pin)** na mesma linha à direita, barra de progresso e, embaixo, uma
-  linha com "R$X de R$Y" à esquerda e **"meta para DD/MM/AAAA"** (a `dataAlvo`
-  do objetivo) à direita. Usa `planoObjetivo()` (`utils/objetivos.ts`) para o
-  cálculo.
+- **Seleção, edição e exclusão** — a lista de objetivos ganhou o mesmo padrão
+  do card de Investimento CDB (ver 4.5.3): clicar numa linha
+  seleciona/deseleciona (fundo `bg-grouper-sky/30`; sem clique, hover dá
+  `hover:bg-grouper-sky/20` **+ `hover:shadow-md`** — a sombra no hover é
+  peculiar desse bloco, os demais blocos com seleção por clique só usam
+  destaque de fundo). Com 1+ selecionados aparecem `BarraSelecao` (exclusão
+  em lote) e "Selecionar todos", no mesmo padrão do CDB. Cada item também tem
+  **ícones de editar/excluir** (`IconeEditar`/`IconeExcluir`, mesmo
+  componente e estilo dos outros blocos) posicionados **à direita da "meta
+  para DD/MM/AAAA"**, na mesma linha — o texto da data ganhou `truncate` +
+  `min-w-0` no contêiner pra ceder espaço aos ícones em vez de empurrá-los
+  pra fora. Editar abre o `NovoObjetivoModal` já em modo edição (prop
+  `objetivo`); excluir pede confirmação (`confirm()`) e chama
+  `excluirObjetivo`. Erros de exclusão sobem pro banner de erro da Home via
+  prop `onErro`.
+- Layout de cada item: descrição (texto normal, sem negrito, `text-grouper-ink`)
+  + percentual de progresso + **ícone de fixar (pin)** na mesma linha à
+  direita (esse grupo tem `stopPropagation` pra não disparar a seleção da
+  linha), barra de progresso e, embaixo, uma linha com "R$X de R$Y" à
+  esquerda e **"meta para DD/MM/AAAA"** (a `dataAlvo` do objetivo) + os
+  ícones de editar/excluir à direita. Usa `planoObjetivo()`
+  (`utils/objetivos.ts`) para o cálculo.
 - **Cor da barra de progresso**: escala de azul por degraus de 20%
   (`corEscalaProgresso()`), do mais claro (`grouper-sky`, 0–20%) ao mais escuro
   (`grouper-ink`, 80–100%) — quanto maior o progresso, mais escura a barra.
+- **Informações de menor destaque em azul**: a linha "R$X de R$Y" / "meta
+  para DD/MM/AAAA" usa `text-xs font-medium text-grouper-deep` (era
+  `text-grouper-navy/60`, cinza-azulado apagado) — mesmo ajuste replicado em
+  "Últimas despesas" (4.4.3), Investimento CDB (4.5.3) e nos blocos de
+  Planejamento (ver seção 6).
 - **Fixar (pin)**: clicar no ícone fixa o objetivo até 2 por vez (preenche de
   `grouper-mid`; tentar fixar um 3º não faz nada, só mostra tooltip
   explicando o limite). Objetivos fixados vão pro topo da lista. Preferência
   salva só no `localStorage` (`financas.objetivosFixadosHome`).
-- **Rolagem**: com mais de 2 objetivos, a lista vira `max-h-64 overflow-y-auto`
-  em vez de esticar o card.
+- **Divisórias entre itens**: `divide-grouper-sky/45` (era `/15`, bem mais
+  clara/quase invisível) — mesmo tom mais escuro usado em todas as listas
+  com `divide-y` da Home e de Movimentações.
+- **Rolagem**: com mais de 2 objetivos, a lista vira `max-h-44 overflow-y-auto`
+  em vez de esticar o card — ajustado para mostrar só 2 itens antes de
+  precisar rolar (era `max-h-64`, que cabia os 3 primeiros sem rolar).
 
 #### 4.4.3 Seção "Últimas despesas"
-- Card branco, título "Últimas despesas" (`font-semibold`, negrito).
+- Card branco (`p-5`, igual ao de Objetivos — antes era `p-4`, o que
+  desalinhava o título com o de Objetivos), título "Últimas despesas"
+  (`font-semibold`, negrito).
 - Se vazio: "Nenhuma despesa lançada neste mês ainda."
 - Lista das **5** despesas mais recentes **do mês em foco** (ver 4.1, não
-  necessariamente o mês atual): descrição (texto normal, sem negrito)
-  + subtexto (categoria · tipo · data) à esquerda, valor em R$ à direita
-  (também texto normal, sem negrito).
+  necessariamente o mês atual). Cada item tem um `<div>` interno com
+  `rounded-md px-3 py-2` (mesmo padrão de indentação das linhas de
+  Objetivos/Investimento CDB, embora esta lista não seja clicável/selecionável):
+  descrição (texto normal, sem negrito, `text-grouper-ink`) + subtexto
+  (categoria · tipo · data, `text-xs font-medium text-grouper-deep` — mesmo
+  ajuste de cor da seção 4.4.2) à esquerda, valor em R$ à direita (também
+  texto normal, sem negrito). Divisórias `divide-grouper-sky/45` (era `/15`).
 
 ### 4.5 Coluna direita (mais estreita) — de cima para baixo
 
@@ -239,12 +300,17 @@ telas estreitas (`grid-cols-1` abaixo do breakpoint `lg`).
   gráficos de Despesas/Rendas em `movimentacoes-layout-atual.md`.)
 - Eixo Y mostra o valor **por extenso** (`R$ 1.500`, separador de milhar
   `pt-BR`), sem abreviar em "mil".
+- **Cor dos rótulos dos eixos**: `#102241` (`grouper-ink`, texto principal —
+  era `#1C4562`/`grouper-navy`, mais claro). Mesmo ajuste replicado nos
+  gráficos de Despesas/Rendas em `movimentacoes-layout-atual.md`.
 - Se não há histórico suficiente: "Sem histórico suficiente ainda."
 
 #### 4.5.3 Seção "Investimento CDB"
 - Card branco. Cabeçalho com título "Investimento CDB" (`font-semibold`,
-  negrito) + botão "+ Novo investimento" (`grouper-deep`, texto normal — sem
-  negrito) à direita.
+  negrito) + botão **"+ Novo investimento"** (`grouper-deep` sólido, hover
+  `grouper-ink`, Khand caixa alta com tracking em `text-[13px]`, sem negrito —
+  mesmo tratamento de "+ Adicionar objetivo" e "Plano de contenção", ver
+  4.4.2/4.5.4) à direita.
 - Se vazio: texto "Nenhum investimento CDB ativo."
 - Se tem investimentos:
   - Barra de seleção múltipla e "Selecionar todos" só aparecem quando pelo
@@ -260,8 +326,10 @@ telas estreitas (`grid-cols-1` abaixo do breakpoint `lg`).
     - Nome (`text-base`, sem negrito) **e, na mesma linha, ao lado do nome**,
       o selo "X% do CDI" com **fundo azul claro** (`bg-grouper-sky/30`) — antes
       ficava embaixo do nome, com fundo branco.
-    - Canto superior direito: data da aplicação + (se vinculado a um
-      objetivo) só o ícone 🔗, com o nome do objetivo em tooltip (`title`).
+    - Canto superior direito: data da aplicação (`text-xs font-medium
+      text-grouper-deep` — era `text-grouper-navy/60`, mesmo ajuste de cor da
+      seção 4.4.2) + (se vinculado a um objetivo) só o ícone 🔗, com o nome
+      do objetivo em tooltip (`title`).
     - Valor atual em destaque, cor `grouper-deep`, **fonte Hind**
       (`font-body`, sem negrito) — não usa mais Khand/`font-display` como o
       resto dos números grandes da Home.
@@ -269,13 +337,16 @@ telas estreitas (`grid-cols-1` abaixo do breakpoint `lg`).
       com contorno `grouper-deep`), ícone de Editar (lápis, contorno
       `grouper-mid`) e ícone de Excluir (X, contorno vermelho). "Rendeu R$X"
       fica alinhado à direita nessa mesma linha.
+  - **Divisórias entre itens**: `divide-grouper-sky/45` (era `/15`).
   - **Rolagem**: com mais de 2 investimentos, a lista vira
     `max-h-72 overflow-y-auto`.
 
 #### 4.5.4 Botão + pop-up "Plano de contenção"
-- Botão (`Plano de contenção — {mês seguinte}`, sem aspas ao redor do mês, sem
-  negrito) no cabeçalho do card "Economia nos últimos meses" (ver 4.5.2).
-  Clicar abre o conteúdo num `Modal` genérico centralizado na tela.
+- Botão (`Plano de contenção — {mês seguinte}`, sem aspas ao redor do mês)
+  no cabeçalho do card "Economia nos últimos meses" (ver 4.5.2). Agora com o
+  mesmo tratamento Khand caixa alta com tracking em `text-[13px]` (sem
+  negrito) dos outros botões secundários da Home (era texto normal, sem
+  Khand). Clicar abre o conteúdo num `Modal` genérico centralizado na tela.
   **"Mês seguinte" é relativo ao mês em foco** (`mesSeguinteYYYYMM(mes)`, ver
   4.1), não ao mês seguinte ao real — projeta a partir do mês que está sendo
   visto, não de hoje.
@@ -319,23 +390,25 @@ e o pop-up de Plano de contenção.
 |---|---|
 | Paleta | 5 tons de azul da marca (`grouper-sky` → `grouper-ink`) para hierarquia/estrutura + preto/branco para alarme real — ver seção 0. **Exceções deliberadas de verde/vermelho**: bordas de `StatCard` (Renda/Despesas), borda de "Economia do mês" (escala por %) e botão de Plano de contenção (escala por urgência) — todas as 3 usando as paletas em `frontend/public/brand/palettes/` |
 | Cards | Fundo branco, cantos levemente arredondados (`rounded-lg`), borda esquerda colorida por significado, sombra leve |
-| Botões | Cantos arredondados. **Dois estilos coexistem**: botões de ação "grandes" do cabeçalho da Home (+ Adicionar renda/despesa, Salvar dos modais) em Khand caixa alta com tracking e `font-semibold`; botões secundários por seção (+ Adicionar objetivo, + Novo investimento, Plano de contenção) em texto normal (`text-sm`, sem Khand/caixa alta/negrito). Ações por item (editar/excluir) são **ícones com contorno** (ver `IconesInvestimento.tsx`) |
-| Negrito | Usado com intenção, não por padrão: títulos de seção (Objetivos, Últimas despesas, Economia nos últimos meses, Investimento CDB) e os `StatCard`s (Renda/Despesas do mês) ficam em negrito; itens de lista (nome do investimento, descrição do objetivo, itens de últimas despesas) e o valor atual do investimento **não** ficam |
-| Listas longas (>2 itens) | Padrão repetido em Objetivos e Investimento CDB: em vez de esticar o card, a lista vira `max-h-* overflow-y-auto` com rolagem própria |
-| Seleção por clique | Padrão do Investimento CDB: sem checkbox visível — a linha inteira é clicável (`onClick` no item) e o fundo muda pra indicar selecionado; hover dá um feedback mais sutil |
-| Espaçamento | Compactado numa passada de "caber na tela sem rolar" — `space-y-4`/`gap-4` entre seções, padding dos cards em geral `p-4`/`p-5` |
-| Tipografia | Khand para títulos/números/botões grandes/rótulos; Hind para texto corrido, itens de lista e o valor atual do investimento CDB (ver 4.5.3) |
+| Botões | Cantos arredondados. **Dois tamanhos, mas agora com o mesmo tratamento tipográfico Khand**: botões de ação "grandes" do cabeçalho (+ Adicionar renda/despesa, Salvar dos modais) em `text-sm` caixa alta com tracking e `font-semibold`; botões secundários por seção (+ Adicionar objetivo, + Novo investimento, Plano de contenção) também em Khand caixa alta com tracking, só que menores (`text-[13px]`) e **sem negrito** — antes eram texto normal sem Khand/caixa alta, foram unificados nessa repaginação. Ações por item (editar/excluir) são **ícones com contorno** (ver `IconesInvestimento.tsx`) |
+| Negrito | Usado com intenção, não por padrão: títulos de seção (Objetivos, Últimas despesas, Economia nos últimos meses, Investimento CDB) e os `StatCard`s (Renda/Despesas do mês) ficam em negrito; itens de lista (nome do investimento, descrição do objetivo, itens de últimas despesas) e o valor atual do investimento **não** ficam — já testamos deixar os nomes em negrito, mas foi revertido (ver 4.4.2/4.4.3) |
+| Informações de menor destaque | Cor `text-grouper-deep` (azul) + `font-medium`, `text-xs` — usado no valor/meta de Objetivos, subtexto de Últimas despesas e Investimento CDB (data), e nos blocos de Planejamento (seção 6). Antes era `text-grouper-navy/60` (cinza-azulado apagado); trocado por ter mais contraste/cor sem virar texto principal |
+| Listas longas | Padrão repetido em Objetivos (>2 itens, `max-h-44`) e Investimento CDB (>2 itens, `max-h-72`): em vez de esticar o card, a lista vira `max-h-* overflow-y-auto` com rolagem própria. Divisórias entre itens (`divide-y`) em `divide-grouper-sky/45` (tom mais escuro que o `/15` original, pra ficar visível) |
+| Seleção por clique | Padrão do Investimento CDB, replicado em Objetivos (ver 4.4.2): sem checkbox visível — a linha inteira é clicável (`onClick` no item) e o fundo muda pra indicar selecionado (`bg-grouper-sky/30`); hover dá um feedback mais sutil (`hover:bg-grouper-sky/20`) — em Objetivos o hover também ganhou `hover:shadow-md` |
+| Espaçamento | Compactado numa passada de "caber na tela sem rolar" — `space-y-4`/`gap-4` entre seções, padding dos cards em geral `p-5` (Objetivos, Últimas despesas, Investimento CDB — Últimas despesas usava `p-4`, ajustado pra `p-5` pra alinhar o título com os outros dois) |
+| Tipografia | Khand para títulos/números/botões grandes e pequenos/rótulos; Hind para texto corrido, itens de lista e o valor atual do investimento CDB (ver 4.5.3) |
+| Seletor de mês nativo | O "x" de limpar (`::-webkit-clear-button`) é escondido via CSS global (`index.css`) em Chrome/Edge. Mesmo assim, se o usuário limpar pelo popup nativo do calendário (não estilizável), o handler `selecionarMes` ignora string vazia em vez de deixar o mês em foco quebrar — mesmo padrão na Home e em Despesas/Rendas |
 
 ## 6. Pontos que já pulam aos olhos como possíveis melhorias
 
 *(observação neutra — não são decisões, só o que notei explorando o código)*
 
 - O menu lateral **não tem versão mobile** (não colapsa, não vira menu inferior/hambúrguer) — se algum dia você for usar em celular, isso vai doer.
-- As outras páginas (Despesas, Categorias, Rendas, Objetivos, Limites, Relatórios) ainda são de coluna única centralizada — só a Home ganhou o layout em 2 colunas/full-width até agora.
+- Movimentações já ganhou o mesmo grid full-width da Home (ver `movimentacoes-layout-atual.md`); Planejamento usa um layout próprio de 3 blocos com altura fixa (ver seção 6 daquele contexto) — nenhuma página ficou no wrapper antigo `mx-auto max-w-4xl`.
 - Alguns modais ainda não foram repaginados: `ResgatarCdbModal`, `InvestirMaisModal`, `VincularInvestimentoModal` (ver 4.6).
-- O botão "+ Adicionar objetivo" na página Objetivos dedicada (`ObjetivosPage.tsx`) continua com o visual antigo (`bg-blue-600`) — só a cópia dele na Home (`ObjetivosResumoHome`) foi estilizada com a marca.
-- `frontend/src/components/SimularDespesaModal.tsx` ficou **órfão** (sem nenhum caller) depois que o botão "Simular despesa" saiu da Home — considerar remover o arquivo ou religar a função em outro lugar.
+- `frontend/src/components/SimularDespesaModal.tsx` continua **órfão** (sem nenhum caller) desde que o botão "Simular despesa" saiu da Home — considerar remover o arquivo ou religar a função em outro lugar.
 - O avatar do cabeçalho (4.1) é só um círculo vazio por enquanto — falta decidir de onde vem a foto/iniciais do usuário quando for implementado de verdade.
+- A imagem de fundo do menu lateral (ver seção 3) tem um nome de arquivo genérico (hash), sem otimização de tamanho — se o app crescer, vale renomear/comprimir.
 
 ## 7. Como pedir mudanças de design a partir de agora
 

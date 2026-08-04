@@ -73,32 +73,4 @@ class RelatorioServiceTest {
         assertThat(resumos.get(1).economia()).isEqualByComparingTo("700");
     }
 
-    @Test
-    void deveCompararAnosAgregandoTotaisMensais() {
-        for (int mes = 1; mes <= 12; mes++) {
-            LocalDate inicio2025 = LocalDate.of(2025, mes, 1);
-            when(rendaService.calcularTotalMes(1L, inicio2025)).thenReturn(new BigDecimal("1000"));
-            when(despesaService.calcularTotalPorPeriodo(1L, inicio2025, inicio2025.withDayOfMonth(inicio2025.lengthOfMonth())))
-                    .thenReturn(new BigDecimal("600"));
-
-            LocalDate inicio2026 = LocalDate.of(2026, mes, 1);
-            when(rendaService.calcularTotalMes(1L, inicio2026)).thenReturn(new BigDecimal("1200"));
-            when(despesaService.calcularTotalPorPeriodo(1L, inicio2026, inicio2026.withDayOfMonth(inicio2026.lengthOfMonth())))
-                    .thenReturn(new BigDecimal("700"));
-        }
-
-        List<ResumoAnual> resumos = relatorioService.compararAnos(1L, 2025, 2026);
-
-        assertThat(resumos).hasSize(2);
-        assertThat(resumos.get(0).ano()).isEqualTo(2025);
-        assertThat(resumos.get(0).totalRenda()).isEqualByComparingTo("12000");
-        assertThat(resumos.get(0).totalDespesas()).isEqualByComparingTo("7200");
-        assertThat(resumos.get(0).economia()).isEqualByComparingTo("4800");
-
-        assertThat(resumos.get(1).ano()).isEqualTo(2026);
-        assertThat(resumos.get(1).totalRenda()).isEqualByComparingTo("14400");
-        assertThat(resumos.get(1).totalDespesas()).isEqualByComparingTo("8400");
-        assertThat(resumos.get(1).economia()).isEqualByComparingTo("6000");
-    }
-
 }

@@ -39,27 +39,37 @@ export function DetalheDespesasModal({
                   {formatarBRL(grupo.total)}
                 </span>
               </div>
-              <ul className="mt-1">
-                {despesas
+              {(() => {
+                const despesasCategoria = despesas
                   .filter((d) => d.categoria.nome === grupo.nome)
-                  .sort((a, b) => b.data.localeCompare(a.data))
-                  .map((d) => (
-                    <li
-                      key={d.id}
-                      className="flex items-center justify-between py-1 text-sm"
-                    >
-                      <span className="text-grouper-navy">
-                        {d.descricao}{" "}
-                        <span className="text-xs text-grouper-navy/50">
-                          · {dataBR(d.data)}
+                  .sort((a, b) => b.data.localeCompare(a.data));
+                return (
+                  <ul
+                    className={`mt-1 ${
+                      despesasCategoria.length > 7
+                        ? "max-h-52 overflow-y-auto pr-1"
+                        : ""
+                    }`}
+                  >
+                    {despesasCategoria.map((d) => (
+                      <li
+                        key={d.id}
+                        className="flex items-center justify-between py-1 text-sm"
+                      >
+                        <span className="text-grouper-navy">
+                          {d.descricao}{" "}
+                          <span className="text-xs text-grouper-navy/50">
+                            · {dataBR(d.data)}
+                          </span>
                         </span>
-                      </span>
-                      <span className="text-grouper-ink">
-                        {formatarBRL(d.valor)}
-                      </span>
-                    </li>
-                  ))}
-              </ul>
+                        <span className="text-grouper-ink">
+                          {formatarBRL(d.valor)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              })()}
             </div>
           ))}
         </div>

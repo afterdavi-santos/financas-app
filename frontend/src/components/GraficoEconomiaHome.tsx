@@ -44,13 +44,18 @@ export function GraficoEconomiaHome({ dados }: { dados: PontoEconomia[] }) {
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={dados} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#EEF5FB" />
-          <XAxis dataKey="rotulo" tick={{ fontSize: 11, fill: "#1C4562" }} />
+          <XAxis dataKey="rotulo" tick={{ fontSize: 11, fill: "#102241" }} />
           <YAxis
             tickFormatter={formatarEixoY}
-            tick={{ fontSize: 11, fill: "#1C4562" }}
+            tick={{ fontSize: 11, fill: "#102241" }}
             width={68}
           />
-          <Tooltip formatter={formatarTooltip} />
+          <Tooltip
+            formatter={formatarTooltip}
+            isAnimationActive={false}
+            allowEscapeViewBox={{ x: false, y: false }}
+            wrapperStyle={{ pointerEvents: "none" }}
+          />
           <Bar dataKey="Economia" radius={[4, 4, 0, 0]}>
             {dados.map((d, i) => (
               <Cell key={i} fill={d.Economia >= 0 ? COR_POSITIVA : COR_NEGATIVA} />

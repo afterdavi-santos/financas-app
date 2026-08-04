@@ -149,6 +149,9 @@ export function HomePage() {
   // Troca o mês em foco — usada tanto pelo seletor de mês quanto ao clicar
   // numa coluna do gráfico "Economia nos últimos meses" (mesmo efeito).
   function selecionarMes(novoMes: string) {
+    // O "Limpar" do seletor nativo manda "" — mês em foco não pode ficar
+    // vazio (quebraria os cálculos do mês), então ignora.
+    if (!novoMes) return;
     setMes(novoMes);
   }
 
@@ -274,7 +277,7 @@ export function HomePage() {
               // calendário; showPicker() faz o clique em qualquer parte do
               // "botão" abrir o mesmo seletor.
               onClick={(e) => e.currentTarget.showPicker?.()}
-              className="w-36 cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-3 py-2 font-display text-sm font-semibold text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid"
+              className="w-36 cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-3 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid"
             />
             <button
               onClick={() => setModalRenda(true)}
@@ -306,7 +309,7 @@ export function HomePage() {
             <button
               onClick={() => {
                 dispensarLembrete();
-                navigate("/limites");
+                navigate("/planejamento");
               }}
               className="rounded-md bg-grouper-mid px-4 py-2 text-sm font-medium text-white hover:bg-grouper-deep"
             >
@@ -343,10 +346,11 @@ export function HomePage() {
               objetivos={objetivos}
               rendaFixaMensal={rendaFixaMes}
               onObjetivoCriado={carregar}
+              onErro={(mensagem) => setErro(mensagem)}
             />
 
             {/* Últimas despesas */}
-            <section className="rounded-lg border border-grouper-sky/20 bg-white p-4 shadow-sm">
+            <section className="rounded-lg border border-grouper-sky/20 bg-white p-5 shadow-sm">
               <h2 className="mb-2 font-display text-lg font-semibold text-grouper-ink">
                 Últimas despesas
               </h2>
@@ -355,24 +359,23 @@ export function HomePage() {
                   Nenhuma despesa lançada neste mês ainda.
                 </p>
               ) : (
-                <ul className="divide-y divide-grouper-sky/15">
+                <ul className="divide-y divide-grouper-sky/45">
                   {ultimasDespesas.map((d) => (
-                    <li
-                      key={d.id}
-                      className="flex items-center justify-between py-2.5"
-                    >
-                      <div>
-                        <p className="text-grouper-ink">
-                          {d.descricao}
-                        </p>
-                        <p className="text-xs text-grouper-navy/60">
-                          {d.categoria.nome} · {rotuloTipoDespesa[d.tipo]} ·{" "}
-                          {dataBR(d.data)}
-                        </p>
+                    <li key={d.id}>
+                      <div className="flex items-center justify-between rounded-md px-3 py-1.5">
+                        <div>
+                          <p className="text-grouper-ink">
+                            {d.descricao}
+                          </p>
+                          <p className="text-xs font-medium text-grouper-deep">
+                            {d.categoria.nome} · {rotuloTipoDespesa[d.tipo]} ·{" "}
+                            {dataBR(d.data)}
+                          </p>
+                        </div>
+                        <span className="text-grouper-ink">
+                          {formatarBRL(d.valor)}
+                        </span>
                       </div>
-                      <span className="text-grouper-ink">
-                        {formatarBRL(d.valor)}
-                      </span>
                     </li>
                   ))}
                 </ul>
@@ -395,7 +398,7 @@ export function HomePage() {
                     backgroundColor: corBotaoPlano.fundo,
                     color: corBotaoPlano.texto,
                   }}
-                  className="rounded-md px-3 py-1.5 text-sm shadow-sm transition hover:brightness-95"
+                  className="rounded-md px-3 py-1.5 font-display text-[13px] uppercase tracking-wide shadow-sm transition hover:brightness-95"
                 >
                   Plano de contenção — {rotuloProximoMes}
                 </button>
@@ -412,7 +415,7 @@ export function HomePage() {
                 </h2>
                 <button
                   onClick={abrirNovoInvestimento}
-                  className="rounded-md bg-grouper-deep px-3 py-1.5 text-sm text-white hover:bg-grouper-ink"
+                  className="rounded-md bg-grouper-deep px-3 py-1.5 font-display text-[13px] uppercase tracking-wide text-white hover:bg-grouper-ink"
                 >
                   + Novo investimento
                 </button>
@@ -444,7 +447,7 @@ export function HomePage() {
                     </>
                   )}
                   <ul
-                    className={`divide-y divide-grouper-sky/15 ${
+                    className={`divide-y divide-grouper-sky/45 ${
                       investimentos.length > 2 ? "max-h-72 overflow-y-auto pr-1" : ""
                     }`}
                   >
@@ -469,7 +472,7 @@ export function HomePage() {
                               </span>
                             </div>
                             <div className="flex shrink-0 items-center gap-1.5">
-                              <span className="text-xs text-grouper-navy/60">
+                              <span className="text-xs font-medium text-grouper-deep">
                                 {dataBR(inv.dataAplicacao)}
                               </span>
                               {inv.objetivoId != null && (

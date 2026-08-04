@@ -5,7 +5,6 @@ import com.financas.app.model.Usuario;
 import com.financas.app.security.JwtAuthenticationFilter;
 import com.financas.app.security.UsuarioAutenticado;
 import com.financas.app.service.RelatorioService;
-import com.financas.app.service.ResumoAnual;
 import com.financas.app.service.ResumoMensal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -76,19 +75,6 @@ class RelatorioControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].economia").value(1000.00));
-    }
-
-    @Test
-    void deveCompararAnos() throws Exception {
-        ResumoAnual resumo = new ResumoAnual(2026, new BigDecimal("36000.00"), new BigDecimal("24000.00"), new BigDecimal("12000.00"));
-        when(relatorioService.compararAnos(1L, 2025, 2026)).thenReturn(List.of(resumo));
-
-        mockMvc.perform(get("/api/relatorios/comparar-anos")
-                        .param("anoInicio", "2025")
-                        .param("anoFim", "2026")
-                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].ano").value(2026));
     }
 
     @Test

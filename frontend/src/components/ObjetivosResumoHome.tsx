@@ -4,14 +4,21 @@ import { planoObjetivo } from "../utils/objetivos";
 import { corEscalaProgresso } from "../utils/cores";
 import { dataBR } from "../utils/rotulos";
 import { NovoObjetivoModal } from "./NovoObjetivoModal";
+import { BarraSelecao } from "./BarraSelecao";
+import { SelecionarTodos } from "./SelecionarTodos";
+import { IconeEditar, IconeExcluir } from "./IconesInvestimento";
+import { useSelecao } from "../hooks/useSelecao";
+import { excluirObjetivo } from "../api/objetivos";
+import { mensagemDeErro } from "../api/erros";
 import type { Objetivo } from "../types/financas";
 
 interface ObjetivosResumoHomeProps {
   objetivos: Objetivo[];
   rendaFixaMensal: number;
-  // Chamado após criar um objetivo pelo modal desta seção, para a Home
+  // Chamado após criar/editar/excluir um objetivo por aqui, para a Home
   // recarregar a lista (o estado dos objetivos vive na HomePage).
   onObjetivoCriado: () => void;
+  onErro: (mensagem: string) => void;
 }
 
 // Guarda localmente (só nesta máquina/navegador) quais objetivos o usuário
@@ -45,14 +52,25 @@ function IconeFixar({ preenchido }: { preenchido: boolean }) {
 
 // Resumo condensado de objetivos para a Home, no lugar do "Strategic
 // Objectives" da referência: descrição + barra de progresso por objetivo,
-// sem os botões de gestão completos (esses ficam só na página Objetivos).
+// com seleção/edição/exclusão no mesmo padrão do card de Investimento CDB
+// (ver `HomePage.tsx`).
 export function ObjetivosResumoHome({
   objetivos,
   rendaFixaMensal,
   onObjetivoCriado,
+  onErro,
 }: ObjetivosResumoHomeProps) {
   const [fixados, setFixados] = useState<Set<number>>(lerFixados);
   const [modalAberto, setModalAberto] = useState(false);
+  const [editando, setEditando] = useState<Objetivo | null>(null);
+  const {
+    selecionados,
+    alternar,
+    limpar,
+    selecionarTodos,
+    desselecionarTodos,
+    todosSelecionados,
+  } = useSelecao();
 
   function alternarFixado(id: number) {
     setFixados((atual) => {
@@ -68,6 +86,45 @@ export function ObjetivosResumoHome({
     });
   }
 
+  function abrirNovo() {
+    setEditando(null);
+    setModalAberto(true);
+  }
+
+  function abrirEdicao(objetivo: Objetivo) {
+    setEditando(objetivo);
+    setModalAberto(true);
+  }
+
+  async function excluirItem(objetivo: Objetivo) {
+    if (!confirm(`Excluir o objetivo "${objetivo.descricao}"?`)) return;
+    try {
+      await excluirObjetivo(objetivo.id);
+      desselecionarTodos([objetivo.id]);
+      onObjetivoCriado();
+    } catch (e) {
+      onErro(mensagemDeErro(e));
+    }
+  }
+
+  async function excluirSelecionados() {
+    const ids = Array.from(selecionados);
+    const plural = ids.length > 1;
+    if (
+      !confirm(
+        `Excluir ${ids.length} objetivo${plural ? "s" : ""} selecionado${plural ? "s" : ""}?`,
+      )
+    )
+      return;
+    const resultados = await Promise.allSettled(ids.map((id) => excluirObjetivo(id)));
+    const falhas = resultados.filter((r) => r.status === "rejected").length;
+    if (falhas > 0) {
+      onErro(`${falhas} de ${ids.length} objetivo(s) não puderam ser excluídos.`);
+    }
+    limpar();
+    onObjetivoCriado();
+  }
+
   // Fixados primeiro (mantendo a ordem original entre si e entre os demais).
   const objetivosOrdenados = [...objetivos].sort(
     (a, b) => Number(fixados.has(b.id)) - Number(fixados.has(a.id)),
@@ -80,8 +137,8 @@ export function ObjetivosResumoHome({
           Objetivos
         </h2>
         <button
-          onClick={() => setModalAberto(true)}
-          className="rounded-md bg-grouper-deep px-3 py-1.5 text-sm text-white hover:bg-grouper-ink"
+          onClick={abrirNovo}
+          className="rounded-md bg-grouper-deep px-3 py-1.5 font-display text-[13px] uppercase tracking-wide text-white hover:bg-grouper-ink"
         >
           + Adicionar objetivo
         </button>
@@ -91,68 +148,129 @@ export function ObjetivosResumoHome({
           Nenhum objetivo cadastrado.
         </p>
       ) : (
-        <ul
-          className={`divide-y divide-grouper-sky/15 ${
-            objetivos.length > 2 ? "max-h-64 overflow-y-auto pr-1" : ""
-          }`}
-        >
-          {objetivosOrdenados.map((obj) => {
-            const plano = planoObjetivo(obj, rendaFixaMensal);
-            const fixado = fixados.has(obj.id);
-            return (
-              <li key={obj.id} className="py-3">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-grouper-ink">{obj.descricao}</p>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="text-sm font-semibold text-grouper-deep">
-                      {plano.progresso.toFixed(0)}%
-                    </span>
-                    <button
-                      onClick={() => alternarFixado(obj.id)}
-                      aria-label={fixado ? "Desafixar objetivo" : "Fixar objetivo"}
-                      title={
-                        fixado
-                          ? "Desafixar objetivo"
-                          : fixados.size >= MAX_FIXADOS
-                            ? `Você já fixou ${MAX_FIXADOS} objetivos`
-                            : "Fixar objetivo na Home"
-                      }
-                      className={`transition-colors ${
-                        fixado
-                          ? "text-grouper-mid"
-                          : "text-grouper-navy/30 hover:text-grouper-navy/60"
-                      }`}
-                    >
-                      <IconeFixar preenchido={fixado} />
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-grouper-mist">
+        <>
+          {selecionados.size > 0 && (
+            <>
+              <BarraSelecao
+                quantidade={selecionados.size}
+                texto={`${selecionados.size} objetivo${selecionados.size > 1 ? "s" : ""} selecionado${selecionados.size > 1 ? "s" : ""}`}
+                onExcluir={excluirSelecionados}
+                onCancelar={limpar}
+              />
+              <div className="mb-3 mt-3">
+                <SelecionarTodos
+                  marcado={todosSelecionados(objetivos.map((o) => o.id))}
+                  onAlternar={() =>
+                    todosSelecionados(objetivos.map((o) => o.id))
+                      ? limpar()
+                      : selecionarTodos(objetivos.map((o) => o.id))
+                  }
+                />
+              </div>
+            </>
+          )}
+          <ul
+            className={`divide-y divide-grouper-sky/45 ${
+              objetivos.length > 2 ? "max-h-44 overflow-y-auto pr-1" : ""
+            }`}
+          >
+            {objetivosOrdenados.map((obj) => {
+              const plano = planoObjetivo(obj, rendaFixaMensal);
+              const fixado = fixados.has(obj.id);
+              const selecionado = selecionados.has(obj.id);
+              return (
+                <li key={obj.id}>
                   <div
-                    className="h-full rounded-full transition-[width]"
-                    style={{
-                      width: `${plano.progresso}%`,
-                      backgroundColor: corEscalaProgresso(plano.progresso),
-                    }}
-                  />
-                </div>
-                <div className="mt-1 flex items-center justify-between text-xs text-grouper-navy/60">
-                  <span>
-                    {formatarBRL(obj.valorAtual)} de {formatarBRL(obj.valorAlvo)}
-                  </span>
-                  <span>meta para {dataBR(obj.dataAlvo)}</span>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                    onClick={() => alternar(obj.id)}
+                    className={`cursor-pointer rounded-md px-3 py-2.5 transition-all ${
+                      selecionado
+                        ? "bg-grouper-sky/30"
+                        : "hover:bg-grouper-sky/20 hover:shadow-md"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-grouper-ink">{obj.descricao}</p>
+                      <div
+                        className="flex shrink-0 items-center gap-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span className="text-sm font-semibold text-grouper-deep">
+                          {plano.progresso.toFixed(0)}%
+                        </span>
+                        <button
+                          onClick={() => alternarFixado(obj.id)}
+                          aria-label={fixado ? "Desafixar objetivo" : "Fixar objetivo"}
+                          title={
+                            fixado
+                              ? "Desafixar objetivo"
+                              : fixados.size >= MAX_FIXADOS
+                                ? `Você já fixou ${MAX_FIXADOS} objetivos`
+                                : "Fixar objetivo na Home"
+                          }
+                          className={`transition-colors ${
+                            fixado
+                              ? "text-grouper-mid"
+                              : "text-grouper-navy/30 hover:text-grouper-navy/60"
+                          }`}
+                        >
+                          <IconeFixar preenchido={fixado} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-grouper-mist">
+                      <div
+                        className="h-full rounded-full transition-[width]"
+                        style={{
+                          width: `${plano.progresso}%`,
+                          backgroundColor: corEscalaProgresso(plano.progresso),
+                        }}
+                      />
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-2 text-xs font-medium text-grouper-deep">
+                      <span className="shrink-0">
+                        {formatarBRL(obj.valorAtual)} de {formatarBRL(obj.valorAlvo)}
+                      </span>
+                      <div
+                        className="flex min-w-0 items-center gap-1.5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span className="truncate">meta para {dataBR(obj.dataAlvo)}</span>
+                        <button
+                          onClick={() => abrirEdicao(obj)}
+                          aria-label="Editar"
+                          title="Editar"
+                          className="shrink-0 rounded-md border border-grouper-mid/30 bg-white p-1 text-grouper-mid hover:bg-grouper-mist"
+                        >
+                          <IconeEditar className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => excluirItem(obj)}
+                          aria-label="Excluir"
+                          title="Excluir"
+                          className="shrink-0 rounded-md border border-red-300 bg-white p-1 text-red-600 hover:bg-red-50"
+                        >
+                          <IconeExcluir className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
 
       <NovoObjetivoModal
         aberto={modalAberto}
-        onClose={() => setModalAberto(false)}
+        objetivo={editando}
+        onClose={() => {
+          setModalAberto(false);
+          setEditando(null);
+        }}
         onCriada={() => {
           setModalAberto(false);
+          setEditando(null);
           onObjetivoCriado();
         }}
       />

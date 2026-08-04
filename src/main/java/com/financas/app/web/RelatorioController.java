@@ -3,7 +3,6 @@ package com.financas.app.web;
 import com.financas.app.dto.TotalResponse;
 import com.financas.app.security.UsuarioAutenticado;
 import com.financas.app.service.RelatorioService;
-import com.financas.app.service.ResumoAnual;
 import com.financas.app.service.ResumoMensal;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -36,13 +35,6 @@ public class RelatorioController {
                                              @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
                                              @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fim) {
         return relatorioService.compararMeses(usuarioAutenticado.getId(), inicio, fim);
-    }
-
-    @GetMapping("/comparar-anos")
-    public List<ResumoAnual> compararAnos(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado,
-                                           @RequestParam int anoInicio,
-                                           @RequestParam int anoFim) {
-        return relatorioService.compararAnos(usuarioAutenticado.getId(), anoInicio, anoFim);
     }
 
 }

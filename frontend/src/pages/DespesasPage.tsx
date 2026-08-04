@@ -217,6 +217,9 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
   // Troca o mês em foco — usada tanto pelo seletor de mês quanto ao clicar
   // numa coluna do gráfico "Despesas dos últimos meses" (mesmo efeito).
   function selecionarMes(novoMes: string) {
+    // O "Limpar" do seletor nativo manda "" — mês em foco não pode ficar
+    // vazio (quebraria os cálculos do mês), então ignora.
+    if (!novoMes) return;
     limpar(); // seleção era da lista do mês anterior
     setMes(novoMes);
   }
@@ -231,7 +234,7 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
         // calendário; showPicker() faz o clique em qualquer parte do "botão"
         // abrir o mesmo seletor.
         onClick={(e) => e.currentTarget.showPicker?.()}
-        className="cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-4 py-2 font-display text-sm font-semibold text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid"
+        className="w-36 cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-3 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid"
       />
       <button
         onClick={abrirNovaDespesa}
@@ -328,7 +331,7 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
                 </p>
               ) : (
                 <ul
-                  className={`divide-y divide-grouper-sky/15 ${
+                  className={`divide-y divide-grouper-sky/45 ${
                     resumo.porCategoria.length > 5 ? "max-h-40 overflow-y-auto pr-1" : ""
                   }`}
                 >
@@ -348,7 +351,7 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
                             ),
                           })
                         }
-                        className="flex w-full items-center justify-between py-2 text-left hover:text-grouper-mid"
+                        className="flex w-full cursor-pointer items-center justify-between rounded-md px-2 py-2 text-left transition-all hover:bg-grouper-sky/20 hover:shadow-md"
                       >
                         <span className="text-sm text-grouper-ink">{c.nome}</span>
                         <span className="text-sm font-semibold text-grouper-ink">
@@ -456,7 +459,7 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
               </p>
             ) : (
               <ul
-                className={`divide-y divide-grouper-sky/15 ${
+                className={`divide-y divide-grouper-sky/45 ${
                   ordenadas.length > 3 ? "max-h-49 overflow-y-auto pr-1" : ""
                 }`}
               >
@@ -474,7 +477,7 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
                           <p className="text-grouper-ink">
                             {d.descricao}
                           </p>
-                          <p className="text-xs text-grouper-navy/60">
+                          <p className="text-xs font-medium text-grouper-deep">
                             {d.categoria.nome} · {rotuloTipoDespesa[d.tipo]} ·{" "}
                             {dataBR(d.data)}
                           </p>

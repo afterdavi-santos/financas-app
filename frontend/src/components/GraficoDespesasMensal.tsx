@@ -51,13 +51,18 @@ export function GraficoDespesasMensal({ dados }: { dados: PontoDespesa[] }) {
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={dados} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#EEF5FB" />
-          <XAxis dataKey="rotulo" tick={{ fontSize: 11, fill: "#1C4562" }} />
+          <XAxis dataKey="rotulo" tick={{ fontSize: 11, fill: "#102241" }} />
           <YAxis
             tickFormatter={formatarEixoY}
-            tick={{ fontSize: 11, fill: "#1C4562" }}
+            tick={{ fontSize: 11, fill: "#102241" }}
             width={68}
           />
-          <Tooltip formatter={formatarTooltip} />
+          <Tooltip
+            formatter={formatarTooltip}
+            isAnimationActive={false}
+            allowEscapeViewBox={{ x: false, y: false }}
+            wrapperStyle={{ pointerEvents: "none" }}
+          />
           <Bar dataKey="Fixa" name="Despesas fixas" stackId="despesas" fill={COR_FIXA} radius={[0, 0, 4, 4]} />
           <Bar dataKey="Variavel" name="Despesas variáveis" stackId="despesas" fill={COR_VARIAVEL} radius={[4, 4, 0, 0]} />
         </BarChart>

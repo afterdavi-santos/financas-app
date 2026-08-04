@@ -170,17 +170,10 @@ export interface StatusLimite {
   estourado: boolean;
 }
 
-// -> ResumoMensal (relatório): um ponto do gráfico de comparação mês a mês.
+// -> ResumoMensal (relatório): um ponto do gráfico de comparação mês a mês
+// (usado pelo gráfico "Economia nos últimos meses" da Home).
 export interface ResumoMensal {
   mes: string; // "YYYY-MM-DD" (1º dia do mês)
-  totalRenda: number;
-  totalDespesas: number;
-  economia: number;
-}
-
-// -> ResumoAnual (relatório): um ponto do gráfico de comparação ano a ano.
-export interface ResumoAnual {
-  ano: number;
   totalRenda: number;
   totalDespesas: number;
   economia: number;
