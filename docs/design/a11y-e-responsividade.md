@@ -161,7 +161,24 @@ existem a partir de `lg` agora — no mobile os blocos têm altura natural
 (baseada no conteúdo) e a página inteira rola normalmente, em vez de cada
 bloco rolar internamente numa altura espremida.
 
-### 2.5 O que já estava bem resolvido (não mexemos)
+### 2.5 Planejamento — Objetivos: botões de ação para uma linha própria no mobile
+
+Depois do fix de altura (2.4), apareceu um segundo problema no mesmo
+bloco: a linha "R$X de R$Y · meta de conclusão DD/MM/AAAA" + os 5 botões
+de ação (Aportar/Linha do tempo/Vincular/editar/excluir) vivia num único
+`flex flex-nowrap`, e nessa largura os botões não cabiam — gerava rolagem
+horizontal na página inteira no mobile (`scrollWidth > clientWidth`).
+
+Fix: abaixo de `lg`, valor+meta ficam numa linha (`flex-nowrap`, como
+antes) e os botões passam pra uma **segunda linha, com `flex-wrap`**
+(quebram em mais de uma linha se precisar, em vez de forçar scroll
+horizontal) — usando `flex-col` no container externo. Em `lg`+, os dois
+grupos viram `contents` e "achatam" de volta pra exatamente a mesma linha
+única de antes (mesma técnica de 2.2, sem duplicar JSX). Verificado
+criando um objetivo de teste e conferindo `document.documentElement
+.scrollWidth === clientWidth` via Chrome em viewport mobile.
+
+### 2.6 O que já estava bem resolvido (não mexemos)
 
 - Home e Movimentações: grid `grid-cols-1 lg:grid-cols-3` — empilha em 1
   coluna abaixo de `lg`, sem overflow horizontal.
@@ -169,7 +186,7 @@ bloco rolar internamente numa altura espremida.
 - Textos grandes usam `rem` via classes Tailwind (`text-3xl` etc.), não
   `px` cravado.
 
-### 2.6 Pontos que ficaram de fora deste ajuste (candidatos a próxima rodada)
+### 2.7 Pontos que ficaram de fora deste ajuste (candidatos a próxima rodada)
 
 - `StatCard`s (Renda/Despesas do mês) usam `grid-cols-2` fixo, sem
   breakpoint — em telas muito estreitas (<360px) os dois cards ficam
