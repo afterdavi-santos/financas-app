@@ -197,21 +197,31 @@ export function PlanejamentoObjetivos() {
                         />
                       </div>
 
+                      {/* No mobile os botões vão pra uma linha própria,
+                          abaixo de valor/meta (`flex-col` + `contents` em
+                          lg+ pra achatar de volta na mesma linha única de
+                          sempre — mesma técnica usada na Home pra reordenar
+                          sem duplicar JSX, ver docs/design/a11y-e-responsividade.md
+                          seção 2.2). Sem isso os 5 botões em `flex-nowrap`
+                          empurravam a linha pra fora da tela, gerando
+                          rolagem horizontal numa viewport estreita. */}
                       <div
-                        className="mt-1.5 flex flex-nowrap items-center gap-1.5"
+                        className="mt-1.5 flex flex-col gap-1.5 lg:flex-row lg:flex-nowrap lg:items-center"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <p className="min-w-0 flex-1 truncate text-[13px] font-medium text-grouper-deep">
-                          {formatarBRL(obj.valorAtual)} de {formatarBRL(obj.valorAlvo)}
-                          {!plano.concluido && plano.percentualRenda !== null && (
-                            <> · guarde {formatarBRL(plano.aporteMensal)}/mês</>
-                          )}
-                          {plano.concluido && <> · 🎉 meta atingida</>}
-                        </p>
-                        <p className="shrink-0 text-[13px] font-medium text-grouper-deep">
-                          meta de conclusão {dataBR(obj.dataAlvo)}
-                        </p>
-                        <div className="flex shrink-0 items-center gap-1.5">
+                        <div className="flex flex-nowrap items-center gap-1.5 lg:contents">
+                          <p className="min-w-0 flex-1 truncate text-[13px] font-medium text-grouper-deep">
+                            {formatarBRL(obj.valorAtual)} de {formatarBRL(obj.valorAlvo)}
+                            {!plano.concluido && plano.percentualRenda !== null && (
+                              <> · guarde {formatarBRL(plano.aporteMensal)}/mês</>
+                            )}
+                            {plano.concluido && <> · 🎉 meta atingida</>}
+                          </p>
+                          <p className="shrink-0 text-[13px] font-medium text-grouper-deep">
+                            meta de conclusão {dataBR(obj.dataAlvo)}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 lg:contents">
                           {obj.investimentoCdbId == null && (
                             <button
                               onClick={() => setAportando(obj)}
