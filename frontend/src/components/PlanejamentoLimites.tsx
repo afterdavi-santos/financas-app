@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NovoLimiteModal } from "./NovoLimiteModal";
 import { BarraSelecao } from "./BarraSelecao";
 import { SelecionarTodos } from "./SelecionarTodos";
@@ -82,10 +82,13 @@ export function PlanejamentoLimites() {
     carregar();
   }, []);
 
-  const categoriasComLimite = new Set(linhas.map((l) => l.limite.categoria.id));
-  const categoriasSemLimite = categorias.filter(
-    (c) => !categoriasComLimite.has(c.id),
-  );
+  // useMemo: sem isso, um novo array a cada render reinicia o efeito de
+  // useCategoriasSemelhantes (dentro do NovoLimiteModal) indefinidamente
+  // (loop infinito de render).
+  const categoriasSemLimite = useMemo(() => {
+    const comLimite = new Set(linhas.map((l) => l.limite.categoria.id));
+    return categorias.filter((c) => !comLimite.has(c.id));
+  }, [categorias, linhas]);
 
   async function excluir(linha: Linha) {
     if (!confirm(`Excluir o limite de "${linha.limite.categoria.nome}"?`)) return;

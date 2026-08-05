@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DespesasPage } from "./DespesasPage";
 import { RendasPage } from "./RendasPage";
+import { Avatar } from "../components/Avatar";
 
 type Aba = "despesas" | "rendas";
 
@@ -46,10 +47,7 @@ export function MovimentacoesPage() {
           </div>
           <div className="flex flex-wrap items-center gap-3 pb-3">
             <div ref={setHeaderSlot} className="flex flex-wrap items-center gap-2" />
-            {/* Placeholder do avatar do usuário — mesmo padrão da Home. */}
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-grouper-ink font-display text-sm font-semibold text-white">
-              <span className="sr-only">Perfil do usuário</span>
-            </div>
+            <Avatar menu />
           </div>
         </div>
 

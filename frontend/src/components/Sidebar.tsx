@@ -18,7 +18,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-60 shrink-0 bg-grouper-ink text-white flex flex-col min-h-screen">
+    <aside className="w-60 shrink-0 sticky top-0 h-screen bg-grouper-ink text-white flex flex-col">
       <div className="flex items-center justify-center px-6 py-6 border-b border-white/10">
         <img
           src="/brand/logomarca-branca.svg"
@@ -68,7 +68,19 @@ export function Sidebar() {
         </div>
       </nav>
 
-      <div className="p-3 border-t border-white/10">
+      <div className="p-3 border-t border-white/10 space-y-1">
+        <NavLink
+          to="/configuracoes"
+          className={({ isActive }) =>
+            `block rounded-md px-3 py-2 font-body text-sm font-medium transition-colors ${
+              isActive
+                ? "bg-grouper-mid text-white"
+                : "text-white/70 hover:bg-white/10 hover:text-white"
+            }`
+          }
+        >
+          Configurações
+        </NavLink>
         <button
           onClick={sair}
           className="w-full rounded-md px-3 py-1.5 font-body text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white text-left"

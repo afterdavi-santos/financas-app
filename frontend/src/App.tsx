@@ -7,6 +7,7 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { HomePage } from "./pages/HomePage";
 import { MovimentacoesPage } from "./pages/MovimentacoesPage";
 import { PlanejamentoPage } from "./pages/PlanejamentoPage";
+import { ConfiguracoesPage } from "./pages/ConfiguracoesPage";
 
 // AuthProvider por fora: todo o app enxerga o estado de autenticação.
 // BrowserRouter: liga as URLs do navegador às páginas abaixo.
@@ -26,6 +27,7 @@ export default function App() {
               <Route index element={<HomePage />} /> {/* "/" */}
               <Route path="movimentacoes" element={<MovimentacoesPage />} />
               <Route path="planejamento" element={<PlanejamentoPage />} />
+              <Route path="configuracoes" element={<ConfiguracoesPage />} />
             </Route>
           </Route>
         </Routes>

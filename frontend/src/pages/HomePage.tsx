@@ -14,6 +14,7 @@ import { StatCard } from "../components/StatCard";
 import { EconomiaDestaque } from "../components/EconomiaDestaque";
 import { GraficoEconomiaHome, type PontoEconomia } from "../components/GraficoEconomiaHome";
 import { ObjetivosResumoHome } from "../components/ObjetivosResumoHome";
+import { Avatar } from "../components/Avatar";
 import { useSelecao } from "../hooks/useSelecao";
 import { listarCategorias } from "../api/categorias";
 import { listarDespesas } from "../api/despesas";
@@ -287,10 +288,7 @@ export function HomePage() {
               + Adicionar despesa
             </button>
           </div>
-          {/* Placeholder do avatar do usuário — no futuro recebe a foto de perfil. */}
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-grouper-ink font-display text-sm font-semibold text-white">
-            <span className="sr-only">Perfil do usuário</span>
-          </div>
+          <Avatar menu />
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Modal } from "./Modal";
 import { criarCategoria, atualizarCategoria } from "../api/categorias";
@@ -26,7 +26,12 @@ export function NovaCategoriaModal({ aberto, onClose, onCriada, categoria, categ
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   // Na edição, não compara contra ela mesma (senão o nome atual sempre "bate exato").
-  const outrasCategorias = categorias.filter((c) => c.id !== categoria?.id);
+  // useMemo: sem isso, um novo array a cada render reinicia o efeito de
+  // useCategoriasSemelhantes indefinidamente (loop infinito de render).
+  const outrasCategorias = useMemo(
+    () => categorias.filter((c) => c.id !== categoria?.id),
+    [categorias, categoria?.id],
+  );
   const { sugestoes: categoriasSemelhantes } = useCategoriasSemelhantes(nome, outrasCategorias);
 
   // Ao abrir, sincroniza os campos: com categoria -> prefill; sem -> limpa.

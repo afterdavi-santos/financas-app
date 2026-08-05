@@ -1,5 +1,6 @@
 package com.financas.app.model;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -31,5 +32,10 @@ public class Usuario {
     private String senha;
 
     private LocalDateTime dataCriacao;
+
+    @Column(columnDefinition = "bytea")
+    private byte[] foto;
+
+    private String fotoTipo;
 
 }

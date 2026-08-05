@@ -47,8 +47,12 @@ api.interceptors.response.use(
   },
   (erro) => {
     const url = erro.config?.url ?? "";
-    const ehRotaDeAuth = url.includes("/auth/");
-    if (erro.response?.status === 401 && !ehRotaDeAuth) {
+    // /auth/* -> credenciais de login inválidas; /perfil* -> senha atual
+    // errada ao editar dados/senha (SenhaAtualInvalidaException, também 401).
+    // Nenhum dos dois é sessão expirada — deixamos a própria página tratar.
+    const ehRotaSemLogoutAutomatico =
+      url.includes("/auth/") || url.includes("/perfil");
+    if (erro.response?.status === 401 && !ehRotaSemLogoutAutomatico) {
       const tinhaToken = localStorage.getItem(TOKEN_KEY) !== null;
       localStorage.removeItem(TOKEN_KEY);
       // Evita loop se já estivermos no login.
