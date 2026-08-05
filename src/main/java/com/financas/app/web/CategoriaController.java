@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/categorias")
@@ -40,7 +41,20 @@ public class CategoriaController {
 
     @GetMapping
     public List<CategoriaResponse> listar(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado) {
-        return categoriaService.listarPorUsuario(usuarioAutenticado.getId()).stream()
+        Long usuarioId = usuarioAutenticado.getId();
+        Map<Long, Long> contagens = categoriaService.contarDespesasPorCategoria(usuarioId);
+        return categoriaService.listarPorUsuario(usuarioId).stream()
+                .map(c -> toResponse(c, contagens.getOrDefault(c.getId(), 0L)))
+                .toList();
+    }
+
+    // Categorias do usuário com nome parecido ao informado (busca por
+    // similaridade, pg_trgm) — usado pra avisar antes de criar uma possível
+    // duplicata, nos pontos onde uma categoria nova pode ser criada.
+    @GetMapping("/semelhantes")
+    public List<CategoriaResponse> semelhantes(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado,
+                                                @RequestParam String nome) {
+        return categoriaService.buscarSemelhantes(usuarioAutenticado.getId(), nome).stream()
                 .map(CategoriaController::toResponse)
                 .toList();
     }
@@ -64,11 +78,17 @@ public class CategoriaController {
     private static Categoria toEntity(CategoriaRequest request) {
         Categoria categoria = new Categoria();
         categoria.setNome(request.nome());
+        categoria.setTipo(request.tipo());
         return categoria;
     }
 
     private static CategoriaResponse toResponse(Categoria categoria) {
-        return new CategoriaResponse(categoria.getId(), categoria.getNome());
+        return toResponse(categoria, 0L);
+    }
+
+    private static CategoriaResponse toResponse(Categoria categoria, long totalDespesas) {
+        return new CategoriaResponse(categoria.getId(), categoria.getNome(), categoria.getTipo(), totalDespesas,
+                categoria.getDataCriacao());
     }
 
 }

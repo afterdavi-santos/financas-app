@@ -1,5 +1,6 @@
 package com.financas.app.model;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -12,39 +13,31 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 
+// Equivalente a RecorrenciaDespesa, mas para Renda com tipo FIXA (ex.:
+// salário). Renda não tem categoria, e mesReferencia é sempre dia 1, então
+// não precisa de um "diaDoMes" pra clampar.
 @Entity
-@Table(name = "despesa")
+@Table(name = "recorrencia_renda")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class Despesa {
+public class RecorrenciaRenda {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String descricao;
-
-    private BigDecimal valor;
-
-    private LocalDate data;
-
-    @ManyToOne
-    @JoinColumn(name = "categoria_id", nullable = false)
-    private Categoria categoria;
-
     @ManyToOne
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
-    // Não-nula quando esta despesa nasceu (ou foi gerada automaticamente) numa
-    // categoria FIXA: liga esta linha à série recorrente mensal.
-    @ManyToOne
-    @JoinColumn(name = "recorrencia_id")
-    private RecorrenciaDespesa recorrencia;
+    @Column(nullable = false)
+    private boolean ativa = true;
+
+    // 1º dia do mês (mesReferencia) da renda original que iniciou a série.
+    private LocalDate dataInicio;
 
 }

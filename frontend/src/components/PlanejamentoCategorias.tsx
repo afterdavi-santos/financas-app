@@ -8,6 +8,7 @@ import { IconeEditar, IconeExcluir } from "./IconesInvestimento";
 import { useSelecao } from "../hooks/useSelecao";
 import { listarCategorias } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
+import { rotuloTipoCategoria } from "../utils/rotulos";
 import type { Categoria } from "../types/financas";
 
 // Bloco "Categorias" da página Planejamento — mesmo conteúdo que antes vivia
@@ -117,7 +118,12 @@ export function PlanejamentoCategorias() {
                         selecionado ? "bg-grouper-sky/30" : "hover:bg-grouper-sky/20"
                       }`}
                     >
-                      <span className="text-[15px] text-grouper-ink">{cat.nome}</span>
+                      <span className="text-[15px] text-grouper-ink">
+                        {cat.nome}{" "}
+                        <span className="text-xs font-medium text-grouper-navy/50">
+                          · {rotuloTipoCategoria[cat.tipo]}
+                        </span>
+                      </span>
                       <div
                         className="flex shrink-0 items-center gap-1.5"
                         onClick={(e) => e.stopPropagation()}
@@ -150,6 +156,7 @@ export function PlanejamentoCategorias() {
       <NovaCategoriaModal
         aberto={modalAberto}
         categoria={editando}
+        categorias={categorias}
         onClose={() => setModalAberto(false)}
         onCriada={() => {
           setModalAberto(false);

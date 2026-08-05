@@ -7,10 +7,10 @@ import { criarCategoria } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { hojeISO } from "../utils/datas";
-import type { Categoria, Despesa, StatusLimite, TipoDespesa } from "../types/financas";
-
-// Valor especial do <select> que abre o campo de "nova categoria" inline.
-const OPCAO_NOVA_CATEGORIA = "__nova__";
+import { SeletorCategoria, OPCAO_NOVA_CATEGORIA } from "./SeletorCategoria";
+import { AvisoCategoriaSemelhante } from "./AvisoCategoriaSemelhante";
+import { useCategoriasSemelhantes } from "../hooks/useCategoriasSemelhantes";
+import type { Categoria, Despesa, StatusLimite, TipoCategoria } from "../types/financas";
 
 // Modal do form de nova despesa. Recebe a lista de categorias (para o select)
 // já carregada pela home, evitando uma segunda requisição aqui.
@@ -39,7 +39,6 @@ export function NovaDespesaModal({
   const [descricao, setDescricao] = useState("");
   const [valor, setValor] = useState(""); // string no input; convertida ao enviar
   const [data, setData] = useState(dataInicial);
-  const [tipo, setTipo] = useState<TipoDespesa>("EXTRAORDINARIA");
   const [categoriaId, setCategoriaId] = useState("");
 
   // Ao (re)abrir o modal, sincroniza os campos: com despesa -> prefill (edição);
@@ -49,11 +48,12 @@ export function NovaDespesaModal({
     setDescricao(despesa?.descricao ?? "");
     setValor(despesa ? String(despesa.valor) : "");
     setData(despesa?.data ?? dataInicial);
-    setTipo(despesa?.tipo ?? "EXTRAORDINARIA");
     setCategoriaId(despesa ? String(despesa.categoria.id) : "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberto, despesa, dataInicial]);
   const [novaCategoriaNome, setNovaCategoriaNome] = useState("");
+  const [novaCategoriaTipo, setNovaCategoriaTipo] = useState<TipoCategoria>("VARIAVEL");
+  const { sugestoes: categoriasSemelhantes } = useCategoriasSemelhantes(novaCategoriaNome, categorias);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   // Limite da categoria selecionada no mês da despesa (null = categoria sem limite).
@@ -103,19 +103,24 @@ export function NovaDespesaModal({
   async function aoEnviar(evento: FormEvent) {
     evento.preventDefault();
     setErro(null);
+    // SeletorCategoria não é um <select> nativo — sem "required" do browser,
+    // precisa validar aqui que alguma opção foi escolhida.
+    if (!categoriaId) {
+      setErro("Selecione uma categoria.");
+      return;
+    }
     setCarregando(true);
     try {
       // Se o usuário escolheu "+ Nova categoria...", cria a categoria antes
       // e usa o id retornado para a despesa.
       const idCategoria = criandoNovaCategoria
-        ? (await criarCategoria({ nome: novaCategoriaNome })).id
+        ? (await criarCategoria({ nome: novaCategoriaNome, tipo: novaCategoriaTipo })).id
         : Number(categoriaId);
 
       const req = {
         descricao,
         valor: Number(valor), // <input> devolve string; backend espera número
         data,
-        tipo,
         categoriaId: idCategoria,
       };
       if (editando) {
@@ -126,9 +131,9 @@ export function NovaDespesaModal({
         setDescricao("");
         setValor("");
         setData(dataInicial);
-        setTipo("EXTRAORDINARIA");
         setCategoriaId("");
         setNovaCategoriaNome("");
+        setNovaCategoriaTipo("VARIAVEL");
       }
       onCriada();
     } catch (e) {
@@ -205,71 +210,69 @@ export function NovaDespesaModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label
-                htmlFor="tipo"
-                className="text-sm font-medium text-grouper-navy"
-              >
-                Tipo
-              </label>
-              <select
-                id="tipo"
-                value={tipo}
-                onChange={(e) => setTipo(e.target.value as TipoDespesa)}
-                className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
-              >
-                <option value="EXTRAORDINARIA">Variável</option>
-                <option value="FIXA">Fixa</option>
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label
-                htmlFor="categoria"
-                className="text-sm font-medium text-grouper-navy"
-              >
-                Categoria
-              </label>
-              <select
-                id="categoria"
-                required
-                value={categoriaId}
-                onChange={(e) => setCategoriaId(e.target.value)}
-                className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
-              >
-                <option value="" disabled>
-                  Selecione...
-                </option>
-                {categorias.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nome}
-                  </option>
-                ))}
-                <option value={OPCAO_NOVA_CATEGORIA}>
-                  + Nova categoria...
-                </option>
-              </select>
-            </div>
+          <div className="space-y-1">
+            <label
+              htmlFor="categoria"
+              className="text-sm font-medium text-grouper-navy"
+            >
+              Categoria
+            </label>
+            <SeletorCategoria
+              id="categoria"
+              categorias={categorias}
+              valor={categoriaId}
+              onChange={setCategoriaId}
+            />
           </div>
 
           {criandoNovaCategoria && (
-            <div className="space-y-1">
-              <label
-                htmlFor="despesa-nova-categoria"
-                className="text-sm font-medium text-grouper-navy"
-              >
-                Nome da nova categoria
-              </label>
-              <input
-                id="despesa-nova-categoria"
-                type="text"
-                required
-                autoFocus
-                value={novaCategoriaNome}
-                onChange={(e) => setNovaCategoriaNome(e.target.value)}
-                placeholder="Ex.: Alimentação"
-                className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label
+                    htmlFor="despesa-nova-categoria"
+                    className="text-sm font-medium text-grouper-navy"
+                  >
+                    Nome da nova categoria
+                  </label>
+                  <input
+                    id="despesa-nova-categoria"
+                    type="text"
+                    required
+                    autoFocus
+                    value={novaCategoriaNome}
+                    onChange={(e) => setNovaCategoriaNome(e.target.value)}
+                    placeholder="Ex.: Alimentação"
+                    className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label
+                    htmlFor="despesa-nova-categoria-tipo"
+                    className="text-sm font-medium text-grouper-navy"
+                  >
+                    Tipo da categoria
+                  </label>
+                  <select
+                    id="despesa-nova-categoria-tipo"
+                    value={novaCategoriaTipo}
+                    onChange={(e) => setNovaCategoriaTipo(e.target.value as TipoCategoria)}
+                    className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
+                  >
+                    <option value="VARIAVEL">Variável</option>
+                    <option value="FIXA">Fixa</option>
+                  </select>
+                </div>
+              </div>
+
+              <AvisoCategoriaSemelhante
+                sugestoes={categoriasSemelhantes}
+                onSelecionar={(c) => {
+                  setCategoriaId(String(c.id));
+                  setNovaCategoriaNome("");
+                  setNovaCategoriaTipo("VARIAVEL");
+                }}
               />
             </div>
           )}

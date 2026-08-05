@@ -4,10 +4,10 @@ import { Modal } from "./Modal";
 import { criarLimite, atualizarLimite } from "../api/limites";
 import { criarCategoria } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
-import type { Categoria, LimiteCategoria } from "../types/financas";
-
-// Valor especial do <select> que abre o campo de "nova categoria" inline.
-const OPCAO_NOVA_CATEGORIA = "__nova__";
+import { SeletorCategoria, OPCAO_NOVA_CATEGORIA } from "./SeletorCategoria";
+import { AvisoCategoriaSemelhante } from "./AvisoCategoriaSemelhante";
+import { useCategoriasSemelhantes } from "../hooks/useCategoriasSemelhantes";
+import type { Categoria, LimiteCategoria, TipoCategoria } from "../types/financas";
 
 // Modal de limite de gasto por categoria (teto FIXO, sem mês).
 // - Criação: recebe as categorias sem limite ainda (select).
@@ -31,6 +31,8 @@ export function NovoLimiteModal({
   const editando = !!limite;
   const [categoriaId, setCategoriaId] = useState("");
   const [novaCategoriaNome, setNovaCategoriaNome] = useState("");
+  const [novaCategoriaTipo, setNovaCategoriaTipo] = useState<TipoCategoria>("VARIAVEL");
+  const { sugestoes: categoriasSemelhantes } = useCategoriasSemelhantes(novaCategoriaNome, categorias);
   const [valor, setValor] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -51,18 +53,23 @@ export function NovoLimiteModal({
           : "",
     );
     setNovaCategoriaNome("");
+    setNovaCategoriaTipo("VARIAVEL");
     setValor(limite ? String(limite.valorLimite) : "");
   }, [aberto, limite, categorias]);
 
   async function aoEnviar(evento: FormEvent) {
     evento.preventDefault();
     setErro(null);
+    if (!categoriaId) {
+      setErro("Selecione uma categoria.");
+      return;
+    }
     setCarregando(true);
     try {
       // Se o usuário escolheu "+ Nova categoria...", cria a categoria antes
       // e usa o id retornado para o limite.
       const idCategoria = criandoNovaCategoria
-        ? (await criarCategoria({ nome: novaCategoriaNome })).id
+        ? (await criarCategoria({ nome: novaCategoriaNome, tipo: novaCategoriaTipo })).id
         : Number(categoriaId);
 
       const req = {
@@ -102,48 +109,64 @@ export function NovoLimiteModal({
           >
             Categoria
           </label>
-          <select
+          <SeletorCategoria
             id="limite-categoria"
-            required
-            autoFocus={!editando}
-            disabled={editando} // categoria não muda na edição
-            value={categoriaId}
-            onChange={(e) => setCategoriaId(e.target.value)}
-            className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50 disabled:bg-grouper-mist disabled:text-grouper-navy/50"
-          >
-            <option value="" disabled>
-              Selecione...
-            </option>
-            {categorias.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
-            ))}
-            {!editando && (
-              <option value={OPCAO_NOVA_CATEGORIA}>
-                + Nova categoria...
-              </option>
-            )}
-          </select>
+            categorias={categorias}
+            valor={categoriaId}
+            onChange={setCategoriaId}
+            permitirNovaCategoria={!editando}
+            desabilitado={editando}
+          />
         </div>
 
         {criandoNovaCategoria && (
-          <div className="space-y-1">
-            <label
-              htmlFor="limite-nova-categoria"
-              className="text-sm font-medium text-grouper-navy"
-            >
-              Nome da nova categoria
-            </label>
-            <input
-              id="limite-nova-categoria"
-              type="text"
-              required
-              autoFocus
-              value={novaCategoriaNome}
-              onChange={(e) => setNovaCategoriaNome(e.target.value)}
-              placeholder="Ex.: Alimentação"
-              className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label
+                  htmlFor="limite-nova-categoria"
+                  className="text-sm font-medium text-grouper-navy"
+                >
+                  Nome da nova categoria
+                </label>
+                <input
+                  id="limite-nova-categoria"
+                  type="text"
+                  required
+                  autoFocus
+                  value={novaCategoriaNome}
+                  onChange={(e) => setNovaCategoriaNome(e.target.value)}
+                  placeholder="Ex.: Alimentação"
+                  className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label
+                  htmlFor="limite-nova-categoria-tipo"
+                  className="text-sm font-medium text-grouper-navy"
+                >
+                  Tipo da categoria
+                </label>
+                <select
+                  id="limite-nova-categoria-tipo"
+                  value={novaCategoriaTipo}
+                  onChange={(e) => setNovaCategoriaTipo(e.target.value as TipoCategoria)}
+                  className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
+                >
+                  <option value="VARIAVEL">Variável</option>
+                  <option value="FIXA">Fixa</option>
+                </select>
+              </div>
+            </div>
+
+            <AvisoCategoriaSemelhante
+              sugestoes={categoriasSemelhantes}
+              onSelecionar={(c) => {
+                setCategoriaId(String(c.id));
+                setNovaCategoriaNome("");
+                setNovaCategoriaTipo("VARIAVEL");
+              }}
             />
           </div>
         )}

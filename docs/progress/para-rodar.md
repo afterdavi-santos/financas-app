@@ -65,5 +65,6 @@ Build de produção (checagem de tipos + bundle): `npm run build`. Lint: `npm ru
 
 1. Suba os 3 (Postgres → backend → frontend), nessa ordem.
 2. Abra `http://localhost:5173`, vá em **Registrar**, crie um usuário e faça **login**.
-3. A partir da Home dá para lançar renda/despesa/categoria, definir limites, criar
-   objetivos e ver os relatórios.
+3. A partir da Home dá para lançar renda/despesa/categoria (fixa ou variável — as
+   fixas recorrem sozinhas todo mês), definir limites, criar objetivos (com ou sem
+   vínculo a um investimento CDB), lançar investimentos CDB e ver os relatórios.

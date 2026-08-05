@@ -1,39 +1,52 @@
 // Espelha os DTOs do backend (pacote com.financas.app.dto), como types/auth.ts.
 // LocalDate (Java) vira string "YYYY-MM-DD" no JSON; BigDecimal vira number.
 
-// -> enum TipoDespesa (FIXA | EXTRAORDINARIA)
-export type TipoDespesa = "FIXA" | "EXTRAORDINARIA";
+// -> enum TipoCategoria (FIXA | VARIAVEL)
+export type TipoCategoria = "FIXA" | "VARIAVEL";
 
 // -> enum TipoRenda (FIXA | FREELA | RETORNO_INVESTIMENTOS)
 export type TipoRenda = "FIXA" | "FREELA" | "RETORNO_INVESTIMENTOS";
 
-// -> CategoriaResponse ({ id, nome })
+// -> CategoriaResponse ({ id, nome, tipo, totalDespesas, dataCriacao }). Toda
+// categoria é fixa OU variável; toda despesa lançada nela herda esse tipo.
+// `totalDespesas` só vem preenchido de verdade em GET /categorias (usado pra
+// ranquear as mais usadas no seletor); aninhada em Despesa/LimiteCategoria
+// sempre vem 0 (não é usada nesses contextos). `dataCriacao` pode vir null
+// (categorias criadas antes desse campo existir, sem backfill).
 export interface Categoria {
   id: number;
   nome: string;
+  tipo: TipoCategoria;
+  totalDespesas: number;
+  dataCriacao: string | null; // "YYYY-MM-DDTHH:mm:ss" ou null
 }
 
-// -> CategoriaRequest ({ nome })
+// -> CategoriaRequest ({ nome, tipo })
 export interface CategoriaRequest {
   nome: string;
+  tipo: TipoCategoria;
 }
 
 // -> DespesaResponse: repare que "categoria" chega ANINHADA (objeto), não como id.
+// `tipo` é derivado da categoria (calculado no backend), não escolhido por despesa.
+// `recorrente`: true quando esta despesa nasceu (ou foi gerada
+// automaticamente) numa categoria FIXA — excluí-la também encerra a
+// recorrência a partir de agora (meses passados ficam intactos).
 export interface Despesa {
   id: number;
   descricao: string;
   valor: number;
   data: string; // "YYYY-MM-DD"
-  tipo: TipoDespesa;
+  tipo: TipoCategoria;
   categoria: Categoria;
+  recorrente: boolean;
 }
 
-// -> DespesaRequest: aqui SIM mandamos só o categoriaId.
+// -> DespesaRequest: aqui SIM mandamos só o categoriaId (tipo vem da categoria).
 export interface DespesaRequest {
   descricao: string;
   valor: number;
   data: string; // "YYYY-MM-DD"
-  tipo: TipoDespesa;
   categoriaId: number;
 }
 
@@ -42,13 +55,15 @@ export interface Total {
   total: number;
 }
 
-// -> RendaResponse
+// -> RendaResponse. `recorrente`: true quando nasceu (ou foi gerada
+// automaticamente) com tipo FIXA — mesma semântica de Despesa.recorrente.
 export interface Renda {
   id: number;
   descricao: string;
   valor: number;
   mesReferencia: string; // "YYYY-MM-DD" (1º dia do mês, por convenção)
   tipo: TipoRenda;
+  recorrente: boolean;
 }
 
 // -> RendaRequest

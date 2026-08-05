@@ -23,15 +23,28 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// INTERCEPTOR DE RESPONSE: trata a SESSÃO EXPIRADA de forma global.
-// Quando o token vence (2h), o backend responde 401. Como esse interceptor vive
-// fora do React Router, limpamos o token e forçamos a navegação para /login
-// (com ?expirada=1, para o Login exibir o aviso). Assim o app não fica travado
-// dando erro em toda tela — ele volta para o login sozinho.
+// Header em que o backend devolve um token renovado (sessão de janela
+// deslizante — ver JwtAuthenticationFilter). Nome em minúsculas porque o
+// axios normaliza as chaves de resposta assim.
+const HEADER_TOKEN_RENOVADO = "x-renewed-token";
+
+// INTERCEPTOR DE RESPONSE: trata a SESSÃO EXPIRADA de forma global, e
+// atualiza o token salvo sempre que o backend renova (a cada requisição
+// autenticada, enquanto a pessoa continuar usando — só é desconectada após
+// 24h sem uso). Como esse interceptor vive fora do React Router, no caso de
+// sessão expirada limpamos o token e forçamos a navegação para /login
+// (com ?expirada=1, para o Login exibir o aviso) — assim o app não fica
+// travado dando erro em toda tela, ele volta para o login sozinho.
 // Exceções: 401 no próprio /auth/login|registrar é "credencial inválida", não
 // sessão expirada, então deixamos a página tratar normalmente.
 api.interceptors.response.use(
-  (resposta) => resposta,
+  (resposta) => {
+    const tokenRenovado = resposta.headers[HEADER_TOKEN_RENOVADO];
+    if (tokenRenovado) {
+      localStorage.setItem(TOKEN_KEY, tokenRenovado);
+    }
+    return resposta;
+  },
   (erro) => {
     const url = erro.config?.url ?? "";
     const ehRotaDeAuth = url.includes("/auth/");

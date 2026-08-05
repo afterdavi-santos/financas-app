@@ -175,7 +175,7 @@ export function PlanejamentoLimites() {
                   <li key={limite.id}>
                     <div
                       onClick={() => alternar(limite.id)}
-                      className={`cursor-pointer rounded-md px-2 py-1.5 transition-colors ${
+                      className={`cursor-pointer rounded-md px-2 py-1 transition-colors ${
                         selecionado ? "bg-grouper-sky/30" : "hover:bg-grouper-sky/20"
                       }`}
                     >

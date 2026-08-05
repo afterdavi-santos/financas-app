@@ -3,8 +3,11 @@ package com.financas.app.repository;
 import com.financas.app.model.Despesa;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface DespesaRepository extends JpaRepository<Despesa, Long>, JpaSpecificationExecutor<Despesa> {
 
@@ -13,5 +16,15 @@ public interface DespesaRepository extends JpaRepository<Despesa, Long>, JpaSpec
     boolean existsByCategoriaId(Long categoriaId);
 
     void deleteByCategoriaId(Long categoriaId);
+
+    Optional<Despesa> findTopByRecorrenciaIdOrderByDataDesc(Long recorrenciaId);
+
+    @Query("""
+            SELECT d.categoria.id AS categoriaId, COUNT(d) AS total
+            FROM Despesa d
+            WHERE d.usuario.id = :usuarioId
+            GROUP BY d.categoria.id
+            """)
+    List<ContagemCategoria> contarPorCategoria(@Param("usuarioId") Long usuarioId);
 
 }

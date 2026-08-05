@@ -34,6 +34,13 @@ public class CdiService {
     private final Map<LocalDate, Instant> tentativasSemDadoNovo = new ConcurrentHashMap<>();
     private static final Duration COOLDOWN_TENTATIVA = Duration.ofMinutes(20);
 
+    // Backfills grandes (ex.: investimento aplicado há vários anos) são
+    // quebrados em pedaços de ~1 ano em vez de uma chamada única cobrindo
+    // tudo: se um pedaço falhar (rede, timeout), só ELE entra em cooldown —
+    // os outros pedaços continuam sendo tentados/salvos normalmente, em vez
+    // de o histórico inteiro ficar bloqueado por causa de uma falha pontual.
+    private static final int TAMANHO_CHUNK_DIAS = 365;
+
     public CdiService(CdiDiarioRepository cdiRepository, BcbCdiClient bcbCdiClient) {
         this.cdiRepository = cdiRepository;
         this.bcbCdiClient = bcbCdiClient;
@@ -94,6 +101,18 @@ public class CdiService {
         if (inicio.isAfter(fim)) {
             return;
         }
+        LocalDate inicioChunk = inicio;
+        while (!inicioChunk.isAfter(fim)) {
+            LocalDate fimChunk = inicioChunk.plusDays(TAMANHO_CHUNK_DIAS - 1);
+            if (fimChunk.isAfter(fim)) {
+                fimChunk = fim;
+            }
+            salvarChunk(inicioChunk, fimChunk);
+            inicioChunk = fimChunk.plusDays(1);
+        }
+    }
+
+    private void salvarChunk(LocalDate inicio, LocalDate fim) {
         Instant ultimaTentativa = tentativasSemDadoNovo.get(fim);
         if (ultimaTentativa != null && Duration.between(ultimaTentativa, Instant.now()).compareTo(COOLDOWN_TENTATIVA) < 0) {
             return;

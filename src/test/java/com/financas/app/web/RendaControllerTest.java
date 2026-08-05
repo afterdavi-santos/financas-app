@@ -80,7 +80,8 @@ class RendaControllerTest {
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(30))
-                .andExpect(jsonPath("$.tipo").value("FIXA"));
+                .andExpect(jsonPath("$.tipo").value("FIXA"))
+                .andExpect(jsonPath("$.recorrente").value(false));
     }
 
     @Test

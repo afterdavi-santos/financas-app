@@ -1,6 +1,5 @@
 package com.financas.app.dto;
 
-import com.financas.app.model.enums.TipoDespesa;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -12,7 +11,6 @@ public record DespesaRequest(
         @NotBlank String descricao,
         @NotNull @Positive BigDecimal valor,
         @NotNull LocalDate data,
-        @NotNull TipoDespesa tipo,
         @NotNull Long categoriaId
 ) {
 }

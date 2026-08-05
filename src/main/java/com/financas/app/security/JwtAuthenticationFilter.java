@@ -16,8 +16,14 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.Optional;
 
+// Header usado pra devolver um token renovado ao cliente (janela deslizante
+// de sessão) — precisa estar liberado em SecurityConfig.setExposedHeaders,
+// senão o navegador bloqueia o JS de ler um header custom numa resposta
+// cross-origin (frontend em :5173, backend em :8080).
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    public static final String HEADER_TOKEN_RENOVADO = "X-Renewed-Token";
 
     private final JwtService jwtService;
     private final UsuarioRepository usuarioRepository;
@@ -42,6 +48,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             usuarioAutenticado, null, usuarioAutenticado.getAuthorities());
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                    // Sessão com janela deslizante: renova a validade a cada uso,
+                    // enquanto ainda estiver dentro do teto máximo (ver JwtService).
+                    long sessaoInicio = jwtService.extrairSessaoInicio(token);
+                    jwtService.renovarToken(usuarioId, sessaoInicio)
+                            .ifPresent(novoToken -> response.setHeader(HEADER_TOKEN_RENOVADO, novoToken));
                 }
             } catch (JwtException | IllegalArgumentException ignored) {
                 // token inválido/expirado: segue sem autenticar, Spring Security barra o acesso

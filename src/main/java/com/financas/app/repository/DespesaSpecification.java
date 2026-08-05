@@ -1,7 +1,7 @@
 package com.financas.app.repository;
 
 import com.financas.app.model.Despesa;
-import com.financas.app.model.enums.TipoDespesa;
+import com.financas.app.model.enums.TipoCategoria;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDate;
@@ -22,11 +22,12 @@ public class DespesaSpecification {
         return (root, query, cb) -> cb.equal(root.get("categoria").get("id"), categoriaId);
     }
 
-    public static Specification<Despesa> comTipo(TipoDespesa tipo) {
+    // Tipo agora vive na categoria, não na despesa: filtra pelo relacionamento.
+    public static Specification<Despesa> comTipo(TipoCategoria tipo) {
         if (tipo == null) {
             return null;
         }
-        return (root, query, cb) -> cb.equal(root.get("tipo"), tipo);
+        return (root, query, cb) -> cb.equal(root.get("categoria").get("tipo"), tipo);
     }
 
     public static Specification<Despesa> comPeriodo(LocalDate inicio, LocalDate fim) {

@@ -46,4 +46,10 @@ public class Renda {
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
+    // Não-nula quando esta renda nasceu (ou foi gerada automaticamente) com
+    // tipo FIXA: liga esta linha à série recorrente mensal.
+    @ManyToOne
+    @JoinColumn(name = "recorrencia_id")
+    private RecorrenciaRenda recorrencia;
+
 }

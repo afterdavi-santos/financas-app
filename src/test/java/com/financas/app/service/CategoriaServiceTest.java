@@ -4,9 +4,12 @@ import com.financas.app.exception.CategoriaEmUsoException;
 import com.financas.app.exception.RecursoNaoEncontradoException;
 import com.financas.app.model.Categoria;
 import com.financas.app.model.Usuario;
+import com.financas.app.model.enums.TipoCategoria;
 import com.financas.app.repository.CategoriaRepository;
+import com.financas.app.repository.ContagemCategoria;
 import com.financas.app.repository.DespesaRepository;
 import com.financas.app.repository.LimiteCategoriaRepository;
+import com.financas.app.repository.RecorrenciaDespesaRepository;
 import com.financas.app.repository.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,11 +18,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,12 +45,16 @@ class CategoriaServiceTest {
     @Mock
     private LimiteCategoriaRepository limiteCategoriaRepository;
 
+    @Mock
+    private RecorrenciaDespesaRepository recorrenciaDespesaRepository;
+
     private CategoriaService categoriaService;
 
     @BeforeEach
     void setUp() {
         categoriaService = new CategoriaService(
-                categoriaRepository, usuarioRepository, despesaRepository, limiteCategoriaRepository);
+                categoriaRepository, usuarioRepository, despesaRepository, limiteCategoriaRepository,
+                recorrenciaDespesaRepository);
     }
 
     private Usuario usuarioComId(Long id) {
@@ -57,6 +67,7 @@ class CategoriaServiceTest {
         Categoria categoria = new Categoria();
         categoria.setId(categoriaId);
         categoria.setNome("Mercado");
+        categoria.setTipo(TipoCategoria.VARIAVEL);
         categoria.setUsuario(usuarioComId(usuarioId));
         return categoria;
     }
@@ -65,6 +76,7 @@ class CategoriaServiceTest {
     void deveCriarCategoriaParaUsuarioExistente() {
         Categoria categoria = new Categoria();
         categoria.setNome("Mercado");
+        categoria.setTipo(TipoCategoria.VARIAVEL);
 
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioComId(1L)));
         when(categoriaRepository.save(any(Categoria.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -72,6 +84,7 @@ class CategoriaServiceTest {
         Categoria salva = categoriaService.criar(1L, categoria);
 
         assertThat(salva.getUsuario().getId()).isEqualTo(1L);
+        assertThat(salva.getDataCriacao()).isNotNull();
     }
 
     @Test
@@ -98,6 +111,7 @@ class CategoriaServiceTest {
         Categoria existente = categoriaDoUsuario(10L, 1L);
         Categoria dadosAtualizados = new Categoria();
         dadosAtualizados.setNome("Supermercado");
+        dadosAtualizados.setTipo(TipoCategoria.FIXA);
 
         when(categoriaRepository.findById(10L)).thenReturn(Optional.of(existente));
         when(categoriaRepository.save(any(Categoria.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -105,6 +119,7 @@ class CategoriaServiceTest {
         Categoria atualizada = categoriaService.atualizar(1L, 10L, dadosAtualizados);
 
         assertThat(atualizada.getNome()).isEqualTo("Supermercado");
+        assertThat(atualizada.getTipo()).isEqualTo(TipoCategoria.FIXA);
     }
 
     @Test
@@ -170,6 +185,7 @@ class CategoriaServiceTest {
         categoriaService.excluir(1L, 10L, true);
 
         verify(despesaRepository).deleteByCategoriaId(10L);
+        verify(recorrenciaDespesaRepository).deleteByCategoriaId(10L);
         verify(limiteCategoriaRepository).deleteByCategoriaId(10L);
         verify(categoriaRepository).delete(existente);
     }
@@ -182,8 +198,57 @@ class CategoriaServiceTest {
         categoriaService.excluir(1L, 10L, true);
 
         verify(despesaRepository, never()).deleteByCategoriaId(any());
+        verify(recorrenciaDespesaRepository, never()).deleteByCategoriaId(any());
         verify(limiteCategoriaRepository, never()).deleteByCategoriaId(any());
         verify(categoriaRepository).delete(existente);
+    }
+
+    @Test
+    void deveBuscarCategoriasSemelhantes() {
+        Categoria semelhante = categoriaDoUsuario(20L, 1L);
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioComId(1L)));
+        when(categoriaRepository.buscarSemelhantes(eq(1L), eq("Mercadinho"), anyDouble()))
+                .thenReturn(List.of(semelhante));
+
+        List<Categoria> resultado = categoriaService.buscarSemelhantes(1L, "Mercadinho");
+
+        assertThat(resultado).containsExactly(semelhante);
+    }
+
+    @Test
+    void deveRetornarListaVaziaAoBuscarSemelhantesComNomeEmBranco() {
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioComId(1L)));
+
+        List<Categoria> resultado = categoriaService.buscarSemelhantes(1L, "   ");
+
+        assertThat(resultado).isEmpty();
+        verify(categoriaRepository, never()).buscarSemelhantes(any(), any(), anyDouble());
+    }
+
+    @Test
+    void deveFalharAoBuscarSemelhantesParaUsuarioInexistente() {
+        when(usuarioRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> categoriaService.buscarSemelhantes(99L, "Mercado"))
+                .isInstanceOf(RecursoNaoEncontradoException.class);
+    }
+
+    @Test
+    void deveContarDespesasPorCategoria() {
+        ContagemCategoria contagem = new ContagemCategoria() {
+            public Long getCategoriaId() {
+                return 10L;
+            }
+
+            public Long getTotal() {
+                return 5L;
+            }
+        };
+        when(despesaRepository.contarPorCategoria(1L)).thenReturn(List.of(contagem));
+
+        Map<Long, Long> resultado = categoriaService.contarDespesasPorCategoria(1L);
+
+        assertThat(resultado).containsEntry(10L, 5L);
     }
 
 }

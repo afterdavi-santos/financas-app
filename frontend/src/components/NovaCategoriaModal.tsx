@@ -3,29 +3,38 @@ import type { FormEvent } from "react";
 import { Modal } from "./Modal";
 import { criarCategoria, atualizarCategoria } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
-import type { Categoria } from "../types/financas";
+import { AvisoCategoriaSemelhante } from "./AvisoCategoriaSemelhante";
+import { useCategoriasSemelhantes } from "../hooks/useCategoriasSemelhantes";
+import type { Categoria, TipoCategoria } from "../types/financas";
 
-// Modal com o form de categoria (só o campo `nome`).
+// Modal com o form de categoria (`nome` + `tipo`).
 // `categoria` (opcional) coloca o modal em modo EDIÇÃO — prefill + PUT em vez de POST.
 // `onCriada` avisa a página para fechar o modal e recarregar os dados.
+// `categorias` (todas as do usuário) alimenta o aviso de nome parecido.
 interface Props {
   aberto: boolean;
   onClose: () => void;
   onCriada: () => void;
   categoria?: Categoria | null;
+  categorias: Categoria[];
 }
 
-export function NovaCategoriaModal({ aberto, onClose, onCriada, categoria }: Props) {
+export function NovaCategoriaModal({ aberto, onClose, onCriada, categoria, categorias }: Props) {
   const editando = !!categoria;
   const [nome, setNome] = useState("");
+  const [tipo, setTipo] = useState<TipoCategoria>("VARIAVEL");
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
+  // Na edição, não compara contra ela mesma (senão o nome atual sempre "bate exato").
+  const outrasCategorias = categorias.filter((c) => c.id !== categoria?.id);
+  const { sugestoes: categoriasSemelhantes } = useCategoriasSemelhantes(nome, outrasCategorias);
 
-  // Ao abrir, sincroniza o campo: com categoria -> prefill; sem -> limpa.
+  // Ao abrir, sincroniza os campos: com categoria -> prefill; sem -> limpa.
   useEffect(() => {
     if (!aberto) return;
     setErro(null);
     setNome(categoria?.nome ?? "");
+    setTipo(categoria?.tipo ?? "VARIAVEL");
   }, [aberto, categoria]);
 
   async function aoEnviar(evento: FormEvent) {
@@ -34,10 +43,11 @@ export function NovaCategoriaModal({ aberto, onClose, onCriada, categoria }: Pro
     setCarregando(true);
     try {
       if (editando) {
-        await atualizarCategoria(categoria.id, { nome });
+        await atualizarCategoria(categoria.id, { nome, tipo });
       } else {
-        await criarCategoria({ nome });
+        await criarCategoria({ nome, tipo });
         setNome(""); // limpa para o próximo uso
+        setTipo("VARIAVEL");
       }
       onCriada();
     } catch (e) {
@@ -75,6 +85,23 @@ export function NovaCategoriaModal({ aberto, onClose, onCriada, categoria }: Pro
             className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
           />
         </div>
+
+        <div className="space-y-1">
+          <label htmlFor="categoria-tipo" className="text-sm font-medium text-grouper-navy">
+            Tipo
+          </label>
+          <select
+            id="categoria-tipo"
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value as TipoCategoria)}
+            className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
+          >
+            <option value="VARIAVEL">Variável</option>
+            <option value="FIXA">Fixa</option>
+          </select>
+        </div>
+
+        <AvisoCategoriaSemelhante sugestoes={categoriasSemelhantes} />
 
         <div className="flex justify-end gap-2 pt-2">
           <button

@@ -4,6 +4,7 @@ import com.financas.app.exception.GlobalExceptionHandler;
 import com.financas.app.exception.RecursoNaoEncontradoException;
 import com.financas.app.model.Categoria;
 import com.financas.app.model.Usuario;
+import com.financas.app.model.enums.TipoCategoria;
 import com.financas.app.security.JwtAuthenticationFilter;
 import com.financas.app.security.UsuarioAutenticado;
 import com.financas.app.service.CategoriaService;
@@ -21,6 +22,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -59,6 +61,7 @@ class CategoriaControllerTest {
         Categoria salva = new Categoria();
         salva.setId(10L);
         salva.setNome("Alimentação");
+        salva.setTipo(TipoCategoria.VARIAVEL);
         when(categoriaService.criar(eq(1L), any(Categoria.class))).thenReturn(salva);
 
         mockMvc.perform(post("/api/categorias")
@@ -66,11 +69,24 @@ class CategoriaControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"nome":"Alimentação"}
+                                {"nome":"Alimentação","tipo":"VARIAVEL"}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(10))
-                .andExpect(jsonPath("$.nome").value("Alimentação"));
+                .andExpect(jsonPath("$.nome").value("Alimentação"))
+                .andExpect(jsonPath("$.tipo").value("VARIAVEL"));
+    }
+
+    @Test
+    void deveRecusarCriacaoSemTipo() throws Exception {
+        mockMvc.perform(post("/api/categorias")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nome":"Alimentação"}
+                                """))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -78,12 +94,37 @@ class CategoriaControllerTest {
         Categoria categoria = new Categoria();
         categoria.setId(10L);
         categoria.setNome("Alimentação");
+        categoria.setTipo(TipoCategoria.VARIAVEL);
         when(categoriaService.listarPorUsuario(1L)).thenReturn(List.of(categoria));
+        when(categoriaService.contarDespesasPorCategoria(1L)).thenReturn(Map.of(10L, 7L));
 
         mockMvc.perform(get("/api/categorias")
                         .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(10));
+                .andExpect(jsonPath("$[0].id").value(10))
+                .andExpect(jsonPath("$[0].totalDespesas").value(7));
+    }
+
+    @Test
+    void deveBuscarCategoriasSemelhantes() throws Exception {
+        Categoria semelhante = new Categoria();
+        semelhante.setId(20L);
+        semelhante.setNome("Mercado");
+        semelhante.setTipo(TipoCategoria.VARIAVEL);
+        when(categoriaService.buscarSemelhantes(1L, "Mercadinho")).thenReturn(List.of(semelhante));
+
+        mockMvc.perform(get("/api/categorias/semelhantes")
+                        .param("nome", "Mercadinho")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(20))
+                .andExpect(jsonPath("$[0].nome").value("Mercado"));
+    }
+
+    @Test
+    void deveRecusarBuscaSemelhantesSemAutenticacao() throws Exception {
+        mockMvc.perform(get("/api/categorias/semelhantes").param("nome", "Mercado"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

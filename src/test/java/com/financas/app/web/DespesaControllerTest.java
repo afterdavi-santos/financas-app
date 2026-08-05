@@ -5,7 +5,7 @@ import com.financas.app.exception.RecursoNaoEncontradoException;
 import com.financas.app.model.Categoria;
 import com.financas.app.model.Despesa;
 import com.financas.app.model.Usuario;
-import com.financas.app.model.enums.TipoDespesa;
+import com.financas.app.model.enums.TipoCategoria;
 import com.financas.app.security.JwtAuthenticationFilter;
 import com.financas.app.security.UsuarioAutenticado;
 import com.financas.app.service.DespesaService;
@@ -63,13 +63,13 @@ class DespesaControllerTest {
         Categoria categoria = new Categoria();
         categoria.setId(5L);
         categoria.setNome("Alimentação");
+        categoria.setTipo(TipoCategoria.VARIAVEL);
 
         Despesa despesa = new Despesa();
         despesa.setId(id);
         despesa.setDescricao("Mercado");
         despesa.setValor(new BigDecimal("150.00"));
         despesa.setData(LocalDate.of(2026, 7, 10));
-        despesa.setTipo(TipoDespesa.EXTRAORDINARIA);
         despesa.setCategoria(categoria);
         return despesa;
     }
@@ -83,22 +83,23 @@ class DespesaControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"descricao":"Mercado","valor":150.00,"data":"2026-07-10","tipo":"EXTRAORDINARIA","categoriaId":5}
+                                {"descricao":"Mercado","valor":150.00,"data":"2026-07-10","categoriaId":5}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(20))
-                .andExpect(jsonPath("$.categoria.id").value(5));
+                .andExpect(jsonPath("$.categoria.id").value(5))
+                .andExpect(jsonPath("$.recorrente").value(false));
     }
 
     @Test
     void deveListarDespesasComFiltros() throws Exception {
-        when(despesaService.listar(1L, 5L, TipoDespesa.EXTRAORDINARIA,
+        when(despesaService.listar(1L, 5L, TipoCategoria.VARIAVEL,
                 LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)))
                 .thenReturn(List.of(despesa(20L)));
 
         mockMvc.perform(get("/api/despesas")
                         .param("categoriaId", "5")
-                        .param("tipo", "EXTRAORDINARIA")
+                        .param("tipo", "VARIAVEL")
                         .param("inicio", "2026-07-01")
                         .param("fim", "2026-07-31")
                         .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao)))
@@ -128,7 +129,7 @@ class DespesaControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"descricao":"Mercado","valor":150.00,"data":"2026-07-10","tipo":"EXTRAORDINARIA","categoriaId":5}
+                                {"descricao":"Mercado","valor":150.00,"data":"2026-07-10","categoriaId":5}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(20));
@@ -152,7 +153,7 @@ class DespesaControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"descricao":"Mercado","valor":-10,"data":"2026-07-10","tipo":"EXTRAORDINARIA","categoriaId":5}
+                                {"descricao":"Mercado","valor":-10,"data":"2026-07-10","categoriaId":5}
                                 """))
                 .andExpect(status().isBadRequest());
     }

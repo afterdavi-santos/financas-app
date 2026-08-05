@@ -56,6 +56,10 @@ public class SecurityConfig {
         config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
+        // Sem isso, o navegador bloqueia o JS de ler este header custom numa
+        // resposta cross-origin — a renovação de sessão (ver
+        // JwtAuthenticationFilter) ficaria silenciosamente sem efeito no front.
+        config.setExposedHeaders(List.of(JwtAuthenticationFilter.HEADER_TOKEN_RENOVADO));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", config);
         return source;

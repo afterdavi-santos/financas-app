@@ -40,7 +40,7 @@ export function planoContencao(
 ): PlanoContencao | null {
   if (valorNecessarioReduzir <= 0) return null;
 
-  const porCategoria = totalPorCategoria(despesasExtraordinarias, "EXTRAORDINARIA");
+  const porCategoria = totalPorCategoria(despesasExtraordinarias, "VARIAVEL");
 
   // Começa só na maior categoria; vai chamando a próxima enquanto o valor a
   // reduzir for >= 30% do que já foi selecionado (nunca inclui despesas

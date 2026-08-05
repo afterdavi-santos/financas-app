@@ -6,10 +6,10 @@ import { criarCategoria } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { primeiroDiaDoMesISO } from "../utils/datas";
-import type { Categoria } from "../types/financas";
-
-// Valor especial do <select> que abre o campo de "nova categoria" inline.
-const OPCAO_NOVA_CATEGORIA = "__nova__";
+import { SeletorCategoria, OPCAO_NOVA_CATEGORIA } from "./SeletorCategoria";
+import { AvisoCategoriaSemelhante } from "./AvisoCategoriaSemelhante";
+import { useCategoriasSemelhantes } from "../hooks/useCategoriasSemelhantes";
+import type { Categoria, TipoCategoria } from "../types/financas";
 
 // Simulador de despesa: sem gravar nada, informa se um valor hipotético numa
 // categoria estouraria o limite do mês e, se não, quanto ainda sobraria.
@@ -41,6 +41,8 @@ export function SimularDespesaModal({
 }: Props) {
   const [categoriaId, setCategoriaId] = useState("");
   const [novaCategoriaNome, setNovaCategoriaNome] = useState("");
+  const [novaCategoriaTipo, setNovaCategoriaTipo] = useState<TipoCategoria>("VARIAVEL");
+  const { sugestoes: categoriasSemelhantes } = useCategoriasSemelhantes(novaCategoriaNome, categorias);
   const [valor, setValor] = useState("");
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const [novoLimiteValor, setNovoLimiteValor] = useState("");
@@ -55,6 +57,7 @@ export function SimularDespesaModal({
     if (!aberto) return;
     setCategoriaId(categorias.length === 0 ? OPCAO_NOVA_CATEGORIA : "");
     setNovaCategoriaNome("");
+    setNovaCategoriaTipo("VARIAVEL");
     setValor("");
     setResultado(null);
     setNovoLimiteValor("");
@@ -95,6 +98,10 @@ export function SimularDespesaModal({
   async function aoSimular(evento: FormEvent) {
     evento.preventDefault();
     setErro(null);
+    if (!categoriaId) {
+      setErro("Selecione uma categoria.");
+      return;
+    }
     setResultado(null);
     setCarregando(true);
     try {
@@ -103,7 +110,7 @@ export function SimularDespesaModal({
       // opção de criar um a seguir).
       let idCategoriaAtual = Number(categoriaId);
       if (criandoNovaCategoria) {
-        const nova = await criarCategoria({ nome: novaCategoriaNome });
+        const nova = await criarCategoria({ nome: novaCategoriaNome, tipo: novaCategoriaTipo });
         idCategoriaAtual = nova.id;
         setCategoriaId(String(nova.id));
         setNovaCategoriaNome("");
@@ -158,32 +165,18 @@ export function SimularDespesaModal({
             >
               Categoria
             </label>
-            <select
+            <SeletorCategoria
               id="sim-categoria"
-              required
-              autoFocus
-              value={categoriaId}
-              onChange={(e) => {
+              categorias={categorias}
+              valor={categoriaId}
+              onChange={(novoValor) => {
                 // Troca manual de categoria: descarta resultado e limite ainda
                 // não salvo (evita levar valores digitados para outra categoria).
-                setCategoriaId(e.target.value);
+                setCategoriaId(novoValor);
                 setResultado(null);
                 setNovoLimiteValor("");
               }}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="" disabled>
-                Selecione...
-              </option>
-              {categorias.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome}
-                </option>
-              ))}
-              <option value={OPCAO_NOVA_CATEGORIA}>
-                + Nova categoria...
-              </option>
-            </select>
+            />
           </div>
 
           {criandoNovaCategoria && (
@@ -206,6 +199,33 @@ export function SimularDespesaModal({
                   className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+
+              <div className="space-y-1">
+                <label
+                  htmlFor="sim-nova-categoria-tipo"
+                  className="text-sm font-medium text-slate-700"
+                >
+                  Tipo da categoria
+                </label>
+                <select
+                  id="sim-nova-categoria-tipo"
+                  value={novaCategoriaTipo}
+                  onChange={(e) => setNovaCategoriaTipo(e.target.value as TipoCategoria)}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="VARIAVEL">Variável</option>
+                  <option value="FIXA">Fixa</option>
+                </select>
+              </div>
+
+              <AvisoCategoriaSemelhante
+                sugestoes={categoriasSemelhantes}
+                onSelecionar={(c) => {
+                  setCategoriaId(String(c.id));
+                  setNovaCategoriaNome("");
+                  setNovaCategoriaTipo("VARIAVEL");
+                }}
+              />
 
               <div className="space-y-1">
                 <label

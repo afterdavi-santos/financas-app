@@ -5,30 +5,36 @@ Localização: `src/main/java/com/financas/app/web/` (controllers), `src/main/ja
 ## Segurança (Spring Security + JWT, stateless)
 
 - `UsuarioAutenticado` (`security/`) — `UserDetails` que envolve a entidade `Usuario`, expõe `getId()`.
-- `JwtService` — gera token com `subject = usuarioId` (não o email); lê `jwt.secret`/`jwt.expiration-ms` do `application.properties`.
-- `JwtAuthenticationFilter` (`OncePerRequestFilter`) — lê `Authorization: Bearer <token>`, resolve o `Usuario` via `UsuarioRepository` e popula o `SecurityContextHolder` com `UsuarioAutenticado`.
-- `SecurityConfig` — stateless, CSRF desabilitado, `permitAll` em `/api/auth/**`, resto autenticado.
+- `JwtService` — gera token com `subject = usuarioId` (não o email); lê `jwt.secret`/`jwt.expiration-ms`/`jwt.max-sessao-ms` do `application.properties`. **Sessão com janela deslizante**: cada token carrega uma claim própria `sessaoInicio` (quando a sessão realmente começou, no login), carregada adiante em toda reemissão. `gerarToken` cria uma sessão nova; `renovarToken(usuarioId, sessaoInicio)` reemite mantendo o `sessaoInicio` original com validade renovada (`jwt.expiration-ms`, 24h) — só recusa (retorna vazio) se já passou do teto máximo (`jwt.max-sessao-ms`, 7 dias) desde o login original. Depende de um `Clock` injetável (`config/ClockConfig.java`) em vez de `new Date()` direto, pra dar pra testar com um relógio fixo.
+- `JwtAuthenticationFilter` (`OncePerRequestFilter`) — lê `Authorization: Bearer <token>`, resolve o `Usuario` via `UsuarioRepository` e popula o `SecurityContextHolder` com `UsuarioAutenticado`. Depois de autenticar, tenta renovar o token (`JwtService.renovarToken`) e, se conseguir, devolve o token novo no header `X-Renewed-Token` (constante `JwtAuthenticationFilter.HEADER_TOKEN_RENOVADO`) — o frontend intercepta esse header (`api/client.ts`) e atualiza o token salvo. **Atenção**: esse header precisa estar em `CorsConfiguration.setExposedHeaders` (`SecurityConfig`), senão o navegador bloqueia o JS de lê-lo numa resposta cross-origin.
+- `SecurityConfig` — stateless, CSRF desabilitado, `permitAll` em `/api/auth/**` e `/error` (forward interno de exceção não tratada), resto autenticado. CORS liberado para `app.cors.allowed-origins` (dev: `http://localhost:5173`).
 - Nos controllers, o usuário logado sempre vem de `@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado` — nunca de path/query param. `usuarioAutenticado.getId()` é passado pros services (que já validam posse dos recursos).
 
 ## Tratamento de erros
 
-`GlobalExceptionHandler` (`@RestControllerAdvice`) mapeia: `RecursoNaoEncontradoException` → 404, `EmailJaCadastradoException` → 409, `LimiteJaExisteException` → 409, `CredenciaisInvalidasException` → 401, `MethodArgumentNotValidException` (`@Valid`) → 400 com lista de campos. Resposta padronizada em `ErrorResponse`.
+`GlobalExceptionHandler` (`@RestControllerAdvice`) mapeia: `RecursoNaoEncontradoException` → 404, `EmailJaCadastradoException` → 409, `LimiteJaExisteException` → 409, `CategoriaEmUsoException` → 409, `InvestimentoJaVinculadoException` → 409, `OperacaoInvalidaException` → 400, `CredenciaisInvalidasException` → 401, `MethodArgumentNotValidException` (`@Valid`) → 400 com lista de campos. Resposta padronizada em `ErrorResponse`.
 
 ## Endpoints
 
 - `AuthController` (`/api/auth`) — `POST /registrar`, `POST /login` (retorna JWT). Únicas rotas públicas.
-- `CategoriaController` (`/api/categorias`) — CRUD.
-- `DespesaController` (`/api/despesas`) — CRUD + `GET /` com filtros (`categoriaId`, `tipo`, `inicio`, `fim`) + `GET /total`.
-- `RendaController` (`/api/rendas`) — CRUD + `GET /total?mesReferencia`.
-- `ObjetivoController` (`/api/objetivos`) — CRUD (inclui `PUT /{id}`) + `POST /{id}/aportar`.
-- `LimiteCategoriaController` (`/api/limites-categoria`) — CRUD (inclui `PUT /{id}`) + `GET /status?categoriaId&mesReferencia`. **Limite é fixo por categoria** (não tem mais `mesReferencia`): `GET /` lista todos os limites do usuário; `criar` recusa um segundo limite na mesma categoria (`LimiteJaExisteException` → 409). O `/status` ainda recebe `mesReferencia` porque o *gasto* é sempre avaliado num mês (normalmente o atual) contra o teto fixo.
-- `RelatorioController` (`/api/relatorios`) — `GET /economia`, `GET /comparar-meses`, `GET /comparar-anos`.
+- `CategoriaController` (`/api/categorias`) — CRUD (`CategoriaRequest`/`Response` incluem `tipo`, obrigatório na criação); `DELETE /{id}?cascata=` apaga despesas/limites/recorrências vinculados quando confirmado. `CategoriaResponse` inclui `totalDespesas` (contagem real só em `GET /`, usada pra ranquear as mais usadas no seletor do frontend; `0` nos outros pontos onde o DTO é montado) e `dataCriacao` (sempre o valor real, `null` pra categorias antigas). `GET /semelhantes?nome=` — categorias do usuário com nome parecido (busca por similaridade via `pg_trgm`), usado pra avisar de possíveis duplicatas antes de criar.
+- `DespesaController` (`/api/despesas`) — CRUD (sem `tipo` no request — vem da categoria) + `GET /` com filtros (`categoriaId`, `tipo`, `inicio`, `fim`) + `GET /total`. `DespesaResponse` inclui `tipo` (derivado da categoria) e `recorrente` (true se a despesa nasceu numa categoria FIXA).
+- `RendaController` (`/api/rendas`) — CRUD + `GET /total?mesReferencia`. `RendaResponse` inclui `recorrente` (true se `tipo=FIXA`).
+- `ObjetivoController` (`/api/objetivos`) — CRUD + `GET/POST/PUT/DELETE /{id}/aportes` (linha do tempo de aportes) + `PUT`/`DELETE /{id}/investimento-cdb` (vincula/desvincula um `InvestimentoCdb`).
+- `InvestimentoCdbController` (`/api/investimentos-cdb`) — CRUD (só descrição/%CDI editáveis — valor/data vivem nos lotes) + `GET /{id}/posicao` + `POST /{id}/investir-mais` + `POST /{id}/simular-resgate(-total)` + `POST /{id}/resgatar(-total)`. `InvestimentoCdbResponse` inclui `objetivoId`/`objetivoDescricao` quando vinculado.
+- `CdiController` (`/api/cdi`) — `GET /atual` (taxa diária mais recente + anualizada).
+- `LimiteCategoriaController` (`/api/limites-categoria`) — CRUD + `GET /status?categoriaId&mesReferencia`. **Limite é fixo por categoria** (não tem `mesReferencia`); `criar` recusa um segundo limite na mesma categoria (409). `/status` recebe `mesReferencia` porque o *gasto* é sempre avaliado num mês contra o teto fixo.
+- `RelatorioController` (`/api/relatorios`) — `GET /economia?mesReferencia`, `GET /comparar-meses?inicio&fim`.
 
 Padrão de DTO: `XRequest` (record com Bean Validation) + `XResponse` (record), mapeamento manual (`toEntity`/`toResponse`) como métodos privados estáticos dentro do próprio controller — sem mapper genérico.
 
+## Vínculo Investimento ↔ Objetivo
+
+Um `InvestimentoCdb` pode estar vinculado a no máximo um `Objetivo` (e vice-versa). O vínculo é sempre feito pelos endpoints do lado do Objetivo (`PUT`/`DELETE /objetivos/{id}/investimento-cdb`) — o frontend orquestra a criação/edição/vínculo em sequência a partir do popup de investimento (cria ou atualiza o investimento, depois vincula/desvincula/cria o objetivo conforme a escolha do usuário). Excluir um investimento vinculado desvincula automaticamente o objetivo (não apaga); o frontend oferece a opção de apagar os dois.
+
 ## Estado dos testes
 
-88 testes no total (50 de service + 38 de controller/`@WebMvcTest`, um arquivo de teste por controller).
+176 testes no total (services + controllers, um arquivo de teste por controller via `@WebMvcTest`).
 
 ### Pegadinha de `@WebMvcTest` + Spring Security
 
@@ -43,5 +49,4 @@ $env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
 
 ## Próximo passo
 
-- Testar o fluxo fim a fim com Postgres rodando (`mvnw spring-boot:run` + registrar/login/CRUD via curl ou Postman).
-- Definir estratégia de refresh token / expiração (hoje o token dura 24h, sem renovação).
+- Backlog: leitor automático de fatura em PDF, deploy em nuvem (Supabase + Render/Railway/Fly.io), anexo de comprovante (ver `PROJECT_SCOPE.md` seção 5).

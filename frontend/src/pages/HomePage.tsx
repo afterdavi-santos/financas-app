@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { NovaDespesaModal } from "../components/NovaDespesaModal";
 import { NovaRendaModal } from "../components/NovaRendaModal";
 import { NovoInvestimentoCdbModal } from "../components/NovoInvestimentoCdbModal";
+import { ExcluirInvestimentoModal } from "../components/ExcluirInvestimentoModal";
 import { ResgatarCdbModal } from "../components/ResgatarCdbModal";
 import { InvestirMaisModal } from "../components/InvestirMaisModal";
 import { BarraSelecao } from "../components/BarraSelecao";
@@ -26,7 +27,7 @@ import { listarObjetivos } from "../api/objetivos";
 import { compararMeses } from "../api/relatorios";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
-import { rotuloTipoDespesa, dataBR, mesCurtoBR } from "../utils/rotulos";
+import { rotuloTipoCategoria, dataBR, mesCurtoBR } from "../utils/rotulos";
 import {
   mesAtualYYYYMM,
   primeiroDiaDoMes,
@@ -76,6 +77,7 @@ export function HomePage() {
   const [modalInvestimento, setModalInvestimento] = useState(false);
   const [modalPlano, setModalPlano] = useState(false);
   const [editandoInvestimento, setEditandoInvestimento] = useState<InvestimentoCdb | null>(null);
+  const [excluindoInvestimento, setExcluindoInvestimento] = useState<InvestimentoCdb | null>(null);
   const [resgatando, setResgatando] = useState<InvestimentoCdb | null>(null);
   const [investindoMaisEm, setInvestindoMaisEm] = useState<InvestimentoCdb | null>(null);
   const {
@@ -205,7 +207,7 @@ export function HomePage() {
     .reduce((soma, r) => soma + r.valor, 0);
   const valorNecessarioReduzir = Math.max(0, totalDespesas - rendaFixaMes);
   const despesasExtraordinarias = despesas.filter(
-    (d) => d.tipo === "EXTRAORDINARIA",
+    (d) => d.tipo === "VARIAVEL",
   );
   const plano = planoContencao(despesasExtraordinarias, valorNecessarioReduzir);
   const dificuldadePlano = dificuldadeContencao(plano);
@@ -231,15 +233,8 @@ export function HomePage() {
     setModalInvestimento(true);
   }
 
-  async function excluirInvestimento(investimento: InvestimentoCdb) {
-    if (!confirm(`Excluir o investimento "${investimento.descricao}"?`)) return;
-    try {
-      await excluirInvestimentoCdb(investimento.id);
-      desselecionarTodosCdb([investimento.id]);
-      carregar();
-    } catch (e) {
-      setErro(mensagemDeErro(e));
-    }
+  function excluirInvestimento(investimento: InvestimentoCdb) {
+    setExcluindoInvestimento(investimento);
   }
 
   async function excluirInvestimentosSelecionados() {
@@ -368,7 +363,7 @@ export function HomePage() {
                             {d.descricao}
                           </p>
                           <p className="text-xs font-medium text-grouper-deep">
-                            {d.categoria.nome} · {rotuloTipoDespesa[d.tipo]} ·{" "}
+                            {d.categoria.nome} · {rotuloTipoCategoria[d.tipo]} ·{" "}
                             {dataBR(d.data)}
                           </p>
                         </div>
@@ -491,6 +486,21 @@ export function HomePage() {
                               {formatarBRL(posicao ? posicao.valorAtual : inv.valorAplicado)}
                             </span>
                           </div>
+
+                          {/* Dias úteis normalmente ficam perto de ~69-70% dos dias
+                              corridos (5 de 7 dias da semana); bem abaixo disso
+                              indica que o histórico de CDI usado no cálculo está
+                              incompleto (ex.: backfill do Banco Central ainda não
+                              terminou) — o rendimento mostrado pode estar
+                              subestimado até o próximo carregamento. */}
+                          {posicao && posicao.diasCorridos > 30 &&
+                            posicao.diasUteisRendidos < posicao.diasCorridos * 0.5 && (
+                              <p className="mt-1 text-xs text-amber-700">
+                                ⚠ Dados de CDI incompletos para o período ({posicao.diasUteisRendidos} de{" "}
+                                {posicao.diasCorridos} dias considerados) — o rendimento pode estar
+                                subestimado. Tente recarregar em alguns minutos.
+                              </p>
+                            )}
 
                           <div
                             className="mt-1.5 flex flex-wrap items-center gap-2"
@@ -625,9 +635,19 @@ export function HomePage() {
       <NovoInvestimentoCdbModal
         aberto={modalInvestimento}
         investimento={editandoInvestimento}
+        objetivos={objetivos}
         onClose={() => setModalInvestimento(false)}
         onSalvo={() => {
           setModalInvestimento(false);
+          carregar();
+        }}
+      />
+      <ExcluirInvestimentoModal
+        investimento={excluindoInvestimento}
+        onClose={() => setExcluindoInvestimento(null)}
+        onExcluido={() => {
+          if (excluindoInvestimento) desselecionarTodosCdb([excluindoInvestimento.id]);
+          setExcluindoInvestimento(null);
           carregar();
         }}
       />

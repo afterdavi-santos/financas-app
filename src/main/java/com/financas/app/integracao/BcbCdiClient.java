@@ -53,7 +53,11 @@ public class BcbCdiClient {
                             new BigDecimal(p.valor())))
                     .toList();
         } catch (RestClientException e) {
-            log.warn("Falha ao consultar CDI no Banco Central para [{}, {}]: {}", inicio, fim, e.getMessage());
+            // Inclui a classe da exceção (ex.: SSLHandshakeException, timeout) além
+            // da mensagem — "Falha ao consultar" sozinho não é suficiente pra
+            // diagnosticar se é rede, TLS do JDK, ou o próprio BCB fora do ar.
+            log.warn("Falha ao consultar CDI no Banco Central para [{}, {}] (url={}): {}: {}",
+                    inicio, fim, url, e.getClass().getSimpleName(), e.getMessage());
             return List.of();
         }
     }

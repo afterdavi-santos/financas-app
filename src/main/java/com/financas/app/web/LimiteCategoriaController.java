@@ -84,7 +84,8 @@ public class LimiteCategoriaController {
 
     private static LimiteCategoriaResponse toResponse(LimiteCategoria limiteCategoria) {
         var categoria = limiteCategoria.getCategoria();
-        var categoriaResponse = new CategoriaResponse(categoria.getId(), categoria.getNome());
+        var categoriaResponse = new CategoriaResponse(categoria.getId(), categoria.getNome(), categoria.getTipo(), 0L,
+                categoria.getDataCriacao());
         return new LimiteCategoriaResponse(limiteCategoria.getId(), limiteCategoria.getValorLimite(),
                 categoriaResponse);
     }

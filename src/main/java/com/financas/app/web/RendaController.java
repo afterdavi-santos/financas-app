@@ -79,7 +79,8 @@ public class RendaController {
     }
 
     private static RendaResponse toResponse(Renda renda) {
-        return new RendaResponse(renda.getId(), renda.getDescricao(), renda.getValor(), renda.getMesReferencia(), renda.getTipo());
+        return new RendaResponse(renda.getId(), renda.getDescricao(), renda.getValor(), renda.getMesReferencia(),
+                renda.getTipo(), renda.getRecorrencia() != null);
     }
 
 }

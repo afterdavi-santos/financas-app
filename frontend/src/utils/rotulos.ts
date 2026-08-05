@@ -1,9 +1,9 @@
-import type { TipoDespesa, TipoRenda } from "../types/financas";
+import type { TipoCategoria, TipoRenda } from "../types/financas";
 
 // Rótulos amigáveis para os enums do backend, num só lugar (reuso entre páginas).
-export const rotuloTipoDespesa: Record<TipoDespesa, string> = {
+export const rotuloTipoCategoria: Record<TipoCategoria, string> = {
   FIXA: "Fixa",
-  EXTRAORDINARIA: "Variável",
+  VARIAVEL: "Variável",
 };
 
 export const rotuloTipoRenda: Record<TipoRenda, string> = {

@@ -104,6 +104,50 @@ class CdiServiceTest {
         verify(bcbCdiClient).buscarPeriodo(inicio, fim);
     }
 
+    private static final int TAMANHO_CHUNK_DIAS = 365;
+
+    @Test
+    void garantirCacheQuebraBackfillGrandeEmPedacosDeUmAno() {
+        // Gap de exatamente 2 pedaços de 365 dias (cache vazio): deve virar 2
+        // chamadas ao BCB, não uma única cobrindo tudo — assim, se um pedaço
+        // falhar, o outro continua sendo tentado/salvo.
+        LocalDate inicio = LocalDate.of(2024, 1, 1);
+        LocalDate fim = inicio.plusDays(2L * TAMANHO_CHUNK_DIAS - 1);
+        when(cdiRepository.findTopByOrderByDataAsc()).thenReturn(Optional.empty());
+        when(bcbCdiClient.buscarPeriodo(any(), any())).thenReturn(List.of());
+        when(cdiRepository.findByDataBetweenOrderByDataAsc(inicio.plusDays(1), fim)).thenReturn(List.of());
+
+        cdiService.fatorAcumulado(inicio, fim);
+
+        ArgumentCaptor<LocalDate> iniciosCaptor = ArgumentCaptor.forClass(LocalDate.class);
+        ArgumentCaptor<LocalDate> finsCaptor = ArgumentCaptor.forClass(LocalDate.class);
+        verify(bcbCdiClient, org.mockito.Mockito.times(2)).buscarPeriodo(iniciosCaptor.capture(), finsCaptor.capture());
+        assertThat(iniciosCaptor.getAllValues().get(0)).isEqualTo(inicio);
+        assertThat(finsCaptor.getAllValues().get(0)).isEqualTo(inicio.plusDays(TAMANHO_CHUNK_DIAS - 1));
+        assertThat(iniciosCaptor.getAllValues().get(1)).isEqualTo(inicio.plusDays(TAMANHO_CHUNK_DIAS));
+        assertThat(finsCaptor.getAllValues().get(1)).isEqualTo(fim);
+    }
+
+    @Test
+    void garantirCacheContinuaProximoPedacoQuandoUmPedacoFalha() {
+        // Primeiro pedaço "falha" (BCB devolve vazio); o segundo tem dado e
+        // deve ser salvo mesmo assim — uma falha pontual não trava o resto.
+        LocalDate inicio = LocalDate.of(2024, 1, 1);
+        LocalDate fim = inicio.plusDays(2L * TAMANHO_CHUNK_DIAS - 1);
+        LocalDate inicioSegundoChunk = inicio.plusDays(TAMANHO_CHUNK_DIAS);
+        when(cdiRepository.findTopByOrderByDataAsc()).thenReturn(Optional.empty());
+        when(bcbCdiClient.buscarPeriodo(inicio, inicio.plusDays(TAMANHO_CHUNK_DIAS - 1))).thenReturn(List.of());
+        when(bcbCdiClient.buscarPeriodo(inicioSegundoChunk, fim)).thenReturn(List.of(
+                new BcbCdiClient.PontoCdi(inicioSegundoChunk, new BigDecimal("0.05"))));
+        when(cdiRepository.findByDataBetweenOrderByDataAsc(inicio.plusDays(1), fim)).thenReturn(List.of());
+
+        cdiService.fatorAcumulado(inicio, fim);
+
+        ArgumentCaptor<List<CdiDiario>> captor = ArgumentCaptor.forClass(List.class);
+        verify(cdiRepository).saveAll(captor.capture());
+        assertThat(captor.getValue()).hasSize(1);
+    }
+
     @Test
     void taxaMaisRecenteDevolveOUltimoValorEmCacheAposGarantirAtualizacao() {
         CdiDiario ultimo = dia(LocalDate.now(), "0.0525");

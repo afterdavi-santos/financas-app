@@ -130,7 +130,10 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
     .sort((a, b) => b.mesReferencia.localeCompare(a.mesReferencia));
 
   async function excluir(renda: Renda) {
-    if (!confirm(`Excluir a renda "${renda.descricao}"?`)) return;
+    const mensagem = renda.recorrente
+      ? `A renda "${renda.descricao}" é fixa e recorrente. Excluí-la remove só o mês atual e para as próximas repetições — os meses anteriores continuam registrados. Continuar?`
+      : `Excluir a renda "${renda.descricao}"?`;
+    if (!confirm(mensagem)) return;
     try {
       await excluirRenda(renda.id);
       desselecionarTodos([renda.id]);

@@ -1,6 +1,6 @@
 package com.financas.app.model.enums;
 
-public enum TipoDespesa {
+public enum TipoCategoria {
     FIXA,
-    EXTRAORDINARIA
+    VARIAVEL
 }

@@ -33,3 +33,15 @@ export async function excluirCategoria(
 ): Promise<void> {
   await api.delete(`/categorias/${id}`, { params: cascata ? { cascata: true } : undefined });
 }
+
+// GET /api/categorias/semelhantes?nome= -> categorias do usuário com nome
+// parecido (busca por similaridade, pg_trgm) ao informado — usado pra avisar
+// antes de criar uma possível duplicata.
+export async function buscarCategoriasSemelhantes(
+  nome: string,
+): Promise<Categoria[]> {
+  const { data } = await api.get<Categoria[]>("/categorias/semelhantes", {
+    params: { nome },
+  });
+  return data;
+}

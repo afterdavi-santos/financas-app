@@ -6,7 +6,7 @@ import com.financas.app.dto.DespesaResponse;
 import com.financas.app.dto.TotalResponse;
 import com.financas.app.model.Categoria;
 import com.financas.app.model.Despesa;
-import com.financas.app.model.enums.TipoDespesa;
+import com.financas.app.model.enums.TipoCategoria;
 import com.financas.app.security.UsuarioAutenticado;
 import com.financas.app.service.DespesaService;
 import jakarta.validation.Valid;
@@ -47,7 +47,7 @@ public class DespesaController {
     @GetMapping
     public List<DespesaResponse> listar(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado,
                                          @RequestParam(required = false) Long categoriaId,
-                                         @RequestParam(required = false) TipoDespesa tipo,
+                                         @RequestParam(required = false) TipoCategoria tipo,
                                          @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
                                          @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fim) {
         return despesaService.listar(usuarioAutenticado.getId(), categoriaId, tipo, inicio, fim).stream()
@@ -86,18 +86,19 @@ public class DespesaController {
         despesa.setDescricao(request.descricao());
         despesa.setValor(request.valor());
         despesa.setData(request.data());
-        despesa.setTipo(request.tipo());
         Categoria categoria = new Categoria();
         categoria.setId(request.categoriaId());
         despesa.setCategoria(categoria);
         return despesa;
     }
 
+    // tipo é derivado da categoria da despesa, nunca armazenado na despesa.
     private static DespesaResponse toResponse(Despesa despesa) {
         var categoria = despesa.getCategoria();
-        var categoriaResponse = new CategoriaResponse(categoria.getId(), categoria.getNome());
+        var categoriaResponse = new CategoriaResponse(categoria.getId(), categoria.getNome(), categoria.getTipo(), 0L,
+                categoria.getDataCriacao());
         return new DespesaResponse(despesa.getId(), despesa.getDescricao(), despesa.getValor(),
-                despesa.getData(), despesa.getTipo(), categoriaResponse);
+                despesa.getData(), categoria.getTipo(), categoriaResponse, despesa.getRecorrencia() != null);
     }
 
 }

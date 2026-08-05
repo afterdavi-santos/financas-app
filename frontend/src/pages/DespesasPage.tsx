@@ -13,7 +13,7 @@ import { listarDespesas, excluirDespesa } from "../api/despesas";
 import { listarCategorias } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
-import { rotuloTipoDespesa, dataBR, mesCurtoBR } from "../utils/rotulos";
+import { rotuloTipoCategoria, dataBR, mesCurtoBR } from "../utils/rotulos";
 import {
   hojeISO,
   mesAtualYYYYMM,
@@ -30,15 +30,15 @@ import {
   maiorBaixa,
 } from "../utils/despesasResumo";
 import type { VariacaoCategoria } from "../utils/despesasResumo";
-import type { Categoria, Despesa, TipoDespesa } from "../types/financas";
+import type { Categoria, Despesa, TipoCategoria } from "../types/financas";
 
 // Filtro da lista "Todas as despesas do mês" (canto direito do cabeçalho da
 // seção, no lugar de "Selecionar todos").
-type FiltroTipo = "TODAS" | TipoDespesa;
+type FiltroTipo = "TODAS" | TipoCategoria;
 const FILTROS: { chave: FiltroTipo; rotulo: string }[] = [
   { chave: "TODAS", rotulo: "Todas" },
   { chave: "FIXA", rotulo: "Fixas" },
-  { chave: "EXTRAORDINARIA", rotulo: "Variáveis" },
+  { chave: "VARIAVEL", rotulo: "Variáveis" },
 ];
 
 // Formata o % de variação (ou "nova" quando não havia gasto no mês anterior).
@@ -151,16 +151,17 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
   // agregação a cada render). Toda a lógica pesada vive em utils/despesasResumo.
   const resumo = useMemo(() => {
     const totalFixas = somaPorTipo(despesas, "FIXA");
-    const totalExtra = somaPorTipo(despesas, "EXTRAORDINARIA");
+    const totalExtra = somaPorTipo(despesas, "VARIAVEL");
     // Todas as categorias (não só as 5 maiores) — a lista tem rolagem própria.
     const porCategoria = totalPorCategoria(
       despesas,
       filtroCategoria === "TODAS" ? undefined : filtroCategoria,
     );
-    // Atenção/parabéns comparam APENAS despesas extraordinárias entre os meses.
+    // Atenção/parabéns comparam APENAS despesas variáveis entre os meses.
     const variacoes = variacaoCategorias(
-      despesas.filter((d) => d.tipo === "EXTRAORDINARIA"),
-      despesasAnterior.filter((d) => d.tipo === "EXTRAORDINARIA"),
+      despesas.filter((d) => d.tipo === "VARIAVEL"),
+      despesasAnterior.filter((d) => d.tipo === "VARIAVEL"),
+      mes,
     );
     return {
       totalFixas,
@@ -169,10 +170,13 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
       alta: maiorAlta(variacoes),
       baixa: maiorBaixa(variacoes),
     };
-  }, [despesas, despesasAnterior, filtroCategoria]);
+  }, [despesas, despesasAnterior, filtroCategoria, mes]);
 
   async function excluir(despesa: Despesa) {
-    if (!confirm(`Excluir a despesa "${despesa.descricao}"?`)) return;
+    const mensagem = despesa.recorrente
+      ? `A despesa "${despesa.descricao}" é fixa e recorrente. Excluí-la remove só o mês atual e para as próximas repetições — os meses anteriores continuam registrados. Continuar?`
+      : `Excluir a despesa "${despesa.descricao}"?`;
+    if (!confirm(mensagem)) return;
     try {
       await excluirDespesa(despesa.id);
       desselecionarTodos([despesa.id]);
@@ -478,7 +482,7 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
                             {d.descricao}
                           </p>
                           <p className="text-xs font-medium text-grouper-deep">
-                            {d.categoria.nome} · {rotuloTipoDespesa[d.tipo]} ·{" "}
+                            {d.categoria.nome} · {rotuloTipoCategoria[d.tipo]} ·{" "}
                             {dataBR(d.data)}
                           </p>
                         </div>

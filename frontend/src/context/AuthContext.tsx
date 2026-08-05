@@ -19,8 +19,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   // Estado inicializado a partir do localStorage:
   // se o usuário já logou antes, o token sobrevive a um reload da página.
-  // MAS se o token já expirou (ex.: voltou depois de 2h), descartamos na hora —
-  // assim o usuário cai no /login em vez de entrar numa sessão morta.
+  // MAS se o token já expirou (ex.: voltou depois de 24h sem usar o app —
+  // sessão é de janela deslizante, renovada a cada requisição enquanto ativa,
+  // ver api/client.ts), descartamos na hora — assim o usuário cai no /login
+  // em vez de entrar numa sessão morta.
   const [token, setToken] = useState<string | null>(() => {
     const salvo = localStorage.getItem(TOKEN_KEY);
     if (tokenExpirado(salvo)) {
