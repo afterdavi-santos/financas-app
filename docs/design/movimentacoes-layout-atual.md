@@ -114,6 +114,15 @@ direita da linha das abas — cópia exata do avatar da Home (`HomePage.tsx`
 seção 4.1 do doc da Home). Ainda não tem foto/iniciais reais, é só reserva de
 espaço.
 
+**No mobile (abaixo de `lg`)** esse avatar sai da linha das abas e sobe
+pra dividir a linha do título "Movimentações" (mesmo padrão da Home, ver
+`home-layout-atual.md` 4.1.1) — no cabeçalho da página, não mais ao lado
+dos controles. Em `lg`+ ele volta pra posição descrita acima. O seletor de
+mês e o botão "+ Adicionar despesa/renda" (portados via `headerSlot`, ver
+seção 4) também empilham em largura total no mobile, revertendo pra lado
+a lado em `lg`+ — mesmas classes usadas na Home. Detalhes técnicos em
+`docs/design/a11y-e-responsividade.md` (seção 2.3).
+
 ## 6. Conteúdo de cada aba
 
 Igual descrito no doc da Home (seções 4.4.1 a 4.5.3 lá tratam de padrões

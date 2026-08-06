@@ -72,6 +72,13 @@ export function HomePage() {
   // anterior) e o gráfico ao lado dele.
   const [historicoEconomia, setHistoricoEconomia] = useState<PontoEconomia[]>([]);
 
+  // Aba selecionada no seletor mobile (Renda/Despesas/Economia do mês) —
+  // só usada abaixo de `lg`, onde os 3 cards viram abas pra economizar
+  // espaço vertical (ver JSX). Em lg+ os 3 continuam sempre visíveis.
+  const [abaResumoMobile, setAbaResumoMobile] = useState<
+    "renda" | "despesas" | "economia"
+  >("renda");
+
   // Controle de qual modal está aberto.
   const [modalDespesa, setModalDespesa] = useState(false);
   const [modalRenda, setModalRenda] = useState(false);
@@ -254,9 +261,18 @@ export function HomePage() {
   return (
     <div className="w-full space-y-4">
       <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-3">
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-grouper-ink lg:col-span-2">
-          Início
-        </h1>
+        {/* No mobile, título e avatar dividem a mesma linha (lg:block tira
+            o avatar-mobile de dentro, já que em lg+ ele mora na ponta
+            direita da página — ver abaixo). */}
+        <div className="flex items-center justify-between gap-3 lg:col-span-2 lg:block">
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-grouper-ink">
+            Início
+          </h1>
+          {/* Avatar mobile: ao lado do título. Some em lg+ (o de baixo assume). */}
+          <div className="lg:hidden">
+            <Avatar menu />
+          </div>
+        </div>
         {/* Alinhado com a coluna direita (Economia do mês) logo abaixo: os
             botões começam onde aquele card começa, e o avatar fica na
             borda direita da página, como antes. O seletor de mês entra no
@@ -264,7 +280,10 @@ export function HomePage() {
             gap-2 = 24+144+8 = 176px = os mesmos 44*4px de antes), então
             "+ Adicionar renda" continua exatamente na mesma posição. */}
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-2 pl-6">
+          {/* No mobile os 3 controles empilham (mês em cima, renda embaixo
+              dele, despesa embaixo de renda); em lg+ voltam a ficar numa
+              linha só, como sempre foi. */}
+          <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:pl-6">
             <input
               type="month"
               value={mes}
@@ -273,22 +292,25 @@ export function HomePage() {
               // calendário; showPicker() faz o clique em qualquer parte do
               // "botão" abrir o mesmo seletor.
               onClick={(e) => e.currentTarget.showPicker?.()}
-              className="w-36 cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-3 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid"
+              className="w-full cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-3 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid lg:w-36"
             />
             <button
               onClick={() => setModalRenda(true)}
-              className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep"
+              className="w-full rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep lg:w-auto"
             >
               + Adicionar renda
             </button>
             <button
               onClick={() => setModalDespesa(true)}
-              className="rounded-md bg-grouper-ink px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-black"
+              className="w-full rounded-md bg-grouper-ink px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-black lg:w-auto"
             >
               + Adicionar despesa
             </button>
           </div>
-          <Avatar menu />
+          {/* Avatar desktop: posição original, na borda direita da página. */}
+          <div className="hidden lg:block">
+            <Avatar menu />
+          </div>
         </div>
       </div>
 
@@ -327,23 +349,77 @@ export function HomePage() {
       {carregando ? (
         <p className="text-grouper-navy/60">Carregando...</p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          {/* Coluna esquerda (mais larga): Renda/Despesas + Objetivos + Últimas despesas */}
-          <div className="space-y-4 lg:col-span-2">
-            <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-4 lg:grid lg:grid-cols-3">
+          {/* Seletor de 3 abas (Renda/Despesas/Economia do mês) — só existe
+              abaixo de `lg`, no lugar dos cards separados (ver abaixo),
+              pra economizar espaço vertical numa tela estreita. Primeiro
+              bloco a aparecer no mobile. */}
+          <div className="order-1 lg:hidden">
+            <div className="grid grid-cols-3 gap-1 rounded-lg border border-grouper-sky/20 bg-white p-1 shadow-sm">
+              {(
+                [
+                  { chave: "renda", rotulo: "Renda" },
+                  { chave: "despesas", rotulo: "Despesas" },
+                  { chave: "economia", rotulo: "Economia" },
+                ] as const
+              ).map((aba) => (
+                <button
+                  key={aba.chave}
+                  onClick={() => setAbaResumoMobile(aba.chave)}
+                  className={`rounded-md py-2 font-display text-xs font-semibold uppercase tracking-wide transition-colors ${
+                    abaResumoMobile === aba.chave
+                      ? "bg-grouper-mid text-white"
+                      : "text-grouper-navy/70 hover:bg-grouper-mist"
+                  }`}
+                >
+                  {aba.rotulo}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3">
+              {abaResumoMobile === "renda" && (
+                <StatCard titulo="Renda do mês" valor={renda} destaque="positivo" />
+              )}
+              {abaResumoMobile === "despesas" && (
+                <StatCard titulo="Despesas do mês" valor={totalDespesas} destaque="negativo" />
+              )}
+              {abaResumoMobile === "economia" && (
+                <EconomiaDestaque
+                  valor={economia}
+                  renda={renda}
+                  variacaoPercentual={variacaoEconomia}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Coluna esquerda (mais larga) em lg+: Renda/Despesas + Objetivos +
+              Últimas despesas. Abaixo de lg esse wrapper vira `contents`
+              (some da árvore de layout) e os 3 blocos de dentro passam a
+              competir livremente com os da coluna direita pela ordem
+              definida em `order-*` — por isso Objetivos/Últimas despesas
+              têm `order` mesmo "dentro" desta div: em lg+ o `order` não
+              tem efeito nenhum (a div volta a ser um bloco normal, não um
+              item de flex/grid), só entra em jogo no modo `contents`. */}
+          <div className="contents lg:col-span-2 lg:block lg:space-y-4">
+            {/* Desktop: os 2 StatCards lado a lado, como sempre foi — no
+                mobile quem cobre isso é o seletor de abas acima. */}
+            <div className="hidden lg:grid lg:grid-cols-2 lg:gap-4">
               <StatCard titulo="Renda do mês" valor={renda} destaque="positivo" />
               <StatCard titulo="Despesas do mês" valor={totalDespesas} destaque="negativo" />
             </div>
 
-            <ObjetivosResumoHome
-              objetivos={objetivos}
-              rendaFixaMensal={rendaFixaMes}
-              onObjetivoCriado={carregar}
-              onErro={(mensagem) => setErro(mensagem)}
-            />
+            <div className="order-2">
+              <ObjetivosResumoHome
+                objetivos={objetivos}
+                rendaFixaMensal={rendaFixaMes}
+                onObjetivoCriado={carregar}
+                onErro={(mensagem) => setErro(mensagem)}
+              />
+            </div>
 
             {/* Últimas despesas */}
-            <section className="rounded-lg border border-grouper-sky/20 bg-white p-5 shadow-sm">
+            <section className="order-3 rounded-lg border border-grouper-sky/20 bg-white p-5 shadow-sm">
               <h2 className="mb-2 font-display text-lg font-semibold text-grouper-ink">
                 Últimas despesas
               </h2>
@@ -376,11 +452,24 @@ export function HomePage() {
             </section>
           </div>
 
-          {/* Coluna direita (mais estreita): Economia + gráfico + CDB + Plano de contenção */}
-          <div className="space-y-4">
-            <EconomiaDestaque valor={economia} renda={renda} variacaoPercentual={variacaoEconomia} />
+          {/* Coluna direita (mais estreita) em lg+: Economia + gráfico + CDB.
+              Mesmo esquema de `contents` da coluna esquerda acima. */}
+          <div className="contents lg:block lg:space-y-4">
+            {/* Desktop: card de Economia do mês — no mobile quem cobre isso
+                é a aba "Economia" do seletor lá em cima. */}
+            <div className="hidden lg:block">
+              <EconomiaDestaque
+                valor={economia}
+                renda={renda}
+                variacaoPercentual={variacaoEconomia}
+              />
+            </div>
 
-            <section className="rounded-lg border border-grouper-sky/20 bg-white p-4 shadow-sm">
+            {/* "Economia nos últimos meses": fica ANTES do CDB no DOM (pra
+                manter a ordem visual de sempre em lg+, onde `order` não
+                tem efeito), mas com `order-5` — o maior de todos — pra
+                aparecer por último no mobile, depois do CDB (`order-4`). */}
+            <section className="order-5 rounded-lg border border-grouper-sky/20 bg-white p-4 shadow-sm">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <h2 className="font-display text-lg font-semibold text-grouper-ink">
                   Economia nos últimos meses
@@ -400,8 +489,11 @@ export function HomePage() {
             </section>
 
             {/* Investimento CDB: só o que dá pra calcular automaticamente.
-                Só conta como renda no mês em que for resgatado. */}
-            <section className="rounded-lg border border-grouper-sky/20 bg-white p-5 shadow-sm">
+                Só conta como renda no mês em que for resgatado. Aparece
+                antes do gráfico no mobile (`order-4` < `order-5` acima);
+                em lg+ mantém a posição de sempre (depois do gráfico, por
+                estar depois dele no DOM). */}
+            <section className="order-4 rounded-lg border border-grouper-sky/20 bg-white p-5 shadow-sm">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="font-display text-lg font-semibold text-grouper-ink">
                   Investimento CDB
