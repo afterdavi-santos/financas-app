@@ -799,3 +799,211 @@ passa a refletir a posição do CDB → tentar aportar manualmente deve estar
 escondido → "Gerenciar vínculo" → "Desvincular" → aportar volta a aparecer;
 também testar excluir o CDB vinculado e confirmar que o objetivo volta a ficar
 livre, sem erro).
+
+## Parte 10 — Configurações (perfil), correção de bug crítico de navegação e Leitor de fatura Nubank
+
+Sessão longa com três frentes: (1) página de Configurações pra editar dados
+pessoais/senha/foto; (2) um bug sério de navegação (tela travava trocando de
+aba rápido) que só apareceu depois de testar ao vivo com o Claude in Chrome;
+(3) o leitor de fatura do Nubank (item que estava no backlog como "PDF",
+saiu como CSV — bem mais simples).
+
+### Configurações (perfil do usuário)
+Aba nova na sidebar, **fora do bloco de navegação principal** (no rodapé,
+acima de "Sair"). Backend: `UsuarioController`/`UsuarioService` (ver
+`service-layer.md`/`controller-layer.md`). Frontend:
+- `context/PerfilContext.tsx` (novo) — busca o perfil uma vez ao montar
+  `Layout` (não remonta a cada navegação), expõe `{ perfil, carregando,
+  recarregar }`. Diferente do `AuthContext` (só guarda o token, sem fetch).
+- `components/Avatar.tsx` (novo, compartilhado) — mostra a foto (data URI) ou
+  as iniciais do nome; prop `tamanho` (`sm`/`lg`) e prop `menu` (usada nos
+  cabeçalhos da Home/Movimentações): clicar abre um popup com "Editar perfil"
+  que navega pra `/configuracoes` (fecha sozinho ao clicar fora ou Esc —
+  **não** é mais um link direto, virou um menu por pedido do usuário).
+- `pages/ConfiguracoesPage.tsx` (novo) — cartão de identidade no topo (avatar
+  grande com botão de câmera sobreposto, clique abre o seletor de arquivo
+  direto) + 2 cards lado a lado ("Dados pessoais", "Alterar senha"). Trocar
+  senha ou e-mail exige digitar a senha atual. Validação de nova senha igual
+  à atual, tanto no cliente quanto no backend (`OperacaoInvalidaException`).
+- **Bug corrigido no caminho**: o interceptor do axios (`api/client.ts`)
+  tratava QUALQUER 401 fora de `/auth/*` como sessão expirada e deslogava —
+  como "senha atual inválida" também é 401, digitar a senha errada em
+  Configurações deslogava o usuário à força em vez de mostrar o erro no
+  formulário. Corrigido excluindo `/perfil` do logout automático (mesmo
+  tratamento que `/auth/*` já tinha).
+- **Bug corrigido no caminho (Hibernate)**: `Usuario.foto` foi criada como
+  `@Lob private byte[]` — combinação clássica que faz o Hibernate tentar usar
+  a API de LOB do JDBC (em vez de `setBytes` simples), e o driver do Postgres
+  rejeita esse binding em **qualquer** save de `Usuario` (não só ao mandar
+  foto — nome/e-mail/senha quebravam junto). Corrigido removendo `@Lob`
+  (Hibernate 6 já mapeia `byte[]` pra `bytea` sozinho).
+
+### Bug crítico: tela travava trocando de aba rápido
+Reportado como "clico rápido entre as abas e a tela trava, mas a URL muda".
+Reproduzido **ao vivo com o Claude in Chrome** (o usuário autorizou o uso
+pontual, fora do padrão normal de não testar UI). Console mostrou milhares de
+`Maximum update depth exceeded` — um loop infinito de render, não um
+problema de portal/transição como a hipótese inicial (baseada só em leitura
+de código) sugeria.
+
+**Causa raiz**: `NovaCategoriaModal.tsx` (`outrasCategorias =
+categorias.filter(...)`) e `PlanejamentoLimites.tsx` (`categoriasSemLimite =
+categorias.filter(...)`) recriavam um array novo a cada render, passado pro
+hook `useCategoriasSemelhantes` — cujo `useEffect` depende desse array por
+referência. Como esses modais ficam **sempre montados** (só escondidos com
+`aberto={false}`), e são renderizados toda vez que `PlanejamentoCategorias`/
+`PlanejamentoLimites` montam (ida à página de Planejamento), o ciclo
+render→novo array→efeito dispara→`setState`→render de novo virava um loop
+infinito, travando o React bem na hora de trocar de página.
+
+**Correção**: `useMemo` nos dois arrays, com as dependências certas. Sem
+mudar o hook nem o `Modal.tsx` — só a instabilidade dos dois call sites.
+Validado ao vivo repetindo o mesmo teste (clicar rápido entre todas as
+abas várias vezes) — zero erros no console depois do fix.
+
+### Leitor de fatura Nubank (CSV)
+Pedido do usuário: importar despesas em massa a partir da fatura do cartão.
+Descoberta importante no meio do processo: **o Nubank exporta a fatura em
+CSV**, então nada de PDFBox/OCR — só um parser de CSV (Apache Commons CSV).
+Ver `service-layer.md`/`controller-layer.md` pro desenho do backend
+(`LeituraFaturaService`, `ParserFaturaNubank`, `DetectorDuplicidadeFatura`,
+`DespesaService.criarEmLote`).
+
+- Botão **"Leitor de fatura"** na Home, entre o seletor de mês e "+ Adicionar
+  renda". Precisou de um ajuste de layout: a área de ações do cabeçalho
+  estava presa em 1/3 da largura do grid (`lg:col-span-1`, alinhamento fino
+  pensado só pra 3 itens); com o 4º botão não cabia mais. Virou
+  `lg:col-span-2` (título "Início" cede espaço, é curto) + `justify-end` (em
+  vez de `justify-between`, que deixava um vão grande no meio) pra
+  botões+avatar ficarem colados na borda direita.
+- `components/LeitorFaturaModal.tsx` (novo, `Modal` `max-w-4xl`) — 3 passos:
+  1. **Upload**: input de arquivo escondido, valida `.csv`/2MB no cliente.
+  2. **Revisão**: tabela com checkbox por linha (suspeitas de duplicata
+     começam desmarcadas, badge colorido por nível — reaproveita o padrão de
+     "degraus de cor por severidade" de `utils/cores.ts`). Itens ignorados
+     (estorno/reembolso/pagamento, valor ≤ 0 no CSV) aparecem numa seção
+     recolhível separada, só leitura — não desaparecem silenciosamente.
+     **Interruptor único "Juntar despesas equivalentes"** no topo da lista
+     (não um botão por linha — mudança de design a pedido do usuário): liga
+     junta TODOS os grupos de mesma descrição de uma vez (soma dos valores,
+     data mais recente), desliga volta tudo pra linhas individuais.
+  3. **Categorização em lote**: escolhe uma categoria no topo (com opção de
+     criar nova inline, reaproveitando `SeletorCategoria`/`OPCAO_NOVA_CATEGORIA`
+     do `NovaDespesaModal.tsx`), marca quais itens levam ela, "Aplicar" — os
+     itens aplicados somem da lista de trabalho (não aparecem de novo), até
+     zerar. Salva tudo de uma vez em `POST /despesas/lote`.
+- `types/leituraFatura.ts`, `api/leituraFatura.ts` (novo módulo),
+  `api/despesas.ts` ganhou `criarDespesasEmLote`. `utils/cores.ts` ganhou
+  `corNivelDuplicata`.
+
+### Verificação
+Backend: `mvnw test` → **228 testes verdes** (novos: `ParserFaturaNubankTest`
+com casos sintéticos calibrados contra um CSV real de exemplo fornecido pelo
+usuário — sem persistir dados financeiros reais no repositório —,
+`DetectorDuplicidadeFaturaTest`, `LeituraFaturaServiceTest`,
+`LeituraFaturaControllerTest`, mais testes de `criarEmLote` em
+`DespesaServiceTest`). Frontend: `npm run build`/`npm run lint` limpos.
+**Falta testar o fluxo completo do leitor de fatura no navegador** com uma
+fatura real (upload → revisão → junção → categorização em lote → salvar →
+conferir na Home/Movimentações).
+
+## Parte 11 — Ajustes de layout do cabeçalho, leitor de fatura em Despesas, e correções no leitor de fatura (2026-08-07)
+
+Sessão de ajustes finos a partir de feedback direto testando a Parte 10.
+Backend: `mvnw test` → **230 testes verdes**. Frontend: `npm run build`/`npm
+run lint` limpos a cada mudança, verificado no navegador via Claude in
+Chrome a cada passo (inclusive criando contas de teste descartáveis via
+`curl` pra reproduzir cenários de duplicata sem sujar a conta real do
+usuário).
+
+### Cabeçalho da Home — iteração até o layout final
+Passou por 3 tentativas guiadas pelo usuário vendo cada resultado (ver seção
+4.1 de `home-layout-atual.md` pro estado final):
+1. Avatar subiu pra linha do título, botões numa 2ª linha própria —
+   **revertido** ("desceu a foto, não subiu os botões").
+2. Botões numa linha, avatar de volta pro título — ainda **errado** (usuário
+   queria os botões colados ao avatar, não em linhas separadas).
+3. **Final**: título sozinho na 1ª linha; 2ª linha com seletor de mês +
+   Leitor de fatura + Adicionar renda + Adicionar despesa + avatar, todos no
+   mesmo grupo flex (`gap-3`), avatar sempre por último — layout antigo em
+   `lg:grid-cols-3` (que espremia os controles em 1/3 da largura) foi
+   abandonado por um `flex` de largura livre.
+
+### Leitor de fatura — bugs e melhorias
+- **Bug: categorias existentes não apareciam no seletor da categorização**,
+  só as criadas durante a própria sessão do leitor. Causa: `categoriasLocais`
+  (estado interno do modal) era inicializada de `categorias` só na 1ª
+  montagem do componente — que acontece junto com a página hospedeira, antes
+  da lista real terminar de carregar da API — e nunca mais sincronizava.
+  Fix: `useEffect` resincroniza `categoriasLocais` toda vez que o modal abre
+  (`aberto` vira `true`), não só ao fechar.
+- **Bug: reimportar a mesma fatura não sinalizava duplicata pra despesas já
+  importadas em bloco** (via "Juntar despesas equivalentes"). Dois problemas
+  em cascata no backend, ver `service-layer.md` item 11
+  (`DetectorDuplicidadeFatura`): (1) a comparação ignora agora o sufixo
+  `"(Nx)"` no nome; (2) candidatas em bloco dispensam a checagem de valor
+  exato (o valor salvo é a soma de vários itens). Diagnosticado testando
+  contra o backend real via `curl` com contas descartáveis — no caminho,
+  também descobri que o backend local do usuário (`mvnw spring-boot:run`)
+  estava rodando código desatualizado (não faz hot-reload) **e** bateu no
+  bug de cache incremental do Maven já documentado (`service-layer.md`,
+  "Ambiente local") — precisei matar o processo, `mvnw clean compile`, e
+  subir de novo pro fix realmente entrar em vigor.
+- **Juntar despesas de meses diferentes**: decisão de produto discutida com
+  o usuário. Primeiro implementei "não junta entre meses" (grupo por
+  descrição+mês); o usuário esclareceu que quis a opção mais elaborada: a
+  tela de revisão junta visualmente **mesmo cruzando meses** (facilita
+  selecionar/categorizar tudo de uma vez), mas a tela de categorização
+  **expande de volta em uma linha por mês** — cada mês vira sua própria
+  despesa ao salvar, sem cair tudo somado num mês só. Implementado com
+  `expandirParaMeses()`: a linha juntada da revisão guarda os itens
+  originais (`mesclado.itensOriginais`); ao avançar pra categorização, cada
+  grupo é reagrupado por `data.slice(0,7)` e vira uma `LinhaExibida` própria
+  (com seu próprio `(Nx)` se aquele mês específico tinha 2+ itens). Testado
+  ponta a ponta: 3 lançamentos "Uber" (1 julho + 2 agosto) → juntam em
+  "Uber (3x)" na revisão → aparecem como 2 linhas na categorização → salvam
+  como 2 despesas reais, uma por mês (confirmado via `GET /despesas`).
+- **Botão "Juntar despesas equivalentes"** ganhou mais destaque (pedido
+  direto do usuário): trocado de checkbox+label discreto para um botão
+  Khand caixa alta — contorno azul quando desligado, preenchido `grouper-mid`
+  sólido com "✓" quando ligado.
+- **Tela de categorização**: reorganizada em 2 colunas a partir de `lg`
+  (pedido do usuário) — lista de despesas à **esquerda** (`flex-1`), painel
+  de categoria (seletor + campos de nova categoria + botão "Aplicar") à
+  **direita** (`lg:w-64`, largura fixa). Empilha no mobile.
+- **Botão "Voltar"** em todas as etapas (upload não tem, é a primeira):
+  Revisão → volta pro Upload; Categorização → volta pra Revisão.
+- **Confirmação ao fechar em andamento**: popup de aviso **próprio** (não o
+  `confirm()` nativo do navegador, pedido explícito do usuário) sobreposto
+  ao modal — pergunta antes de descartar uma leitura já em progresso. Cobre
+  fechar pelo X, Esc ou clique fora (todos passam pelo mesmo `onClose` do
+  `Modal` genérico); só pergunta se já há algo em andamento (etapa além do
+  upload, ou arquivo já processado) — fechar a tela de upload vazia fecha
+  direto.
+
+### Leitor de fatura também na aba Despesas de Movimentações
+Botão idêntico ao da Home (mesmo `LeitorFaturaModal.tsx`, reaproveitado sem
+duplicar código) adicionado em `DespesasPage.tsx`, entre o seletor de mês e
+"+ Adicionar despesa" — ver `movimentacoes-layout-atual.md` seção 4.
+
+### Data/mês pré-selecionados nos modais de novo lançamento
+Pedido do usuário: abrir "Nova despesa"/"Nova renda" a partir de uma tela com
+seletor de mês deve preencher a data/mês do formulário com o **mês em foco**
+daquela tela, não sempre hoje/mês atual (`DespesasPage` já fazia isso; faltava
+`HomePage` e `RendasPage`).
+- `NovaRendaModal` ganhou a prop opcional `mesPadrao` ("YYYY-MM"), usada como
+  valor inicial do campo "Mês" (sem ela, cai no mês atual, comportamento
+  antigo preservado).
+- `HomePage.tsx` passa `dataPadrao` (helper já existia, só faltava plugar) pro
+  `NovaDespesaModal` e `mesPadrao={mes}` pro `NovaRendaModal`.
+- `RendasPage.tsx` passa `mesPadrao={mes}` pro `NovaRendaModal`.
+
+### Verificação
+Backend: `mvnw test` → 230 testes verdes (2 novos em
+`DetectorDuplicidadeFaturaTest` cobrindo o caso de bloco). Frontend:
+`npm run build`/`npm run lint` limpos. Testado no navegador via Claude in
+Chrome a cada mudança: layout do cabeçalho da Home, sincronização de
+categorias no leitor, junção cruzando meses expandindo por mês na
+categorização (confirmado via API que salva 2 despesas separadas), botão de
+leitor de fatura na aba Despesas de Movimentações, pré-seleção de mês/data
+nos 3 pontos (Home despesa/renda, Rendas).

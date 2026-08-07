@@ -106,6 +106,13 @@ Esse é o ponto mais incomum da implementação, vale documentar bem:
   formato `"YYYY-MM"`. Em Rendas isso é **novo** — antes a lista mostrava
   todas as rendas de todos os meses; agora filtra por `mesReferencia` (client-
   side, já que a API não filtra por mês) igual Despesas já fazia.
+- **Aba Despesas** ganhou o botão **Leitor de fatura** entre o seletor de mês
+  e "+ Adicionar despesa" (mesmo `LeitorFaturaModal.tsx` da Home, ver
+  `frontend-home.md` Parte 10/11) — reaproveita `categorias` e `carregar()`
+  já existentes na página, sem estado novo além do `modalLeitorFatura`.
+- Os modais de nova despesa/renda abertos por essas duas abas já vêm com a
+  **data/mês pré-selecionados no mês em foco daquela aba** (`dataPadrao`/
+  `mesPadrao`), não sempre hoje/mês atual — mesmo padrão da Home.
 
 ## 5. Avatar placeholder
 

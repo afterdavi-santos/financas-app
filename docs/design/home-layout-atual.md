@@ -77,6 +77,10 @@ Arquivos principais:
 | `frontend/src/utils/contencaoRendaVariavel.ts` | `planoContencao()` (cálculo do plano) + `dificuldadeContencao()` (0 a 1, usada por `corEscalaDificuldade`) |
 | `frontend/src/components/PageHeader.tsx` | Cabeçalho padrão de outras páginas (Home tem o seu próprio, inline) |
 | `frontend/src/components/SimularDespesaModal.tsx` | **Órfão no momento** — não é mais chamado por nenhuma página (o botão "Simular despesa" foi removido da Home); o componente continua no repo mas sem callers |
+| `frontend/src/components/Avatar.tsx` | Avatar compartilhado (Home/Movimentações) — foto ou iniciais, prop `menu` abre popup "Editar perfil" |
+| `frontend/src/context/PerfilContext.tsx` | Dados do usuário logado (nome/email/foto), buscados uma vez ao montar o `Layout` — ver `frontend-home.md` Parte 10 |
+| `frontend/src/pages/ConfiguracoesPage.tsx` | Página de perfil (dados pessoais, senha, foto) — ver `frontend-home.md` Parte 10 |
+| `frontend/src/components/LeitorFaturaModal.tsx` | Importação de despesas via CSV da fatura Nubank (upload → revisão → categorização em lote) — ver `frontend-home.md` Parte 10 |
 
 ## 1.1 Menu lateral — item "Relatórios" removido
 
@@ -105,6 +109,12 @@ agora tem só 3 itens: Início, Movimentações, Planejamento.
 - Layout em flex: sidebar fixa à esquerda + área principal ocupando o resto.
 - Fundo da página: `grouper-mist` (quase branco, com leve tingimento azul).
 - **A sidebar não é responsiva**: não colapsa, não vira menu hambúrguer, não some no celular. Está sempre visível e ocupa sempre 240px.
+- **Altura própria travada na tela** (`sticky top-0 h-screen`, era `min-h-screen`):
+  antes, se o conteúdo ao lado (`<main>`) fosse mais alto que a tela (ex.:
+  Configurações, com vários cards), a sidebar esticava junto (comportamento
+  padrão do flex), empurrando o rodapé ("Sair") pra fora da área visível —
+  só aparecia rolando a página inteira. Agora a sidebar fica sempre do
+  tamanho da tela, grudada no topo, com scroll independente do `<main>`.
 - **A Home é full-width** (`w-full`, sem `mx-auto`/`max-w`) — Movimentações
   também usa o grid de colunas (ver `movimentacoes-layout-atual.md`);
   Planejamento usa um grid de 3 blocos próprio com altura fixa (ver seção 6).
@@ -127,7 +137,7 @@ De cima para baixo:
      interfere no clique dos links). Cobre a largura toda da sidebar (240px)
      e a altura toda do bloco de nav — do fim do bloco do logo até o início
      do bloco do "Sair" (ver 3 abaixo), que fica de fora (é uma `<div>`
-     separada, fora do `<nav>`). Como a sidebar é `min-h-screen` e o nav é
+     separada, fora do `<nav>`). Como a sidebar é `h-screen` e o nav é
      `flex-1`, essa altura varia com a tela do usuário (não é um valor fixo).
    - **Lista de navegação**, em `z-10` acima da imagem (senão ela ficaria por
      cima do texto), nesta ordem:
@@ -137,7 +147,11 @@ De cima para baixo:
    - Item ativo (página atual): fundo `grouper-mid` (azul médio), texto branco.
    - Itens inativos: texto branco 70% opaco, fica branco sólido com fundo branco 10% ao passar o mouse.
    - (O código já tem suporte para itens desabilitados/"em breve", mas hoje todos estão ativos.)
-3. **Rodapé** — separado por uma linha, com o botão "Sair" ocupando a largura toda.
+3. **Rodapé** — separado por uma linha, **fora do bloco de navegação
+   principal** (não tem a lógica de "em breve" dos itens acima): item
+   **"Configurações"** (mesmo tratamento visual de active/hover dos itens do
+   menu, navega pra `/configuracoes` — ver `frontend-home.md` Parte 10) e,
+   abaixo, o botão "Sair", ambos ocupando a largura toda.
 
 ## 4. Tela Home — layout full-width em 2 colunas
 
@@ -149,15 +163,15 @@ esquerda com `lg:col-span-2` — proporção ~2:1), que empilha em 1 coluna só 
 telas estreitas (`grid-cols-1` abaixo do breakpoint `lg`).
 
 ### 4.1 Cabeçalho
-- Não é mais um `flex` simples: é um `grid grid-cols-1 lg:grid-cols-3` — o **mesmo
-  template de colunas do corpo da página** (seção 4 intro) — pra alinhar
-  visualmente com o grid de baixo.
-  - Título "Início" (fonte Khand) ocupa `lg:col-span-2` (alinhado com a coluna
-    esquerda).
-  - O bloco de ações ocupa a 3ª coluna (`lg:col-span-1`, implícito), então os
-    **botões começam exatamente onde o card "Economia do mês" começa** logo
-    abaixo, e o avatar (ver abaixo) fica na borda direita da página.
-- **Seletor de mês + 2 botões de ação**, nesta ordem:
+- **Uma única linha** (`flex flex-wrap items-center justify-between`, sem
+  grid de colunas — abandonado o `lg:grid-cols-3` que a área de ações usava
+  antes, ficava apertada demais com 4 controles + avatar disputando 1/3 da
+  largura): título "Início" na ponta esquerda, e o grupo inteiro de
+  controles + avatar na ponta direita, colados uns nos outros
+  (`lg:gap-3`) — o avatar sempre no canto superior direito da página,
+  imediatamente após o último botão.
+- **Seletor de mês + 3 botões + avatar**, nessa ordem, todos no mesmo grupo à
+  direita:
   1. **Seletor de mês** (`<input type="month">`, "cara de botão" — borda
      dupla `grouper-mid`, fundo branco, Khand `font-semibold` **caixa alta
      com tracking** (`uppercase tracking-wide`, mesmo tratamento Khand dos
@@ -172,27 +186,32 @@ telas estreitas (`grid-cols-1` abaixo do breakpoint `lg`).
      quebrar os cálculos do mês. Define o **mês em foco** (estado `mes`,
      padrão o mês atual): todos os cards, a lista e o gráfico da Home
      mostram dados desse mês, não necessariamente "hoje". Largura fixa
-     `w-36` (144px) — encaixado no espaço que já era reservado como padding
-     vazio antes dos botões (`pl-44` virou `pl-6`: 24px + 144px do input +
-     8px do `gap-2` = 176px, os mesmos 44×4px de antes), então "+ Adicionar
-     renda" continua exatamente na mesma posição de antes.
-  2. **+ Adicionar renda** (Khand, caixa alta, tracking, `font-semibold`,
+     `w-36` (144px).
+  2. **Leitor de fatura** (`grouper-deep` sólido, hover `grouper-ink` — abre
+     o `LeitorFaturaModal` de importação da fatura Nubank via CSV, ver
+     `frontend-home.md` Parte 10; o mesmo botão também existe na aba
+     Despesas de Movimentações, ver `movimentacoes-layout-atual.md`).
+  3. **+ Adicionar renda** (Khand, caixa alta, tracking, `font-semibold`,
      `grouper-mid` sólido)
-  3. **+ Adicionar despesa** (idem, `grouper-ink` sólido)
-- **Avatar placeholder**: círculo `grouper-ink` de 40px (`h-10 w-10`) no canto
-  superior direito, vazio por enquanto — reservado para a futura foto de
-  perfil do usuário.
+  4. **+ Adicionar despesa** (idem, `grouper-ink` sólido)
+  5. **Avatar** (`components/Avatar.tsx`, compartilhado com Movimentações):
+     círculo de 40px (`h-10 w-10`) mostrando a foto de perfil (se houver) ou
+     as iniciais do nome. Clicar abre um pequeno menu ("Editar perfil" →
+     navega pra `/configuracoes`), fecha ao clicar fora ou Esc.
+- As despesas/renda de nova despesa/renda abertas por esses botões já vêm com
+  a **data/mês pré-selecionados no mês em foco** (`dataPadrao`/`mesPadrao`),
+  não sempre hoje/mês atual — mesmo padrão em Despesas e Rendas de
+  Movimentações.
 - As caixinhas de **Renda do mês / Despesas do mês** viraram `StatCard`s no
   topo da coluna esquerda (ver 4.4.1) — mostram o mês em foco, não sempre o
   mês atual.
 
 #### 4.1.1 No mobile (abaixo de `lg`) o cabeçalho muda de forma
 
-- **Título + avatar** dividem a mesma linha (avatar ao lado de "Início",
-  não mais isolado lá embaixo) — em `lg`+ o avatar volta pra ponta direita
-  da página, como descrito acima.
-- **Seletor de mês + os 2 botões** empilham em largura total, cada um numa
-  linha — em `lg`+ voltam a ficar lado a lado.
+- **Título sozinho na primeira linha.**
+- **Seletor de mês + os 3 botões + avatar** empilham em largura total, cada
+  um numa linha — em `lg`+ voltam a ficar lado a lado, colados, como descrito
+  acima.
 
 Detalhes técnicos e o "porquê" em `docs/design/a11y-e-responsividade.md`
 (seção 2.2) — o mesmo padrão foi replicado em Movimentações (ver
@@ -441,7 +460,6 @@ e o pop-up de Plano de contenção.
 - Movimentações já ganhou o mesmo grid full-width da Home (ver `movimentacoes-layout-atual.md`); Planejamento usa um layout próprio de 3 blocos com altura fixa (ver seção 6 daquele contexto) — nenhuma página ficou no wrapper antigo `mx-auto max-w-4xl`.
 - Alguns modais ainda não foram repaginados: `ResgatarCdbModal`, `InvestirMaisModal`, `VincularInvestimentoModal` (ver 4.6).
 - `frontend/src/components/SimularDespesaModal.tsx` continua **órfão** (sem nenhum caller) desde que o botão "Simular despesa" saiu da Home — considerar remover o arquivo ou religar a função em outro lugar.
-- O avatar do cabeçalho (4.1) é só um círculo vazio por enquanto — falta decidir de onde vem a foto/iniciais do usuário quando for implementado de verdade.
 - A imagem de fundo do menu lateral (ver seção 3) tem um nome de arquivo genérico (hash), sem otimização de tamanho — se o app crescer, vale renomear/comprimir.
 
 ## 7. Como pedir mudanças de design a partir de agora
