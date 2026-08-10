@@ -63,10 +63,20 @@ superior) toda vez que troca de página.
 
 ### 1.5 Checklist pra código novo
 
-- Botão só com ícone → sempre `aria-label` (e `title` se quiser tooltip
-  nativo).
+- Botão só com ícone → sempre `aria-label` **e** `components/Tooltip.tsx`
+  (não o atributo `title` nativo — sua cor é controlada pelo SO/tema do
+  navegador, não estilizável via CSS; ver `frontend-home.md` Parte 14). O
+  `Tooltip` já cobre hover e foco por teclado (`focus-within`) sozinho; use a
+  prop `posicao="direita"` quando o gatilho ficar na ponta direita de uma
+  lista com `overflow-y-auto`, senão o balão vaza pra fora clipado. Mesma
+  ideia no eixo vertical: use `vertical="baixo"` (2026-08-10) no **primeiro
+  item** de uma lista com rolagem própria, senão o balão (que abre pra cima
+  por padrão) fica cortado por não ter espaço acima dentro do container.
 - Novo overlay/popover → reaproveitar `Modal.tsx` quando fizer sentido, em
-  vez de reinventar fechar-por-Esc/backdrop.
+  vez de reinventar fechar-por-Esc/backdrop. Pra uma confirmação simples
+  ("Excluir X?"), reaproveitar `components/ConfirmacaoModal.tsx`
+  (2026-08-10) em vez do `confirm()` nativo do navegador — já sai com a
+  borda padrão e um estado de "confirmando..." enquanto a ação roda.
 - Nunca usar `outline-none` num elemento focável sem colocar outro
   indicador de foco visível no lugar (ring, borda, fundo).
 - Contraste de texto: os tons já usados no brandbook (`grouper-ink`,

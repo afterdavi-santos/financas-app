@@ -1189,3 +1189,309 @@ navegador** com o backend reiniciado: subir uma fatura cruzando dois meses
 de calendário e conferir que tudo cai no mês selecionado, e reimportar a
 mesma fatura conferindo que a cor de duplicata aparece certa nos dois
 casos (ALTISSIMA/ALTA/BLOCO em vermelho, tonalidades diferentes).
+
+## Parte 14 — Troca de fonte pra Inter, tooltip próprio do app, e ajustes finos de UI (2026-08-10)
+
+Sessão só de frontend, iterando com o usuário vendo cada resultado. Sem
+mudança de backend. `npm run build`/`npm run lint` limpos a cada mudança.
+
+### Fonte: Khand → Inter (teste do usuário)
+- `frontend/index.html` — import do Google Fonts ganhou `Inter:wght@400;
+  500;600;700` ao lado de Khand/Hind (Khand manteve o import, só não é mais
+  referenciada em nenhum token, caso o usuário queira reverter).
+- `frontend/src/index.css` — `--font-display: "Inter", sans-serif;` (era
+  `"Khand"`). Como o *token* (`font-display`) continua com o mesmo nome,
+  nenhum caller no app precisou ser tocado — só o valor do token mudou.
+- **Efeito colateral**: a Inter não é condensada como a Khand era, então
+  texto em `uppercase tracking-wide` (que antes cabia bem em Khand) passou a
+  ficar largo demais em botões menores e no seletor de mês. Dois ajustes:
+  1. **Caixa alta restrita aos botões "superiores"**: só os botões de topo
+     de cada página (seletor de mês, "Leitor de fatura", "+ Adicionar
+     renda/despesa" — Home, Despesas, Rendas) continuam com
+     `uppercase tracking-wide`. Todos os outros ~50 botões do app (abas,
+     botões secundários por seção, todos os de dentro de modal, Sidebar,
+     Configurações) tiveram `uppercase tracking-wide` removido — mudança
+     mecânica em 22 arquivos, sem tocar em elementos que são só *label*
+     (texto de `StatCard`/`EconomiaDestaque`, badge "em breve" da Sidebar),
+     que continuam em caixa alta por não serem botão.
+  2. **Seletor de mês mais largo**: `w-36` (144px) → `w-44` (176px) nas 3
+     páginas que o usam (Home, Despesas, Rendas) — o texto do mês não cabia
+     mais na largura antiga.
+
+### Borda azul-marinho em todo popup
+Pedido do usuário: "quero que todo pop up tenha a borda azul que o leitor de
+fatura tem" (`border-2 border-grouper-ink`, que já era exclusiva do
+`LeitorFaturaModal` via prop `classeCard`). Virou o **valor padrão** de
+`classeCard` em `Modal.tsx` — propaga sozinho pros ~15 modais que usam o
+componente genérico, sem precisar editar cada um. `LeitorFaturaModal` não
+precisa mais passar `classeCard` explicitamente (removida a duplicação). Os
+2 mini-popups de confirmação que vivem dentro do próprio `LeitorFaturaModal`
+(fora do `Modal.tsx`, `role="alertdialog"`) ganharam a borda à mão, pra não
+ficar inconsistente dentro do mesmo componente.
+
+### Investimento CDB: cor dos botões e remoção do "Resgatar tudo"
+- `ResgatarCdbModal.tsx` e `InvestirMaisModal.tsx` (ainda não totalmente
+  repaginados, ver `home-layout-atual.md` 4.6) tinham os botões de ação
+  principal em `bg-indigo-600` (roxo) — única cor do tipo em todo o app.
+  Trocados pra `bg-grouper-mid`/`hover:bg-grouper-deep`, mesmo azul usado em
+  "Salvar" dos outros modais.
+- **Botão "Resgatar tudo" removido** (pedido do usuário) — junto com todo o
+  fluxo de resgate total (`clicarTudo`, o tipo `Modo`, estado por tipo de
+  ação). `ResgatarCdbModal` ficou só com o resgate parcial (2 cliques:
+  simula → confirma). As funções `resgatarTotalCdb`/`simularResgateTotalCdb`
+  continuam em `api/investimentosCdb.ts` (não mexemos no backend/API, só na
+  UI) — ficam órfãs no frontend por enquanto.
+- Textos soltos (parágrafos explicativos sem fundo/borda) nos popups de
+  investimento (`InvestirMaisModal`, `NovoInvestimentoCdbModal` no aviso de
+  vínculo com objetivo, `VincularInvestimentoModal`) aumentados de `text-xs`
+  pra `text-sm` e escurecidos (`slate-500`→`slate-600`,
+  `grouper-navy/60`→`grouper-navy` sólido) a pedido do usuário.
+
+### Tooltip próprio do app (substitui o `title` nativo)
+Pedido do usuário: tooltips brancos com texto escuro, não pretos com texto
+branco. Causa raiz: os "tooltips" eram o atributo `title` **nativo** do
+navegador — cor controlada pelo SO/tema (Windows em modo escuro renderiza
+como fundo escuro), impossível de estilizar via CSS. Confirmado com o
+usuário (pergunta direta) que a solução certa era um componente próprio, não
+uma tentativa de recolorir o nativo.
+
+- **`components/Tooltip.tsx`** (novo) — só CSS/Tailwind, sem lib nova (mesmo
+  espírito do resto do app): `<span className="group/tooltip relative
+  inline-flex">` envolvendo o gatilho + um balão absoluto
+  (`bg-white text-grouper-ink`, `role="tooltip"`), visível em
+  `group-hover/tooltip` **e** `group-focus-within/tooltip` (pra continuar
+  acessível por teclado). Substituiu os 22 usos de `title=` em 9 arquivos
+  (Editar/Excluir em Despesas/Rendas/Home/Objetivos/Categorias/Limites,
+  badges "vinculado a", nível de duplicata do leitor de fatura, fixar
+  objetivo, "Mostrar mais/menos categorias"). O `title="Em breve"` da
+  Sidebar só foi removido (texto já visível sem hover, era redundante) — não
+  virou `Tooltip`. A única exceção que não usa o componente é o botão
+  "Alterar foto de perfil" em `ConfiguracoesPage.tsx`: ele já é `absolute`
+  ancorado no wrapper do avatar, e o `Tooltip` (que também é `relative`)
+  quebraria essa âncora — o balão ali é um `<span>` irmão, ligado ao
+  hover/foco do botão via `peer` em vez do `group/tooltip` interno.
+- **Prop `posicao`** (`"centro"` padrão | `"direita"`): sem JS medindo a
+  tela, um balão centralizado vaza pra fora quando o gatilho está perto da
+  borda direita de uma lista com `overflow-y-auto` (que também clipa o eixo
+  X, ver `a11y-e-responsividade.md`) — bug relatado pelo usuário ("o clipe
+  do objetivo tá sendo cortado"). `"direita"` alinha a borda direita do
+  balão ao gatilho (cresce só pra esquerda). Aplicado em todo tooltip que
+  fica na ponta direita de uma linha: Editar/Excluir (todas as 7 telas),
+  badge 🔗 de vínculo, alfinete de fixar objetivo, "Mostrar mais/menos
+  categorias". Deixado `"centro"` só no badge de duplicata do leitor de
+  fatura (não fica preso numa borda fixa).
+- **Bug: tooltip preso na tela até outro clique** — reportado pelo usuário
+  no botão de fixar objetivo. Causa: o botão ganha foco ao ser CLICADO (não
+  só via Tab), e o tooltip usa `focus-within` pra continuar visível em
+  navegação por teclado — então um clique de mouse prendia o balão até outro
+  clique tirar o foco. Fix: `onMouseLeave` no wrapper chama `.blur()` no
+  `document.activeElement` se ele estiver dentro do próprio tooltip — cobre
+  só o caso de foco vindo de mouse (navegação por Tab nunca dispara
+  `mouseleave` no meio do processo, então continua funcionando normal).
+
+### Bug: limite de objetivos fixados nunca esvaziava
+Reportado pelo usuário: não conseguia mais fixar nenhum objetivo, "como se
+já tivesse 2 fixados" — suspeita de que quebrou ao excluir um objetivo
+fixado. Confirmado: `ObjetivosResumoHome.tsx` lia o Set de ids fixados do
+`localStorage` (`financas.objetivosFixadosHome`) uma única vez ao montar
+(`useState(lerFixados)`) e nunca removia um id de lá quando o objetivo
+correspondente era excluído (individual ou em lote) — o id órfão ficava
+contando pro limite de `MAX_FIXADOS` (2) pra sempre. Fix: novo `useEffect`
+que roda toda vez que a prop `objetivos` muda, removendo do Set qualquer id
+que não exista mais na lista atual (e persistindo a limpeza de volta no
+`localStorage`). Autocorretivo — não precisa de nenhuma ação manual no
+`localStorage` do usuário, a primeira vez que a Home recarregar com a lista
+de objetivos já limpa o que estiver órfão.
+
+### Verificação
+Só frontend, mudanças de estilo/comportamento — usuário testa visualmente
+ele mesmo. `npm run build`/`npm run lint` limpos a cada mudança (só os
+avisos pré-existentes de `AuthContext`/`PerfilContext`). **Falta o usuário
+conferir visualmente**: fonte Inter nos títulos/botões, botões secundários
+sem caixa alta, borda azul nos popups, cor dos botões Resgatar/Investir,
+tooltips brancos não cortando nas bordas e sumindo ao tirar o mouse, e
+fixar/desafixar objetivos funcionando de novo após excluir um fixado.
+
+## Parte 15 — Popups no lugar de confirm()/alert(), gráfico por categoria, unicidade de categoria, e reorganização de cabeçalhos (2026-08-10)
+
+Sessão longa, maioria frontend + um ajuste pontual de backend (unicidade de
+categoria). `npm run build`/`npm run lint` limpos a cada mudança;
+`mvnw test` com os novos testes de categoria = 29 verdes nos dois arquivos
+tocados (suíte completa não re-rodada inteira nesta sessão).
+
+### Incentivo do objetivo virou visível
+Campo `incentivo` existia desde a Parte 4 mas nunca aparecia em lugar
+nenhum (só salvo, nunca lido na UI) — achado pelo usuário. Ícone `ⓘ`
+(`IconeInfo`, novo em `IconesInvestimento.tsx`, mesmo estilo SVG de
+Editar/Excluir) ao lado do **título** do objetivo (não mais num canto
+separado — reposicionado a pedido do usuário), com `Tooltip` mostrando o
+texto do incentivo no hover/foco. Só aparece quando `obj.incentivo` existe.
+Aplicado nos dois lugares que listam objetivos: `ObjetivosResumoHome.tsx`
+(Home) e `PlanejamentoObjetivos.tsx`. Primeira tentativa usou emoji 💬, depois
+`ⓘ` em texto puro (não ficava redondo, dependia da fonte) — resolvido com
+SVG próprio + cor mais escura (`text-grouper-navy/70`, hover sólido).
+
+### Todos os `confirm()`/`alert()` nativos viraram popups
+Pedido do usuário: "quero que você troque todos os alertas por popups... com
+a borda padrão que todo popup já tem". Novo componente genérico
+**`components/ConfirmacaoModal.tsx`** (reaproveita `Modal.tsx`, sai com a
+borda `border-2 border-grouper-ink` de graça) — título + mensagem + botão
+Cancelar/Confirmar (variante `perigo` vermelho ou `neutro` azul), com estado
+de "confirmando..." enquanto a ação roda (o `confirm()` nativo bloqueava a
+thread e não tinha como mostrar isso). Substituiu os ~13 `confirm()`
+restantes (os de exclusão de categoria já tinham popup próprio desde a Parte
+7, não mexidos):
+- `DespesasPage.tsx`/`RendasPage.tsx` — excluir individual (com aviso
+  especial se for recorrente) e em lote.
+- `HomePage.tsx` — excluir investimentos CDB selecionados em lote (exclusão
+  individual já usava `ExcluirInvestimentoModal`, não mexido).
+- `LinhaTempoAportesModal.tsx` — remover aporte.
+- `ObjetivosResumoHome.tsx` e `PlanejamentoObjetivos.tsx` — excluir objetivo
+  individual e em lote.
+- `PlanejamentoLimites.tsx` — excluir limite individual e em lote.
+Padrão em todos: estado `confirmandoExclusao: T | "LOTE" | null` guarda o
+que está pendente; a função de exclusão (renomeada pra `confirmarExclusao`)
+perde o `if (!confirm(...)) return` e passa a ser chamada só pelo
+`onConfirmar` do popup.
+
+### Gráfico de barras por categoria em Despesas
+Pedido do usuário: ícone de gráfico ao lado do filtro "Todas" em "Despesas
+por categoria" (Movimentações → Despesas), abrindo um popup com **todas** as
+categorias (não só as visíveis na lista, respeitando o filtro
+Todas/Fixas/Variáveis ativo). Novo `IconeGrafico` (`IconesInvestimento.tsx`)
++ novo `components/GraficoCategoriasModal.tsx` (Recharts `BarChart
+layout="vertical"` — **barras horizontais**, categoria no eixo Y, valor no
+eixo X; a primeira versão saiu com barras verticais por engano, corrigida a
+pedido do usuário). A partir de 10 categorias, rolagem **vertical** dentro do
+popup (altura fixa por categoria, `overflow-y-auto` com `max-height` de 10
+linhas) em vez de espremer as barras.
+
+### Tooltip ganhou posição vertical (`cima`/`baixo`)
+Bug relatado: passar o mouse no lápis/X do **primeiro** item de uma lista
+com rolagem própria (`overflow-y-auto`) cortava o balão, porque ele abre
+`bottom-full` (pra cima) por padrão e não há espaço acima dentro do
+container clipado. `Tooltip.tsx` ganhou prop `vertical` (`"cima"` padrão |
+`"baixo"`), mesmo raciocínio já usado pra `posicao="direita"` (evitar vazar
+pra fora de um container com scroll). Aplicado no primeiro item (`indice ===
+0`) de todas as listas afetadas: Despesas, Rendas, Investimento CDB,
+Objetivos (Home e Planejamento), Categorias e Limites.
+
+### Fundo decorativo da Sidebar trocado
+Pedido do usuário: usar `garoupas_fundo_1.png` (uma versão nova da
+ilustração) no lugar do `garoupas_fundo.jpeg` atual. O arquivo **não estava**
+em `frontend/public/brand/` — só foi encontrado dentro de
+`frontend/dist/brand/` (sobra de um build anterior, nunca commitado). Copiado
+pra `public/brand/garoupas_fundo_1.png` e `Sidebar.tsx` atualizado. Heads-up
+dado ao usuário: o PNG novo tem 10,5 MB (era 477 KB a jpeg) — compressão
+ainda não feita, fica como dívida técnica (mesma observação já registrada em
+`home-layout-atual.md` seção 6 sobre o arquivo de fundo).
+
+### Regra de unicidade de categoria (nome + tipo)
+Pedido do usuário: impedir criar/editar uma categoria com o mesmo nome de
+outra já existente **do mesmo tipo** (Fixa/Variável) — duas categorias podem
+ter o mesmo nome se forem de tipos diferentes.
+- **Backend**: nova `CategoriaJaExisteException` (409, registrada no
+  `GlobalExceptionHandler`); `CategoriaRepository` ganhou
+  `existsByNomeIgnoreCaseAndTipoAndUsuarioId` (criar) e a variante
+  `...AndIdNot` (editar, excluindo a própria categoria da checagem);
+  `CategoriaService.criar()`/`atualizar()` validam antes de salvar. Testes
+  novos em `CategoriaServiceTest`/`CategoriaControllerTest` (suíte desses
+  dois arquivos = 29 verdes).
+- **Frontend**: `SeletorCategoria.tsx` (usado em Nova Despesa, Novo Limite,
+  Simular Despesa, Leitor de Fatura) ganhou uma tag colorida com o tipo
+  (Fixa/Variável) na frente do nome de cada opção **só quando há duplicata**
+  (mesmo nome, tipos diferentes) — evita ambiguidade sem poluir a lista
+  normal. O placeholder do campo de busca também mostra o tipo quando a
+  categoria selecionada é ambígua.
+- Texto de aviso em `AvisoCategoriaSemelhante.tsx` ajustado pra explicar a
+  regra nova: "Você pode criar categorias com o mesmo nome, desde que sejam
+  de tipos diferentes." (passou por duas iterações de texto com o usuário).
+
+### Bug: categoria nova só aparecia em Limites após F5
+Reportado pelo usuário: criar uma categoria no bloco "Categorias" de
+Planejamento não atualizava o select de "+ Adicionar limite" no bloco
+"Limites" ao lado — cada bloco busca `listarCategorias()` só uma vez ao
+montar, e são blocos irmãos independentes (sem estado compartilhado nem
+prop drilling). Fix pontual: `PlanejamentoLimites.tsx` ganhou um `useEffect`
+que refaz `listarCategorias()` toda vez que o modal abre (`modalAberto` como
+dependência), então a lista sempre está fresca no momento em que importa.
+Pedido do usuário depois: vasculhar o resto do código atrás do mesmo padrão
+de bug — auditoria (via agente Explore) não achou nenhuma outra ocorrência
+real (Home usa uma única fonte de verdade compartilhada via props;
+Movimentações desmonta de fato a aba inativa; Planejamento/Objetivos não
+compete por investimentos com nenhum irmão). Documentado como possível
+melhoria futura (não implementada): levantar `categorias` pro componente pai
+de Planejamento se mais blocos com esse tipo de dependência cruzada forem
+adicionados.
+
+### Reorganização dos cabeçalhos (Movimentações e Planejamento)
+Pedido do usuário: os botões de cada página deveriam ficar todos na mesma
+linha do título (como a Home já fazia), com o avatar junto — não numa linha
+separada.
+- **`MovimentacoesPage.tsx`**: título "Movimentações" + controles (seletor
+  de mês, "Leitor de fatura", "+ Adicionar despesa/renda", portados via
+  `headerSlot` de `DespesasPage`/`RendasPage`) + avatar agora dividem uma
+  única linha, mesmo padrão da Home (`flex flex-wrap items-center
+  justify-between`). A linha das abas (Despesas | Rendas) ficou sozinha
+  logo abaixo, com sua própria borda inferior — antes ela também carregava
+  os controles e o avatar.
+- **`PlanejamentoPage.tsx`**: os três botões "+ Novo objetivo"/"+ Novo
+  limite"/"+ Nova categoria" (cada um no cabeçalho do seu próprio bloco)
+  sobem pra linha do título "Planejamento", via o mesmo mecanismo de portal
+  (`headerSlot`) que Movimentações já usava — `PlanejamentoObjetivos.tsx`,
+  `PlanejamentoLimites.tsx` e `PlanejamentoCategorias.tsx` ganharam uma prop
+  opcional `headerSlot` (sem ela, o botão cai no cabeçalho local do bloco,
+  fallback igual ao de `DespesasPage`/`RendasPage`). Avatar adicionado
+  (Planejamento não tinha nenhum até então).
+  - **Texto e cor dos botões, num segundo pedido**: "Novo"/"Nova" →
+    "Adicionar" (bate com "+ Adicionar despesa/renda" da Home); estilo
+    trocado do secundário (`text-[13px]`, sem caixa alta) pro estilo de
+    botão "superior" (`uppercase tracking-wide`, `px-4 py-2`, `w-full
+    lg:w-auto`) — já que agora vivem no topo da página, não mais dentro de
+    cada bloco. Cores seguem a mesma ordem dos 3 primeiros botões da Home:
+    Objetivos = `grouper-deep`→`grouper-ink` (como "Leitor de fatura"),
+    Limites = `grouper-mid`→`grouper-deep` (como "+ Adicionar renda"),
+    Categorias = `grouper-ink`→`black` (como "+ Adicionar despesa").
+
+### Planejamento — Limites: valor movido pra baixo da barra
+Pedido do usuário: em cada item do bloco Limites, "R$X de R$Y" ficava em
+cima da barra de progresso (ao lado do nome da categoria); passou pra baixo
+da barra, numa linha com "X% do limite" (esquerda/direita) — mesmo padrão
+que Objetivos já usava pra "R$X de R$Y" / "meta para DD/MM/AAAA".
+
+### Planejamento — Categorias: filtro Todas/Fixas/Variáveis
+Pedido do usuário: mesmo filtro que "Despesas por categoria" (Movimentações)
+já tinha. Chips idênticos (mesmo estilo, mesma lógica) adicionados no
+cabeçalho local do bloco — que agora sobra livre a maior parte do tempo,
+já que o botão "+ Adicionar categoria" foi portado pra linha do título (ver
+acima). Filtra a lista, a mensagem de vazio e o "Selecionar todos" (que
+passa a valer só pros itens visíveis no filtro).
+
+### Despesas — texto de "Ponto de atenção"/"Ponto de motivação"
+Usuário pediu um levantamento de todos os textos possíveis nessa seção
+(documentado aqui pra referência futura, não só no chat):
+- **Ponto de atenção**, categoria subiu: não mostrava o percentual (só
+  R$), diferente de "Ponto de motivação" que já mostrava os dois. Corrigido
+  pra mostrar `(±X%)` também, usando a mesma `textoPct()` já existente.
+- **Ponto de atenção**, ninguém subiu: "Parabéns, Nenhuma categoria..." tinha
+  um "Nenhuma" maiúsculo no meio da frase (typo) — corrigido pra minúsculo.
+- Achado no levantamento (não mexido, é código morto): `textoPct()` trata um
+  caso `"nova"` (categoria sem gasto no mês anterior) que nunca é alcançado
+  na prática, porque `altasOrdenadas`/`baixasOrdenadas`
+  (`utils/despesasResumo.ts`) já excluem categorias com `anterior === 0` da
+  disputa por maior alta/queda.
+
+### Verificação
+Frontend: `npm run build`/`npm run lint` limpos a cada mudança (só os
+avisos pré-existentes de `AuthContext`/`PerfilContext`). Backend: testes
+novos de categoria rodados isoladamente (29 verdes); backend derrubado e
+reiniciado no fim da sessão pra pegar a mudança de unicidade. **Falta o
+usuário conferir visualmente**: tudo desta parte é novo desde a última
+verificação — popups de confirmação, gráfico de categorias (barras
+horizontais + rolagem com 10+), tooltip do primeiro item de cada lista não
+cortando mais, fundo novo da Sidebar, criar categoria duplicada (mesmo nome
++ tipo diferente deve funcionar, mesmo tipo deve barrar), tag de
+Fixa/Variável aparecendo só quando há nome duplicado, cabeçalhos de
+Movimentações/Planejamento numa linha só, cores dos botões de Planejamento,
+layout novo do bloco Limites, filtro de Categorias, e os textos ajustados de
+Ponto de atenção.

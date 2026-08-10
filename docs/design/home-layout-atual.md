@@ -39,9 +39,9 @@ O app já passou por uma repaginação baseada num brandbook próprio. A identid
     verde/vermelho.
 
 - **Tipografia:**
-  - **Khand** (condensada) — títulos, números grandes dos cards, rótulos e botões (estes últimos em caixa alta com tracking, ecoando o specimen do brandbook). Nem todo botão usa esse tratamento — ver seção 5.
-  - **Hind** — texto corrido, descrições, itens de lista, e o valor atual de cada investimento CDB (ver 4.5.3).
-  - Ambas importadas via Google Fonts em `frontend/index.html`.
+  - **Inter** (`font-display`) — títulos, números grandes dos cards, rótulos e botões. Era **Khand** (condensada) até 2026-08-10, trocada a pedido do usuário ("quero testar a fonte Inter") — o token Tailwind `--font-display` continua o mesmo nome, só o valor mudou (`frontend/src/index.css`), então nenhum caller precisou ser tocado. **Caixa alta + tracking** (`uppercase tracking-wide`) ficou restrita aos botões "superiores" de cada página (seletor de mês, "Leitor de fatura", "+ Adicionar renda/despesa" — ver seção 4.1) desde a mesma sessão; todos os outros botões (secundários por seção, modais, abas) passaram a usar capitalização normal, sem `uppercase`, porque a Inter não é condensada como a Khand e o texto em caixa alta ficava largo demais nesses botões menores.
+  - **Hind** (`font-body`) — texto corrido, descrições, itens de lista, e o valor atual de cada investimento CDB (ver 4.5.3).
+  - Ambas importadas via Google Fonts em `frontend/index.html` (o link agora inclui Khand + Hind + Inter — Khand ficou no import por segurança, caso o usuário reverta o teste, mas não é mais referenciada em nenhum token).
 
 - **Logomarca:** SVGs reais da marca em `frontend/public/brand/` — `logomarca-branca.svg` (usada sobre fundo escuro) e `logomarca-preta.svg` (para uso futuro sobre fundo claro).
 
@@ -63,7 +63,7 @@ Arquivos principais:
 | `frontend/src/index.css` | Tokens de cor (`grouper-*`, incluindo `grouper-green`/`grouper-red`) e fonte (`font-display`/`font-body`) |
 | `frontend/public/brand/` | SVGs da logomarca (branca e preta) e `brandbook.pptx` (fonte oficial dos 5 tons de azul) |
 | `frontend/public/brand/palettes/` | Duas paletas de referência (imagens) vermelho→amarelo e verde→amarelo, 7 tons cada — fonte das cores usadas em `utils/cores.ts` |
-| `frontend/public/brand/garoupas_fundo.jpeg` | Ilustração de garoupas estilo gravura de cédula (tema "Grouper") usada como fundo decorativo do bloco de navegação da Sidebar (ver seção 3) |
+| `frontend/public/brand/garoupas_fundo_1.png` | Ilustração de garoupas estilo gravura de cédula (tema "Grouper") usada como fundo decorativo do bloco de navegação da Sidebar (ver seção 3) — era `garoupas_fundo.jpeg` até 2026-08-10, trocada por uma versão nova pedida pelo usuário; o PNG é bem mais pesado (10,5 MB vs 477 KB), sem compressão feita ainda |
 | `frontend/src/components/Layout.tsx` | Casca da aplicação (menu + área de conteúdo) |
 | `frontend/src/components/Sidebar.tsx` | Menu lateral |
 | `frontend/src/pages/HomePage.tsx` | Tela Home |
@@ -130,7 +130,7 @@ De cima para baixo:
    lado), com uma linha separadora abaixo.
 2. **Bloco de navegação** (`<nav>`), com um elemento a mais desde a última
    repaginação:
-   - **Imagem de fundo decorativa**: `frontend/public/brand/garoupas_fundo.jpeg`
+   - **Imagem de fundo decorativa**: `frontend/public/brand/garoupas_fundo_1.png`
      (ilustração de garoupas estilo cédula, ecoando o nome "Grouper"),
      posicionada `absolute inset-0` dentro do `<nav>` (`position: relative`),
      `object-cover`, opacidade 15% (`opacity-15`), `pointer-events-none` (não
@@ -186,7 +186,8 @@ telas estreitas (`grid-cols-1` abaixo do breakpoint `lg`).
      quebrar os cálculos do mês. Define o **mês em foco** (estado `mes`,
      padrão o mês atual): todos os cards, a lista e o gráfico da Home
      mostram dados desse mês, não necessariamente "hoje". Largura fixa
-     `w-36` (144px).
+     `w-44` (176px — era `w-36`/144px até 2026-08-10, aumentada porque a
+     Inter não é condensada como a Khand e o texto do seletor não cabia mais).
   2. **Leitor de fatura** (`grouper-deep` sólido, hover `grouper-ink` — abre
      o `LeitorFaturaModal` de importação da fatura Nubank via CSV, ver
      `frontend-home.md` Parte 10; o mesmo botão também existe na aba
@@ -292,6 +293,12 @@ Detalhes técnicos e o "porquê" em `docs/design/a11y-e-responsividade.md`
   `grouper-mid`; tentar fixar um 3º não faz nada, só mostra tooltip
   explicando o limite). Objetivos fixados vão pro topo da lista. Preferência
   salva só no `localStorage` (`financas.objetivosFixadosHome`).
+- **Incentivo** (2026-08-10): quando o objetivo tem `incentivo` preenchido
+  (campo existia desde a Parte 4 do doc de progresso, mas nunca aparecia em
+  lugar nenhum), um ícone `ⓘ` (`IconeInfo`, SVG próprio, mesmo estilo de
+  Editar/Excluir) aparece ao lado do **título** do objetivo — passar o mouse
+  (ou focar por teclado) mostra o texto do incentivo via `Tooltip`. Mesmo
+  tratamento em `PlanejamentoObjetivos.tsx`.
 - **Divisórias entre itens**: `divide-grouper-sky/45` (era `/15`, bem mais
   clara/quase invisível) — mesmo tom mais escuro usado em todas as listas
   com `divide-y` da Home e de Movimentações.
@@ -419,18 +426,42 @@ Abrem por cima da tela ao clicar nos botões de ação: Nova Despesa, Nova Renda
 Novo Investimento CDB, Novo Objetivo (ver 4.4.2), Resgatar CDB, Investir Mais,
 e o pop-up de Plano de contenção.
 
-- **Repaginados com a identidade da marca** (Khand/Hind + `grouper-*`): Nova
+- **Repaginados com a identidade da marca** (Inter/Hind + `grouper-*`): Nova
   Despesa, Nova Renda, Novo Investimento CDB, Novo Objetivo, e o próprio
   `Modal.tsx` genérico (chrome compartilhado por todos, incluindo o pop-up de
   Plano de contenção). Labels em `grouper-navy`, inputs com borda
-  `grouper-sky/40` e foco `grouper-mid`, botão "Salvar" em `grouper-mid`
-  Khand caixa alta, "Cancelar" em texto `grouper-navy`. Mensagens de erro
-  usam o mesmo padrão de alerta preto do banner de erro da Home (seção 4.3);
-  avisos de sucesso (ex.: "dentro do limite") usam o padrão
-  `border-grouper-mid` + `bg-grouper-mist` do modal de Plano de contenção.
-- **Ainda não repaginados** (continuam com o visual antigo azul/slate padrão
-  do Tailwind): `ResgatarCdbModal`, `InvestirMaisModal`,
-  `VincularInvestimentoModal` — fora do escopo até agora.
+  `grouper-sky/40` e foco `grouper-mid`, botão "Salvar" em `grouper-mid`,
+  "Cancelar" em texto `grouper-navy`. Mensagens de erro usam o mesmo padrão
+  de alerta preto do banner de erro da Home (seção 4.3); avisos de sucesso
+  (ex.: "dentro do limite") usam o padrão `border-grouper-mid` +
+  `bg-grouper-mist` do modal de Plano de contenção.
+- **Borda azul-marinho em todo popup** (2026-08-10): `Modal.tsx` ganhou
+  `border-2 border-grouper-ink` como valor padrão de `classeCard` (era só do
+  `LeitorFaturaModal`, que passava isso explicitamente) — propaga
+  automaticamente pros ~15 modais que usam o componente genérico, sem
+  precisar tocar em cada um. Os 2 mini-popups de confirmação que vivem
+  dentro do próprio `LeitorFaturaModal` (fora do `Modal.tsx`) ganharam a
+  mesma borda à mão, pra ficar consistente.
+- **Ainda não repaginados** (continuam com o visual antigo slate padrão do
+  Tailwind pros labels/inputs): `ResgatarCdbModal`, `InvestirMaisModal`,
+  `VincularInvestimentoModal` — fora do escopo até agora. Só os botões de
+  ação principais (Resgatar/Investir) já foram corrigidos pra
+  `bg-grouper-mid`/`hover:bg-grouper-deep` (2026-08-10, estavam
+  `bg-indigo-600`/roxo, cor que não existe em nenhum outro botão do app);
+  `ResgatarCdbModal` também perdeu o botão "Resgatar tudo" (pedido do
+  usuário) — só resgate parcial agora, em 2 cliques (simula → confirma).
+
+### 4.6.1 `ConfirmacaoModal.tsx` — confirmações genéricas (2026-08-10)
+
+Substituiu **todos** os `confirm()`/`alert()` nativos do navegador restantes
+no app (~13 usos: excluir despesa/renda/objetivo/limite/investimento em lote
+ou individual, remover aporte) — os popups de exclusão de categoria já eram
+próprios desde antes (`ExcluirCategoriaModal`/
+`ExcluirCategoriasSelecionadasModal`, ver seção 7 do doc de progresso Parte
+7). Componente genérico (título + mensagem + Cancelar/Confirmar), reaproveita
+`Modal.tsx` (sai com a borda padrão de graça), com variante `perigo`
+(vermelho, default) ou `neutro` (azul) pro botão de ação, e estado de
+"confirmando..." enquanto a ação roda.
 
 ## 5. Padrões visuais observados
 
@@ -438,14 +469,15 @@ e o pop-up de Plano de contenção.
 |---|---|
 | Paleta | 5 tons de azul da marca (`grouper-sky` → `grouper-ink`) para hierarquia/estrutura + preto/branco para alarme real — ver seção 0. **Exceções deliberadas de verde/vermelho**: bordas de `StatCard` (Renda/Despesas), borda de "Economia do mês" (escala por %) e botão de Plano de contenção (escala por urgência) — todas as 3 usando as paletas em `frontend/public/brand/palettes/` |
 | Cards | Fundo branco, cantos levemente arredondados (`rounded-lg`), borda esquerda colorida por significado, sombra leve |
-| Botões | Cantos arredondados. **Dois tamanhos, mas agora com o mesmo tratamento tipográfico Khand**: botões de ação "grandes" do cabeçalho (+ Adicionar renda/despesa, Salvar dos modais) em `text-sm` caixa alta com tracking e `font-semibold`; botões secundários por seção (+ Adicionar objetivo, + Novo investimento, Plano de contenção) também em Khand caixa alta com tracking, só que menores (`text-[13px]`) e **sem negrito** — antes eram texto normal sem Khand/caixa alta, foram unificados nessa repaginação. Ações por item (editar/excluir) são **ícones com contorno** (ver `IconesInvestimento.tsx`) |
+| Botões | Cantos arredondados. **Caixa alta + tracking restrita aos botões "superiores"** (2026-08-10): só os botões de topo de cada página (seletor de mês, "Leitor de fatura", "+ Adicionar renda/despesa") continuam em `uppercase tracking-wide`; todos os outros — secundários por seção (+ Adicionar objetivo, + Novo investimento, Plano de contenção), "Salvar"/"Cancelar" dos modais, abas — usam capitalização normal (sem `uppercase`), porque o texto em caixa alta ficava largo demais com a Inter (não condensada como a Khand era). Ambos os grupos continuam em `font-display`. Ações por item (editar/excluir) são **ícones com contorno** (ver `IconesInvestimento.tsx`) |
 | Negrito | Usado com intenção, não por padrão: títulos de seção (Objetivos, Últimas despesas, Economia nos últimos meses, Investimento CDB) e os `StatCard`s (Renda/Despesas do mês) ficam em negrito; itens de lista (nome do investimento, descrição do objetivo, itens de últimas despesas) e o valor atual do investimento **não** ficam — já testamos deixar os nomes em negrito, mas foi revertido (ver 4.4.2/4.4.3) |
 | Informações de menor destaque | Cor `text-grouper-deep` (azul) + `font-medium`, `text-xs` — usado no valor/meta de Objetivos, subtexto de Últimas despesas e Investimento CDB (data), e nos blocos de Planejamento (seção 6). Antes era `text-grouper-navy/60` (cinza-azulado apagado); trocado por ter mais contraste/cor sem virar texto principal |
 | Listas longas | Padrão repetido em Objetivos (>2 itens, `max-h-44`) e Investimento CDB (>2 itens, `max-h-72`): em vez de esticar o card, a lista vira `max-h-* overflow-y-auto` com rolagem própria. Divisórias entre itens (`divide-y`) em `divide-grouper-sky/45` (tom mais escuro que o `/15` original, pra ficar visível) |
 | Seleção por clique | Padrão do Investimento CDB, replicado em Objetivos (ver 4.4.2): sem checkbox visível — a linha inteira é clicável (`onClick` no item) e o fundo muda pra indicar selecionado (`bg-grouper-sky/30`); hover dá um feedback mais sutil (`hover:bg-grouper-sky/20`) — em Objetivos o hover também ganhou `hover:shadow-md` |
 | Espaçamento | Compactado numa passada de "caber na tela sem rolar" — `space-y-4`/`gap-4` entre seções, padding dos cards em geral `p-5` (Objetivos, Últimas despesas, Investimento CDB — Últimas despesas usava `p-4`, ajustado pra `p-5` pra alinhar o título com os outros dois) |
-| Tipografia | Khand para títulos/números/botões grandes e pequenos/rótulos; Hind para texto corrido, itens de lista e o valor atual do investimento CDB (ver 4.5.3) |
+| Tipografia | Inter (`font-display`, era Khand até 2026-08-10) para títulos/números/botões/rótulos; Hind (`font-body`) para texto corrido, itens de lista e o valor atual do investimento CDB (ver 4.5.3) |
 | Seletor de mês nativo | O "x" de limpar (`::-webkit-clear-button`) é escondido via CSS global (`index.css`) em Chrome/Edge. Mesmo assim, se o usuário limpar pelo popup nativo do calendário (não estilizável), o handler `selecionarMes` ignora string vazia em vez de deixar o mês em foco quebrar — mesmo padrão na Home e em Despesas/Rendas |
+| Tooltip próprio do app | `components/Tooltip.tsx` (2026-08-10) substitui o atributo `title` nativo do navegador (cor controlada pelo SO/tema, não estilizável) em todo botão/ícone que precisa de legenda — fundo branco, texto `grouper-ink`, aparece no hover **e** no foco por teclado (`focus-within`), mas tira o próprio foco ao sair com o mouse (senão ficava preso na tela até outro clique, já que clicar também foca o botão). Prop `posicao` ("centro" padrão ou "direita") evita que o balão vaze pra fora de listas com `overflow-y-auto` quando o gatilho está na borda direita (ex.: ícones de editar/excluir, sempre os últimos de uma linha). Prop `vertical` ("cima" padrão ou "baixo", 2026-08-10) resolve o mesmo problema no eixo Y — sem espaço acima, o balão do **primeiro item** de uma lista com rolagem própria ficava cortado; aplicado nesse item em todas as listas afetadas |
 
 ## 6. Pontos que já pulam aos olhos como possíveis melhorias
 
@@ -457,7 +489,8 @@ e o pop-up de Plano de contenção.
   Esc/clique fora/clique num link, foco move pro primeiro link ao abrir e
   volta pro hambúrguer ao fechar, e o conteúdo principal fica `inert`
   enquanto o drawer está aberto. Ver `docs/design/a11y-e-responsividade.md`.
-- Movimentações já ganhou o mesmo grid full-width da Home (ver `movimentacoes-layout-atual.md`); Planejamento usa um layout próprio de 3 blocos com altura fixa (ver seção 6 daquele contexto) — nenhuma página ficou no wrapper antigo `mx-auto max-w-4xl`.
+- Movimentações já ganhou o mesmo grid full-width da Home (ver `movimentacoes-layout-atual.md`); Planejamento usa um layout próprio de 3 blocos com altura fixa — nenhuma página ficou no wrapper antigo `mx-auto max-w-4xl`.
+- **Cabeçalho de Movimentações e Planejamento igualado ao da Home (2026-08-10)**: nas duas páginas, título + botões + avatar agora dividem uma única linha (`flex flex-wrap items-center justify-between`), mesmo padrão desta seção (4.1) — antes ficavam numa segunda linha, junto com as abas (Movimentações) ou dentro de cada bloco (Planejamento). Em Planejamento, os 3 botões "+ Adicionar X" de cada bloco sobem pra essa linha via o mesmo mecanismo de portal (`headerSlot`) que Movimentações já usava pros seus controles.
 - Alguns modais ainda não foram repaginados: `ResgatarCdbModal`, `InvestirMaisModal`, `VincularInvestimentoModal` (ver 4.6).
 - `frontend/src/components/SimularDespesaModal.tsx` continua **órfão** (sem nenhum caller) desde que o botão "Simular despesa" saiu da Home — considerar remover o arquivo ou religar a função em outro lugar.
 - A imagem de fundo do menu lateral (ver seção 3) tem um nome de arquivo genérico (hash), sem otimização de tamanho — se o app crescer, vale renomear/comprimir.

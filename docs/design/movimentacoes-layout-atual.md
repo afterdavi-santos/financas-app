@@ -39,10 +39,11 @@ dois antigos.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Movimentações                                    (título)    │
-├─────────────────────────────────────────────────────────────┤
-│ Despesas   Rendas         [mês ▾] [+ Adicionar despesa] (●)  │  ← 1 linha,
-│ ───────                                                       │    3 colunas
+│ Movimentações      [mês ▾] [Leitor de fatura] [+ Adicionar]  │  ← título +
+│                                                          (●)  │    controles
+├─────────────────────────────────────────────────────────────┤    + avatar,
+│ Despesas   Rendas                                             │  ← abas
+│ ───────                                                       │    sozinhas
 ├───────────────────────────────────────┬───────────────────────┤
 │  (conteúdo da aba ativa, 2/3 largura)  │ (1/3 — gráfico mensal │
 │                                        │  da aba ativa: despe- │
@@ -51,11 +52,15 @@ dois antigos.
 └───────────────────────────────────────┴───────────────────────┘
 ```
 
-- Título "Movimentações" no topo, mesmo estilo do "Início" da Home
-  (`font-display text-3xl font-semibold tracking-tight text-grouper-ink`).
+- Título "Movimentações" + controles de cabeçalho + avatar numa única linha
+  (`flex flex-wrap items-center justify-between`, mesmo padrão da Home) —
+  **mudou em 2026-08-10**, antes os controles ficavam numa segunda linha
+  junto com as abas. Título à esquerda, controles/avatar colados na ponta
+  direita (empilham em largura total abaixo de `lg`, ver seção 5).
 - Corpo em `grid grid-cols-1 lg:grid-cols-3` (mesmo template da Home).
-- **Linha das abas ocupa as 3 colunas** (`lg:col-span-3`): abas à esquerda,
-  controles de cabeçalho + avatar à direita, na borda direita da página.
+- **Linha das abas ocupa as 3 colunas** (`lg:col-span-3`), agora sozinha —
+  só as duas abas (Despesas | Rendas), sem mais controles nem avatar
+  dividindo o espaço com elas.
 - **Conteúdo da aba ativa ocupa `lg:col-span-2`** — mesma largura da coluna
   esquerda da Home, então os StatCards de Despesas/Rendas (`grid-cols-2` fixo,
   igual à Home, sem breakpoint) saem do mesmo tamanho dos cards "Renda do
@@ -83,12 +88,14 @@ dois antigos.
   desmonta), então na prática o estado da aba anterior é perdido ao trocar.
   Ver seção 6 (melhorias) sobre isso.
 
-## 4. Controles do cabeçalho "puxados" para a linha das abas
+## 4. Controles do cabeçalho "puxados" para a linha do título
 
-Esse é o ponto mais incomum da implementação, vale documentar bem:
+Esse é o ponto mais incomum da implementação, vale documentar bem (era "linha
+das abas" até 2026-08-10 — o `headerSlot` subiu junto com os controles pra
+linha do título, ver seção 2):
 
 - `MovimentacoesPage` cria um nó DOM vazio (`<div ref={setHeaderSlot}>`) na
-  linha das abas, guardado em estado (`headerSlot`).
+  linha do título, guardado em estado (`headerSlot`).
 - Esse nó é passado como prop `headerSlot` para `DespesasPage`/`RendasPage`.
 - Cada uma delas monta seus próprios controles (input de mês + botão
   "+ Adicionar despesa/renda") e, **se `headerSlot` existir**, os renderiza lá
@@ -114,21 +121,19 @@ Esse é o ponto mais incomum da implementação, vale documentar bem:
   **data/mês pré-selecionados no mês em foco daquela aba** (`dataPadrao`/
   `mesPadrao`), não sempre hoje/mês atual — mesmo padrão da Home.
 
-## 5. Avatar placeholder
+## 5. Avatar
 
-Círculo `grouper-ink` de 40px (`h-10 w-10 rounded-full`), vazio, na borda
-direita da linha das abas — cópia exata do avatar da Home (`HomePage.tsx`
-seção 4.1 do doc da Home). Ainda não tem foto/iniciais reais, é só reserva de
-espaço.
+`components/Avatar.tsx` (compartilhado com a Home) — foto de perfil ou
+iniciais, clique abre popup "Editar perfil" (→ `/configuracoes`). Fica na
+linha do título "Movimentações", colado ao final do grupo de controles (ver
+seção 2) — **desde 2026-08-10 essa posição é a mesma em qualquer largura de
+tela**, não muda mais entre mobile/desktop (antes só ficava na linha das
+abas em `lg`+ e subia pra linha do título só no mobile).
 
-**No mobile (abaixo de `lg`)** esse avatar sai da linha das abas e sobe
-pra dividir a linha do título "Movimentações" (mesmo padrão da Home, ver
-`home-layout-atual.md` 4.1.1) — no cabeçalho da página, não mais ao lado
-dos controles. Em `lg`+ ele volta pra posição descrita acima. O seletor de
-mês e o botão "+ Adicionar despesa/renda" (portados via `headerSlot`, ver
-seção 4) também empilham em largura total no mobile, revertendo pra lado
-a lado em `lg`+ — mesmas classes usadas na Home. Detalhes técnicos em
-`docs/design/a11y-e-responsividade.md` (seção 2.3).
+O seletor de mês e o botão "+ Adicionar despesa/renda" (portados via
+`headerSlot`, ver seção 4) empilham em largura total no mobile, revertendo
+pra lado a lado em `lg`+ — mesmas classes usadas na Home. Detalhes técnicos
+em `docs/design/a11y-e-responsividade.md` (seção 2.3).
 
 ## 6. Conteúdo de cada aba
 
@@ -175,6 +180,13 @@ compartilhados), já com a identidade da marca aplicada:
     **Divisórias**: `divide-grouper-sky/45` (era `/15`, quase invisível).
     **Rolagem**: com mais de 5 categorias (a partir da 6ª), vira
     `max-h-40 overflow-y-auto`.
+  - **Ícone de gráfico** (`IconeGrafico`, 2026-08-10) ao lado esquerdo do
+    filtro "Todas": abre `GraficoCategoriasModal`, popup com **todas** as
+    categorias (respeitando o filtro Todas/Fixas/Variáveis ativo) num
+    gráfico de **barras horizontais** (Recharts `layout="vertical"` —
+    categoria no eixo Y, valor no eixo X), já ordenadas da maior pra menor.
+    A partir de 10 categorias, o popup ganha rolagem **vertical** (altura
+    fixa por categoria) em vez de espremer as barras.
   - **Dentro do `DetalheDespesasModal`**, a lista de despesas de cada
     categoria também ganhou rolagem própria: a partir de 8 despesas na
     mesma categoria (`length > 7`), vira `max-h-52 overflow-y-auto` em vez
@@ -239,8 +251,10 @@ compartilhados), já com a identidade da marca aplicada:
 **Seletor de mês** (Despesas e Rendas): o `<input type="month">` do
 cabeçalho ganhou "cara de botão" — borda `border-2 border-grouper-mid`,
 fundo branco, `font-display font-semibold` **caixa alta com tracking**
-(`uppercase tracking-wide`, largura fixa `w-36` — igualado ao seletor de mês
-da Home, que era o único com esse tratamento até agora), sombra leve e hover
+(`uppercase tracking-wide`, largura fixa `w-44` — igualado ao seletor de mês
+da Home, que era o único com esse tratamento até agora; era `w-36` até
+2026-08-10, aumentada junto com a troca de fonte pra Inter, ver
+`frontend-home.md` Parte 14), sombra leve e hover
 `hover:bg-grouper-mist` — em vez da borda fina `grouper-sky/40` genérica de
 campo de formulário. Também ganhou `onClick` chamando
 `e.currentTarget.showPicker?.()`, pra abrir o seletor nativo clicando em
