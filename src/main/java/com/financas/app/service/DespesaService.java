@@ -45,6 +45,15 @@ public class DespesaService {
         return despesaRepository.save(despesa);
     }
 
+    // Usado pelo leitor de fatura (importação em lote): tudo ou nada — se uma
+    // despesa falhar (ex.: categoria inexistente), nenhuma da leva fica
+    // salva, evitando uma importação parcial. Reaproveita criar() por inteiro
+    // (inclusive a recorrência automática para categoria FIXA).
+    @Transactional
+    public List<Despesa> criarEmLote(Long usuarioId, List<Despesa> despesas) {
+        return despesas.stream().map(despesa -> criar(usuarioId, despesa)).toList();
+    }
+
     // Nova série independente: cada criação manual numa categoria FIXA é sua
     // própria recorrência (uma categoria FIXA pode conter vários itens fixos
     // distintos, ex.: "Assinaturas" com Netflix e Spotify separados).
@@ -64,6 +73,20 @@ public class DespesaService {
         return despesaRepository.findAll(filtros(usuarioId, categoriaId, tipo, inicio, fim));
     }
 
+    // Mesmo espírito de listar(), mas filtra pela data REAL da compra (não
+    // pelo mês efetivo) — usado só pela busca de candidatas a duplicata do
+    // Leitor de fatura, onde o que importa é proximidade de data real.
+    @Transactional
+    public List<Despesa> listarPorDataReal(Long usuarioId, LocalDate inicio, LocalDate fim) {
+        garantirRecorrenciasAteHoje(usuarioId);
+        Specification<Despesa> spec = DespesaSpecification.comUsuario(usuarioId)
+                .and(DespesaSpecification.comPeriodoReal(inicio, fim));
+        return despesaRepository.findAll(spec);
+    }
+
+    // Note: não mexe em mesReferencia de propósito — preserva o vínculo com
+    // o mês da fatura (se a despesa veio do Leitor de fatura) mesmo que o
+    // usuário edite descrição/valor/data/categoria pela tela normal.
     public Despesa atualizar(Long usuarioId, Long despesaId, Despesa dadosAtualizados) {
         Despesa despesa = buscarOuFalhar(despesaId, usuarioId);
         despesa.setDescricao(dadosAtualizados.getDescricao());

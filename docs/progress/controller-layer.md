@@ -18,7 +18,7 @@ Localização: `src/main/java/com/financas/app/web/` (controllers), `src/main/ja
 
 - `AuthController` (`/api/auth`) — `POST /registrar`, `POST /login` (retorna JWT). Únicas rotas públicas.
 - `CategoriaController` (`/api/categorias`) — CRUD (`CategoriaRequest`/`Response` incluem `tipo`, obrigatório na criação); `DELETE /{id}?cascata=` apaga despesas/limites/recorrências vinculados quando confirmado. `CategoriaResponse` inclui `totalDespesas` (contagem real só em `GET /`, usada pra ranquear as mais usadas no seletor do frontend; `0` nos outros pontos onde o DTO é montado) e `dataCriacao` (sempre o valor real, `null` pra categorias antigas). `GET /semelhantes?nome=` — categorias do usuário com nome parecido (busca por similaridade via `pg_trgm`), usado pra avisar de possíveis duplicatas antes de criar.
-- `DespesaController` (`/api/despesas`) — CRUD (sem `tipo` no request — vem da categoria) + `GET /` com filtros (`categoriaId`, `tipo`, `inicio`, `fim`) + `GET /total` + `POST /lote` (`DespesaLoteRequest`, usado pelo leitor de fatura — confirma em bloco, tudo ou nada). `DespesaResponse` inclui `tipo` (derivado da categoria) e `recorrente` (true se a despesa nasceu numa categoria FIXA).
+- `DespesaController` (`/api/despesas`) — CRUD (sem `tipo` no request — vem da categoria) + `GET /` com filtros (`categoriaId`, `tipo`, `inicio`, `fim`) + `GET /total` + `POST /lote` (`DespesaLoteRequest`, usado pelo leitor de fatura — confirma em bloco, tudo ou nada). `DespesaResponse` inclui `tipo` (derivado da categoria), `recorrente` (true se a despesa nasceu numa categoria FIXA) e `mesReferencia` (nullable — mês que conta pro orçamento, só preenchido em despesas vindas do Leitor de fatura; ver `service-layer.md` item 3 e `frontend-home.md` Parte 13). `DespesaRequest.mesReferencia` também é opcional, aceito tanto no `POST /` normal quanto no `POST /lote`.
 - `RendaController` (`/api/rendas`) — CRUD + `GET /total?mesReferencia`. `RendaResponse` inclui `recorrente` (true se `tipo=FIXA`).
 - `ObjetivoController` (`/api/objetivos`) — CRUD + `GET/POST/PUT/DELETE /{id}/aportes` (linha do tempo de aportes) + `PUT`/`DELETE /{id}/investimento-cdb` (vincula/desvincula um `InvestimentoCdb`).
 - `InvestimentoCdbController` (`/api/investimentos-cdb`) — CRUD (só descrição/%CDI editáveis — valor/data vivem nos lotes) + `GET /{id}/posicao` + `POST /{id}/investir-mais` + `POST /{id}/simular-resgate(-total)` + `POST /{id}/resgatar(-total)`. `InvestimentoCdbResponse` inclui `objetivoId`/`objetivoDescricao` quando vinculado.
@@ -36,7 +36,7 @@ Um `InvestimentoCdb` pode estar vinculado a no máximo um `Objetivo` (e vice-ver
 
 ## Estado dos testes
 
-228 testes no total (services + controllers, um arquivo de teste por controller via `@WebMvcTest`).
+242 testes no total (services + controllers, um arquivo de teste por controller via `@WebMvcTest`).
 
 ### Pegadinha de `@WebMvcTest` + Spring Security
 

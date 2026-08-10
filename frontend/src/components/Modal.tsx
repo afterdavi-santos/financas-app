@@ -23,6 +23,12 @@ interface ModalProps {
   children: ReactNode;
   // Largura máxima (classe Tailwind). Default estreito; telas com gráfico usam mais.
   largura?: string;
+  // Classes extras no card (ex.: borda de destaque) — opcional, sem afetar
+  // os outros callers que não passam nada.
+  classeCard?: string;
+  // Linha divisória abaixo do título — ligada por padrão (comportamento
+  // antigo de todos os callers); alguns popups preferem sem.
+  bordaCabecalho?: boolean;
 }
 
 // Seletor dos elementos que contam como "focáveis" pro focus trap e pro
@@ -36,6 +42,8 @@ export function Modal({
   onClose,
   children,
   largura = "max-w-md",
+  classeCard = "",
+  bordaCabecalho = true,
 }: ModalProps) {
   const tituloId = useId();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -96,10 +104,12 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={tituloId}
         tabIndex={-1}
-        className={`max-h-[90vh] w-full ${largura} overflow-y-auto rounded-xl bg-white shadow-xl focus:outline-none`}
+        className={`max-h-[90vh] w-full ${largura} overflow-y-auto rounded-xl bg-white shadow-xl focus:outline-none ${classeCard}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-grouper-sky/20 px-6 py-4">
+        <div
+          className={`flex items-center justify-between px-6 py-4 ${bordaCabecalho ? "border-b border-grouper-sky/20" : ""}`}
+        >
           <h2 id={tituloId} className="font-display text-xl font-semibold text-grouper-ink">
             {titulo}
           </h2>

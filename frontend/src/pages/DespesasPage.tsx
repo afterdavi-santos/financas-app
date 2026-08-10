@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { PageHeader } from "../components/PageHeader";
 import { StatCard } from "../components/StatCard";
 import { NovaDespesaModal } from "../components/NovaDespesaModal";
+import { LeitorFaturaModal } from "../components/LeitorFaturaModal";
 import { DetalheDespesasModal } from "../components/DetalheDespesasModal";
 import { BarraSelecao } from "../components/BarraSelecao";
 import { SelecionarTodos } from "../components/SelecionarTodos";
@@ -26,8 +27,9 @@ import {
   somaPorTipo,
   totalPorCategoria,
   variacaoCategorias,
-  maiorAlta,
-  maiorBaixa,
+  altasOrdenadas,
+  baixasOrdenadas,
+  mesEfetivoDespesa,
 } from "../utils/despesasResumo";
 import type { VariacaoCategoria } from "../utils/despesasResumo";
 import type { Categoria, Despesa, TipoCategoria } from "../types/financas";
@@ -67,6 +69,7 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
+  const [modalLeitorFatura, setModalLeitorFatura] = useState(false);
   // Despesa em edição (null = modal em modo "nova despesa").
   const [editando, setEditando] = useState<Despesa | null>(null);
   // Filtro da lista completa por tipo (Todas/Fixas/Variáveis).
@@ -78,6 +81,10 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
     titulo: string;
     despesas: Despesa[];
   } | null>(null);
+  // Botão "+" no canto de Ponto de atenção/motivação — mostra mais 5
+  // categorias além da destacada. Cada seção tem seu próprio estado.
+  const [mostrarMaisAlta, setMostrarMaisAlta] = useState(false);
+  const [mostrarMaisBaixa, setMostrarMaisBaixa] = useState(false);
   const {
     selecionados,
     alternar,
@@ -127,7 +134,7 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
           let fixa = 0;
           let variavel = 0;
           for (const d of despesasHistorico) {
-            if (d.data.slice(0, 7) !== m) continue;
+            if (mesEfetivoDespesa(d) !== m) continue;
             if (d.tipo === "FIXA") fixa += d.valor;
             else variavel += d.valor;
           }
@@ -163,14 +170,25 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
       despesasAnterior.filter((d) => d.tipo === "VARIAVEL"),
       mes,
     );
+    const altas = altasOrdenadas(variacoes);
+    const baixas = baixasOrdenadas(variacoes);
     return {
       totalFixas,
       totalExtra,
       porCategoria,
-      alta: maiorAlta(variacoes),
-      baixa: maiorBaixa(variacoes),
+      alta: altas[0] ?? null,
+      // Mais 5 categorias que pioraram, além da já destacada em `alta`.
+      maisAltas: altas.slice(1, 6),
+      baixa: baixas[0] ?? null,
+      // Mais 5 categorias que melhoraram, além da já destacada em `baixa`.
+      maisBaixas: baixas.slice(1, 6),
     };
   }, [despesas, despesasAnterior, filtroCategoria, mes]);
+
+  // Ponto de atenção/motivação só aparecem a partir do dia 15 do mês
+  // CORRENTE (dados ainda são poucos antes disso, comparação fica ruidosa);
+  // num mês passado (já fechado) a comparação já é válida a qualquer dia.
+  const mostrarInsights = mes !== mesAtualYYYYMM() || Number(hojeISO().slice(8, 10)) >= 15;
 
   async function excluir(despesa: Despesa) {
     const mensagem = despesa.recorrente
@@ -240,6 +258,12 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
         onClick={(e) => e.currentTarget.showPicker?.()}
         className="w-full cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-3 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid lg:w-36"
       />
+      <button
+        onClick={() => setModalLeitorFatura(true)}
+        className="w-full rounded-md bg-grouper-deep px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-ink lg:w-auto"
+      >
+        Leitor de fatura
+      </button>
       <button
         onClick={abrirNovaDespesa}
         className="w-full rounded-md bg-grouper-ink px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-black lg:w-auto"
@@ -370,11 +394,28 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
 
             <div className="flex flex-col gap-4">
               <section className="flex-1 rounded-lg border-l-4 border-amber-400 bg-white p-4 shadow-md">
-                <h2 className="font-display text-sm font-semibold tracking-wide text-amber-800">
-                  Ponto de atenção 
-                </h2>
-                {resumo.alta ? (
-                  <p className="mt-2 text-sm text-amber-900"> As despesas com a categoria 
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="font-display text-sm font-semibold tracking-wide text-amber-800">
+                    Ponto de atenção
+                  </h2>
+                  {mostrarInsights && resumo.maisAltas.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setMostrarMaisAlta((atual) => !atual)}
+                      aria-label={mostrarMaisAlta ? "Mostrar menos categorias" : "Mostrar mais categorias"}
+                      title={mostrarMaisAlta ? "Mostrar menos categorias" : "Mostrar mais categorias"}
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-amber-400 text-amber-700 hover:bg-amber-50"
+                    >
+                      {mostrarMaisAlta ? "−" : "+"}
+                    </button>
+                  )}
+                </div>
+                {!mostrarInsights ? (
+                  <p className="mt-2 text-sm text-amber-900">
+                    A análise dos seus pontos de atenção começa a partir do dia 15 do mês corrente.
+                  </p>
+                ) : resumo.alta ? (
+                  <p className="mt-2 text-sm text-amber-900"> As despesas com a categoria
                   <strong> {resumo.alta.nome}</strong> subiram {" "}
                     <strong>{formatarBRL(resumo.alta.deltaRs)}</strong> em relação ao mês anterior.
                   </p>
@@ -383,13 +424,40 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
                     Parabéns, Nenhuma categoria aumentou de valor em relação ao mês anterior.
                   </p>
                 )}
+                {mostrarInsights && mostrarMaisAlta && resumo.maisAltas.length > 0 && (
+                  <ul className="mt-2 divide-y divide-amber-200 border-t border-amber-200 pt-1 text-sm text-amber-900">
+                    {resumo.maisAltas.map((v) => (
+                      <li key={v.nome} className="flex items-center justify-between gap-2 py-1">
+                        <span>{v.nome}</span>
+                        <strong>+{formatarBRL(v.deltaRs)}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </section>
 
               <section className="flex-1 rounded-lg border-l-4 border-grouper-green bg-white p-4 shadow-md">
-                <h2 className="font-display text-sm font-semibold tracking-wide text-grouper-green">
-                  Ponto de motivação
-                </h2>
-                {resumo.baixa ? (
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="font-display text-sm font-semibold tracking-wide text-grouper-green">
+                    Ponto de motivação
+                  </h2>
+                  {mostrarInsights && resumo.maisBaixas.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setMostrarMaisBaixa((atual) => !atual)}
+                      aria-label={mostrarMaisBaixa ? "Mostrar menos categorias" : "Mostrar mais categorias"}
+                      title={mostrarMaisBaixa ? "Mostrar menos categorias" : "Mostrar mais categorias"}
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-grouper-green text-grouper-green hover:bg-green-50"
+                    >
+                      {mostrarMaisBaixa ? "−" : "+"}
+                    </button>
+                  )}
+                </div>
+                {!mostrarInsights ? (
+                  <p className="mt-2 text-sm text-grouper-ink">
+                    A análise dos seus pontos de motivação começa a partir do dia 15 do mês corrente.
+                  </p>
+                ) : resumo.baixa ? (
                   <p className="mt-2 text-sm text-grouper-ink"> As despesas com a categoria
                     <strong> {resumo.baixa.nome}</strong> caíram{" "}
                     <strong> {formatarBRL(Math.abs(resumo.baixa.deltaRs))}</strong> (
@@ -399,6 +467,16 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
                   <p className="mt-2 text-sm text-grouper-ink">
                     Nenhuma categoria diminuiu em relação ao mês anterior.
                   </p>
+                )}
+                {mostrarInsights && mostrarMaisBaixa && resumo.maisBaixas.length > 0 && (
+                  <ul className="mt-2 divide-y divide-grouper-sky/45 border-t border-grouper-sky/45 pt-1 text-sm text-grouper-ink">
+                    {resumo.maisBaixas.map((v) => (
+                      <li key={v.nome} className="flex items-center justify-between gap-2 py-1">
+                        <span>{v.nome}</span>
+                        <strong>-{formatarBRL(Math.abs(v.deltaRs))}</strong>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </section>
             </div>
@@ -534,6 +612,17 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
         categorias={categorias}
         dataPadrao={dataPadraoNova}
         despesa={editando}
+      />
+
+      <LeitorFaturaModal
+        aberto={modalLeitorFatura}
+        onClose={() => setModalLeitorFatura(false)}
+        categorias={categorias}
+        onImportado={() => {
+          setModalLeitorFatura(false);
+          carregar();
+        }}
+        mes={mes}
       />
 
       <DetalheDespesasModal

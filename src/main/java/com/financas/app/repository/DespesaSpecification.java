@@ -30,7 +30,28 @@ public class DespesaSpecification {
         return (root, query, cb) -> cb.equal(root.get("categoria").get("tipo"), tipo);
     }
 
+    // Filtra pelo "mês efetivo" (mesReferencia, se presente; senão data) —
+    // usado por todo filtro de orçamento (listagem, totais, relatórios).
     public static Specification<Despesa> comPeriodo(LocalDate inicio, LocalDate fim) {
+        if (inicio == null && fim == null) {
+            return null;
+        }
+        if (inicio != null && fim != null) {
+            return (root, query, cb) -> cb.between(
+                    cb.coalesce(root.get("mesReferencia"), root.get("data")), inicio, fim);
+        }
+        if (inicio != null) {
+            return (root, query, cb) -> cb.greaterThanOrEqualTo(
+                    cb.coalesce(root.get("mesReferencia"), root.get("data")), inicio);
+        }
+        return (root, query, cb) -> cb.lessThanOrEqualTo(
+                cb.coalesce(root.get("mesReferencia"), root.get("data")), fim);
+    }
+
+    // Filtra pela data REAL da compra, ignorando mesReferencia — usado só
+    // pela busca de candidatas a duplicata do Leitor de fatura, onde
+    // proximidade de data real (não mês de orçamento) é o que importa.
+    public static Specification<Despesa> comPeriodoReal(LocalDate inicio, LocalDate fim) {
         if (inicio == null && fim == null) {
             return null;
         }

@@ -29,3 +29,10 @@ export async function atualizarDespesa(id: number, req: DespesaRequest): Promise
 export async function excluirDespesa(id: number): Promise<void> {
   await api.delete(`/despesas/${id}`);
 }
+
+// POST /api/despesas/lote -> confirma em bloco as despesas do leitor de
+// fatura (tudo ou nada: se uma falhar, nenhuma fica salva).
+export async function criarDespesasEmLote(despesas: DespesaRequest[]): Promise<Despesa[]> {
+  const { data } = await api.post<Despesa[]>("/despesas/lote", { despesas });
+  return data;
+}

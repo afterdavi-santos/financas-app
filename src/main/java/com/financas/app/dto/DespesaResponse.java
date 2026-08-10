@@ -12,6 +12,7 @@ public record DespesaResponse(
         String descricao,
         BigDecimal valor,
         LocalDate data,
+        LocalDate mesReferencia,
         TipoCategoria tipo,
         CategoriaResponse categoria,
         boolean recorrente

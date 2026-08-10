@@ -1007,3 +1007,185 @@ categorias no leitor, junção cruzando meses expandindo por mês na
 categorização (confirmado via API que salva 2 despesas separadas), botão de
 leitor de fatura na aba Despesas de Movimentações, pré-seleção de mês/data
 nos 3 pontos (Home despesa/renda, Rendas).
+
+## Parte 12 — Ajustes finos de UI no `LeitorFaturaModal` (2026-08-08)
+
+Sessão só de frontend, iterando com o usuário vendo cada resultado (sem
+Claude in Chrome desta vez — mudanças só de estilo/copy, usuário testa ele
+mesmo). Nenhuma mudança de backend. Arquivos tocados:
+`components/LeitorFaturaModal.tsx` e `components/Modal.tsx` (2 props novas,
+opcionais, só usadas por este caller).
+
+### `Modal.tsx` ganhou 2 props opcionais (sem afetar os outros ~15 callers)
+- `classeCard?: string` — classes extras no card (usado aqui pra uma borda
+  de destaque, ver abaixo). Default `""`.
+- `bordaCabecalho?: boolean` — liga/desliga a linha divisória abaixo do
+  título. Default `true` (comportamento antigo, preservado pros outros
+  modais). O leitor de fatura usa `false`.
+
+### Popup do leitor: borda + bordas internas mais sutis
+- Card do modal ganhou `border-2 border-grouper-ink` (azul bem escuro do
+  menu lateral) — via `classeCard`, e a linha sob o título foi removida
+  (`bordaCabecalho={false}`).
+- Todas as divisórias/caixas internas (`divide-y` das listas, contorno das
+  caixinhas recolhíveis) trocaram de `grouper-sky/45`(divisórias) e
+  `grouper-sky/20` (bordas de caixa) para `grouper-ink/20` — mesma cor da
+  borda externa, só que bem mais sutil (opacidade baixa), pra não competir
+  com ela. Inputs de formulário e checkboxes **não** foram tocados (esses
+  continuam com o padrão azul normal do app, não são "divisões").
+
+### Etapa Upload
+- Texto de introdução reescrito: agora orienta a exportar em **CSV, não
+  PDF**, menciona o tutorial e o nome do botão de seleção; parágrafo ficou
+  `text-justify` (justificado).
+- Novo botão **"Tutorial de exportação"** ao lado de "Selecionar CSV da
+  fatura" — link (`<a target="_blank" rel="noopener noreferrer">`) pro
+  vídeo do YouTube que ensina a exportar a fatura em CSV pelo app do
+  Nubank, contorno azul (`border-grouper-mid`) pra não competir com o botão
+  de ação principal (sólido).
+- Os dois botões ganharam `justify-center` + `pt-4` (mais respiro acima,
+  centralizados no popup).
+
+### Etapa Revisão
+- **"Juntar despesas equivalentes" e "Selecionar todos" deixaram de ser
+  botões** e viraram checkboxes discretos com texto ao lado (mesmo padrão
+  visual dos checkboxes de item da lista) — pedido do usuário pra não tirar
+  atenção dos botões de ação no rodapé ("← Voltar" / "Cancelar" /
+  "Continuar"). Texto em `font-semibold text-base` (maior e mais forte que
+  o padrão `text-sm`, pra compensar o fato de não serem mais botões
+  sólidos).
+  - "Selecionar todos" tem **nome fixo** — não alterna mais para "Desmarcar
+    todos" conforme o estado; o próprio estado marcado/desmarcado do
+    checkbox já comunica isso.
+  - Ordem final: texto "Selecione as despesas que deseja incluir" primeiro
+    (linha antiga "N linha(s) encontrada(s)..." foi substituída por essa
+    frase mais direta), depois os dois checkboxes na ordem "Selecionar
+    todos" → "Juntar despesas equivalentes" — passou por algumas trocas de
+    ordem/posição a pedido do usuário até chegar nessa.
+- Texto "N item(ns) ignorado(s) — estorno..." dos itens ignorados
+  simplificado pra só a contagem, com plural condicional de verdade (`{n}
+  {n === 1 ? "item ignorado" : "itens ignorados"}`) em vez do
+  `item(ns)/ignorado(s)` genérico.
+- Valor (R$) dos itens da lista **perdeu o negrito** (`font-semibold`
+  removido) — mesmo ajuste replicado na lista da Categorização. Descrição
+  do item ganhou `font-normal` explícito (já não tinha negrito no código,
+  adicionado só por clareza/robustez a pedido do usuário).
+- Botão "Cancelar" chegou a ficar vermelho (`text-red-600`) numa iteração,
+  mas o usuário pediu pra **voltar à cor antiga** (`text-grouper-navy
+  hover:bg-grouper-mist`) — estado final é a cor original, sem vermelho.
+  O mesmo vale pro "Fechar" da tela de revisão vazia (nenhuma despesa
+  importável no CSV).
+
+### Etapa Categorização
+- Botão final de salvar (antes "Salvar N despesa(s)", desabilitado
+  enquanto sobrasse item sem categoria) virou **"Continuar"**:
+  - Se ainda há itens sem categoria (`itensParaCategorizar.length > 0`):
+    texto **"Continuar com N despesa(s)"** (N = já categorizadas) — não
+    fica mais desabilitado nesse caso. Clicar abre um popup de aviso
+    próprio ("Continuar sem categorizar tudo?", mesmo padrão do popup de
+    cancelar leitura) avisando que os itens ainda sem categoria **não
+    serão incluídos**; o usuário escolhe "Continuar categorizando" (fecha
+    o aviso) ou "Continuar mesmo assim" (salva só os já categorizados).
+  - Se **todos** os itens já têm categoria: texto vira só **"Continuar"**,
+    sem popup — salva direto.
+  - Novo estado `pedindoConfirmacaoSalvarParcial` + funções
+    `aoClicarContinuar`/`manterCategorizando`/`confirmarSalvarParcial`,
+    resetado em `reiniciar()` como os outros popups do componente.
+- Lista de itens já categorizados (antes sempre visível abaixo do painel de
+  trabalho) virou uma **caixinha recolhível**, fechada por padrão
+  ("N já categorizada(s)" / "ver ▼"), mesmo padrão da caixinha de itens
+  ignorados da Revisão — novo estado `mostrarProntos`.
+- Botão "Cancelar" passou pela mesma iteração de cor que o da Revisão
+  (vermelho → revertido pra `text-grouper-navy`, cor original).
+
+### Verificação
+Só frontend, mudanças de estilo/copy — usuário testa visualmente ele mesmo
+(preferência já registrada: não uso Claude in Chrome por padrão).
+`npm run build` limpo (707 módulos; aviso de chunk >500kB é o de sempre, do
+Recharts). **Falta o usuário conferir visualmente** os estados descritos
+acima (upload com tutorial, checkboxes da revisão, popup de "continuar sem
+categorizar tudo", caixinha recolhível de itens prontos).
+
+## Parte 13 — Despesa de cartão conta no mês da fatura, e fix na detecção de duplicata (2026-08-09)
+
+Pedido do usuário: quando a fatura de julho é paga em agosto, a despesa
+precisa contar no orçamento de **agosto**, não de julho — é a renda de
+agosto que paga a fatura. Decisão fechada com o usuário, sem lógica de "mês
+que mais aparece" nem popup de alerta: o mês que conta é sempre o **mês
+selecionado na tela ao abrir o leitor** (mês em que a fatura é
+paga/subida), independente da data real de cada compra; a data real
+continua salva e exibida normalmente.
+
+### Backend — `Despesa.mesReferencia`
+Novo campo `mesReferencia` (LocalDate, nullable, primeiro dia do mês) em
+`Despesa`, espelhando o padrão que `Renda.mesReferencia` já usava. Só o
+Leitor de fatura preenche esse campo; despesas manuais continuam com
+`mesReferencia = null`, caindo no fallback do mês de `data` (comportamento
+antigo, inalterado).
+- `DespesaSpecification.comPeriodo` passou a filtrar por
+  `COALESCE(mesReferencia, data)` — propaga automaticamente pra `listar`,
+  `calcularTotalPorPeriodo`, `calcularTotalPorCategoriaEPeriodo` e
+  `RelatorioService.compararMeses` (Home), sem tocar nesses métodos. Novo
+  `comPeriodoReal` (sem COALESCE) isolado só pra busca de candidatas a
+  duplicata do leitor de fatura, que precisa continuar usando a **data
+  real** (proximidade de compra), não o mês de orçamento — nova
+  `DespesaService.listarPorDataReal`.
+- `DespesaService.atualizar` **não** mexe em `mesReferencia` de propósito —
+  editar uma despesa de fatura pela tela normal de Despesas não apaga o
+  vínculo dela com o mês da fatura.
+- `LeituraFaturaService.processar`: **removido o filtro que descartava
+  itens fora do mês selecionado** (bug relacionado — uma fatura real cruza
+  dois meses de calendário, então uma parte legítima da fatura sumia sem
+  querer). Agora todo item positivo (não estorno/reembolso) vira despesa
+  importável, com `mesReferencia` = mês selecionado, igual para todos os
+  itens.
+- Toda despesa importada ganha o prefixo **"(Crédito) "** na frente da
+  descrição (aplicado em `LeituraFaturaService`, não no frontend) — fica
+  visualmente distinguível de lançamentos manuais.
+- DTOs (`DespesaRequest`, `DespesaResponse`, `ItemFaturaExtraidoResponse`)
+  e `DespesaController` (mapeamento manual `toEntity`/`toResponse`)
+  ganharam o campo novo.
+
+### Bug encontrado depois: prefixo "(Crédito)" quebrava a detecção de duplicata exata
+Reportado pelo usuário testando reimportação da mesma fatura: duas despesas
+na mesma data, uma foi corretamente sinalizada como duplicata forte e outra
+não. Reproduzido com os dados reais do usuário via um teste temporário — o
+nível **ALTA** (só valor + data, sem checar descrição) bateu certo pras
+duas, então a causa raiz não era essa; mas ao investigar o código foi
+encontrado um bug real e diferente: `DetectorDuplicidadeFatura.normalizar()`
+não ignorava o prefixo "(Crédito) " ao comparar descrições — como a despesa
+já salva tem o prefixo e a linha crua reimportada do CSV nunca tem, a
+comparação **exata** de descrição (usada nos níveis **ALTISSIMA** e
+**BLOCO**) nunca batia numa reimportação. Corrigido ignorando o prefixo do
+mesmo jeito que já ignorava o sufixo "(Nx)" de blocos juntados — novo
+`PREFIXO_CREDITO` regex em `normalizar()`. Dois testes novos cobrindo
+ALTISSIMA e BLOCO com o prefixo presente na despesa já salva.
+Aviso pro usuário: `mvnw spring-boot:run` não recarrega sozinho — é preciso
+reiniciar o backend depois de qualquer mudança de código pra ela valer,
+gotcha já conhecido do projeto.
+
+### Frontend
+- `types/financas.ts` (`Despesa.mesReferencia`, `DespesaRequest.mesReferencia`),
+  `types/leituraFatura.ts` (`ItemFaturaExtraido.mesReferencia`).
+- Novo helper `utils/despesasResumo.mesEfetivoDespesa(despesa)` — espelha o
+  `COALESCE` do backend (`mesReferencia ?? data`), usado no agrupamento do
+  gráfico "Despesas dos últimos meses" em `DespesasPage.tsx` (antes agrupava
+  direto por `d.data.slice(0, 7)`).
+- `LeitorFaturaModal.tsx`: `salvarTudo()` inclui `mesReferencia` (mês
+  selecionado) em cada despesa do lote salvo.
+- **Cor do badge de duplicata** (`utils/cores.ts`, `corNivelDuplicata`):
+  pedido do usuário — os 4 níveis (ALTISSIMA, ALTA, MEDIA e também BLOCO,
+  que antes usava azul da marca por ser "informativo") agora usam a mesma
+  família de vermelho (`grouper-red` como âncora), variando só a
+  tonalidade: mais escuro/saturado (`#8B0000`, ALTISSIMA) → mais claro
+  (`#D97A75`, BLOCO), todos com texto branco.
+
+### Verificação
+Backend: `mvnw test` → suíte completa verde (novos testes em
+`LeituraFaturaServiceTest`, `DespesaServiceTest`, `DespesaControllerTest`,
+`LeituraFaturaControllerTest`, `DetectorDuplicidadeFaturaTest`). Frontend:
+`npm run build`/`npm run lint` limpos. **Falta o usuário testar no
+navegador** com o backend reiniciado: subir uma fatura cruzando dois meses
+de calendário e conferir que tudo cai no mês selecionado, e reimportar a
+mesma fatura conferindo que a cor de duplicata aparece certa nos dois
+casos (ALTISSIMA/ALTA/BLOCO em vermelho, tonalidades diferentes).

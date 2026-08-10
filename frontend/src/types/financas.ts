@@ -36,7 +36,11 @@ export interface Despesa {
   id: number;
   descricao: string;
   valor: number;
-  data: string; // "YYYY-MM-DD"
+  data: string; // "YYYY-MM-DD", sempre a data real da compra/lançamento
+  // Mês que conta pro orçamento — só preenchido em despesas vindas do Leitor
+  // de fatura (mês em que a fatura é paga); null nas demais, caindo no
+  // fallback do mês de `data`. Ver utils/despesasResumo.mesEfetivoDespesa.
+  mesReferencia: string | null; // "YYYY-MM-DD" (primeiro dia do mês) ou null
   tipo: TipoCategoria;
   categoria: Categoria;
   recorrente: boolean;
@@ -48,6 +52,7 @@ export interface DespesaRequest {
   valor: number;
   data: string; // "YYYY-MM-DD"
   categoriaId: number;
+  mesReferencia?: string | null; // só o Leitor de fatura preenche
 }
 
 // -> TotalResponse ({ total }) — usado por /rendas/total.

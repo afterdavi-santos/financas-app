@@ -1,6 +1,7 @@
 package com.financas.app.web;
 
 import com.financas.app.dto.CategoriaResponse;
+import com.financas.app.dto.DespesaLoteRequest;
 import com.financas.app.dto.DespesaRequest;
 import com.financas.app.dto.DespesaResponse;
 import com.financas.app.dto.TotalResponse;
@@ -42,6 +43,18 @@ public class DespesaController {
                                                    @Valid @RequestBody DespesaRequest request) {
         Despesa despesa = despesaService.criar(usuarioAutenticado.getId(), toEntity(request));
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(despesa));
+    }
+
+    // Usado pelo leitor de fatura: confirma em bloco as despesas selecionadas
+    // (tudo ou nada — ver DespesaService.criarEmLote).
+    @PostMapping("/lote")
+    public ResponseEntity<List<DespesaResponse>> criarEmLote(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado,
+                                                               @Valid @RequestBody DespesaLoteRequest request) {
+        List<Despesa> despesas = request.despesas().stream().map(DespesaController::toEntity).toList();
+        List<DespesaResponse> criadas = despesaService.criarEmLote(usuarioAutenticado.getId(), despesas).stream()
+                .map(DespesaController::toResponse)
+                .toList();
+        return ResponseEntity.status(HttpStatus.CREATED).body(criadas);
     }
 
     @GetMapping
@@ -86,6 +99,7 @@ public class DespesaController {
         despesa.setDescricao(request.descricao());
         despesa.setValor(request.valor());
         despesa.setData(request.data());
+        despesa.setMesReferencia(request.mesReferencia());
         Categoria categoria = new Categoria();
         categoria.setId(request.categoriaId());
         despesa.setCategoria(categoria);
@@ -98,7 +112,8 @@ public class DespesaController {
         var categoriaResponse = new CategoriaResponse(categoria.getId(), categoria.getNome(), categoria.getTipo(), 0L,
                 categoria.getDataCriacao());
         return new DespesaResponse(despesa.getId(), despesa.getDescricao(), despesa.getValor(),
-                despesa.getData(), categoria.getTipo(), categoriaResponse, despesa.getRecorrencia() != null);
+                despesa.getData(), despesa.getMesReferencia(), categoria.getTipo(), categoriaResponse,
+                despesa.getRecorrencia() != null);
     }
 
 }

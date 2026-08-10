@@ -33,6 +33,13 @@ public class Despesa {
 
     private LocalDate data;
 
+    // Primeiro dia do mês de referência (ex: 2026-08-01 para agosto/2026).
+    // Só preenchido quando a despesa vem do Leitor de fatura: é o mês em que
+    // a fatura é paga, que pode ser diferente do mês de `data` (a data real
+    // da compra). Null = despesa manual; o mês que conta pro orçamento é o
+    // de `data` (fallback, ver DespesaSpecification.comPeriodo).
+    private LocalDate mesReferencia;
+
     @ManyToOne
     @JoinColumn(name = "categoria_id", nullable = false)
     private Categoria categoria;

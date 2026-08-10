@@ -103,6 +103,26 @@ class DespesaServiceTest {
     }
 
     @Test
+    void deveCriarDespesaPersistindoMesReferenciaQuandoInformado() {
+        // mesReferencia só vem preenchido quando a despesa nasce do Leitor de
+        // fatura — o service não altera esse valor, só persiste o que veio.
+        Despesa nova = new Despesa();
+        nova.setValor(new BigDecimal("50.00"));
+        nova.setData(LocalDate.of(2026, 7, 20));
+        nova.setMesReferencia(LocalDate.of(2026, 8, 1));
+        nova.setCategoria(categoriaDoUsuario(5L, 1L));
+
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioComId(1L)));
+        when(categoriaRepository.findById(5L)).thenReturn(Optional.of(categoriaDoUsuario(5L, 1L)));
+        when(despesaRepository.save(any(Despesa.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Despesa salva = despesaService.criar(1L, nova);
+
+        assertThat(salva.getMesReferencia()).isEqualTo(LocalDate.of(2026, 8, 1));
+        assertThat(salva.getData()).isEqualTo(LocalDate.of(2026, 7, 20));
+    }
+
+    @Test
     void deveFalharAoCriarDespesaComCategoriaDeOutroUsuario() {
         Despesa nova = new Despesa();
         nova.setCategoria(categoriaDoUsuario(5L, 2L));
@@ -138,6 +158,17 @@ class DespesaServiceTest {
     }
 
     @Test
+    void deveListarPorDataRealComFiltroDeDataRealNaoMesEfetivo() {
+        Despesa despesa = despesaComId(1L, 1L, 5L, new BigDecimal("100"));
+        when(despesaRepository.findAll(ArgumentMatchers.<Specification<Despesa>>any())).thenReturn(List.of(despesa));
+
+        List<Despesa> resultado = despesaService.listarPorDataReal(1L,
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31));
+
+        assertThat(resultado).containsExactly(despesa);
+    }
+
+    @Test
     void deveAtualizarDespesaDoProprioUsuario() {
         Despesa existente = despesaComId(1L, 1L, 5L, new BigDecimal("100"));
         Despesa dadosAtualizados = new Despesa();
@@ -154,6 +185,29 @@ class DespesaServiceTest {
 
         assertThat(atualizada.getDescricao()).isEqualTo("Mercado atualizado");
         assertThat(atualizada.getValor()).isEqualByComparingTo("150");
+    }
+
+    @Test
+    void deveAtualizarPreservandoMesReferenciaExistente() {
+        // Editar uma despesa vinda do Leitor de fatura pela tela normal não
+        // pode apagar o vínculo dela com o mês da fatura (mesReferencia).
+        Despesa existente = despesaComId(1L, 1L, 5L, new BigDecimal("100"));
+        existente.setMesReferencia(LocalDate.of(2026, 8, 1));
+        Despesa dadosAtualizados = new Despesa();
+        dadosAtualizados.setDescricao("Mercado atualizado");
+        dadosAtualizados.setValor(new BigDecimal("150"));
+        dadosAtualizados.setData(LocalDate.of(2026, 7, 15));
+        dadosAtualizados.setCategoria(categoriaDoUsuario(5L, 1L));
+        // dadosAtualizados.mesReferencia fica null de propósito — simula o
+        // DespesaRequest da tela normal, que nunca envia esse campo.
+
+        when(despesaRepository.findById(1L)).thenReturn(Optional.of(existente));
+        when(categoriaRepository.findById(5L)).thenReturn(Optional.of(categoriaDoUsuario(5L, 1L)));
+        when(despesaRepository.save(any(Despesa.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Despesa atualizada = despesaService.atualizar(1L, 1L, dadosAtualizados);
+
+        assertThat(atualizada.getMesReferencia()).isEqualTo(LocalDate.of(2026, 8, 1));
     }
 
     @Test
@@ -299,6 +353,43 @@ class DespesaServiceTest {
         assertThat(recorrencia.isAtiva()).isFalse();
         verify(recorrenciaDespesaRepository).save(recorrencia);
         verify(despesaRepository).delete(existente);
+    }
+
+    @Test
+    void deveCriarVariasDespesasEmLote() {
+        Despesa despesa1 = new Despesa();
+        despesa1.setValor(new BigDecimal("20.00"));
+        despesa1.setCategoria(categoriaDoUsuario(5L, 1L));
+        Despesa despesa2 = new Despesa();
+        despesa2.setValor(new BigDecimal("30.00"));
+        despesa2.setCategoria(categoriaDoUsuario(5L, 1L));
+
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioComId(1L)));
+        when(categoriaRepository.findById(5L)).thenReturn(Optional.of(categoriaDoUsuario(5L, 1L)));
+        when(despesaRepository.save(any(Despesa.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<Despesa> salvas = despesaService.criarEmLote(1L, List.of(despesa1, despesa2));
+
+        assertThat(salvas).hasSize(2);
+        verify(despesaRepository, times(2)).save(any(Despesa.class));
+    }
+
+    @Test
+    void deveFalharLoteInteiroSeUmaDespesaTiverCategoriaInvalida() {
+        Despesa valida = new Despesa();
+        valida.setValor(new BigDecimal("20.00"));
+        valida.setCategoria(categoriaDoUsuario(5L, 1L));
+        Despesa invalida = new Despesa();
+        invalida.setValor(new BigDecimal("30.00"));
+        invalida.setCategoria(categoriaDoUsuario(99L, 1L));
+
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioComId(1L)));
+        when(categoriaRepository.findById(5L)).thenReturn(Optional.of(categoriaDoUsuario(5L, 1L)));
+        when(categoriaRepository.findById(99L)).thenReturn(Optional.empty());
+        when(despesaRepository.save(any(Despesa.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThatThrownBy(() -> despesaService.criarEmLote(1L, List.of(valida, invalida)))
+                .isInstanceOf(RecursoNaoEncontradoException.class);
     }
 
     @Test

@@ -10,11 +10,15 @@ import type { Renda, TipoRenda } from "../types/financas";
 // O <input type="month"> devolve "YYYY-MM"; o backend espera "YYYY-MM-DD",
 // então completamos com "-01" (1º dia do mês) ao enviar.
 // `renda` (opcional) coloca o modal em modo EDIÇÃO — prefill + PUT em vez de POST.
+// `mesPadrao` (opcional, "YYYY-MM") define o mês inicial do form — as telas
+// com seletor de mês (Home, Rendas) passam o mês em foco, pra já abrir o
+// modal apontando pra lá; sem ele, usa o mês atual.
 interface Props {
   aberto: boolean;
   onClose: () => void;
   onCriada: () => void;
   renda?: Renda | null;
+  mesPadrao?: string;
 }
 
 // "2026-07-01" -> "2026-07" (valor que o <input type="month"> entende).
@@ -22,24 +26,26 @@ function mesInicial(): string {
   return primeiroDiaDoMesISO().slice(0, 7);
 }
 
-export function NovaRendaModal({ aberto, onClose, onCriada, renda }: Props) {
+export function NovaRendaModal({ aberto, onClose, onCriada, renda, mesPadrao }: Props) {
   const editando = !!renda;
   const [descricao, setDescricao] = useState("");
   const [valor, setValor] = useState("");
-  const [mes, setMes] = useState(mesInicial()); // "YYYY-MM"
+  const [mes, setMes] = useState(mesPadrao ?? mesInicial()); // "YYYY-MM"
   const [tipo, setTipo] = useState<TipoRenda>("FIXA");
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
 
-  // Ao abrir, sincroniza os campos: com renda -> prefill; sem -> limpa.
+  // Ao abrir, sincroniza os campos: com renda -> prefill; sem -> limpa,
+  // usando o mês em foco atual (mesPadrao) da tela que abriu o modal.
   useEffect(() => {
     if (!aberto) return;
     setErro(null);
     setDescricao(renda?.descricao ?? "");
     setValor(renda ? String(renda.valor) : "");
-    setMes(renda ? renda.mesReferencia.slice(0, 7) : mesInicial());
+    setMes(renda ? renda.mesReferencia.slice(0, 7) : (mesPadrao ?? mesInicial()));
     setTipo(renda?.tipo ?? "FIXA");
-  }, [aberto, renda]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aberto, renda, mesPadrao]);
 
   async function aoEnviar(evento: FormEvent) {
     evento.preventDefault();

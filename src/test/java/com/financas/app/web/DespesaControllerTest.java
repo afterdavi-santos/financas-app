@@ -88,7 +88,25 @@ class DespesaControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(20))
                 .andExpect(jsonPath("$.categoria.id").value(5))
-                .andExpect(jsonPath("$.recorrente").value(false));
+                .andExpect(jsonPath("$.recorrente").value(false))
+                .andExpect(jsonPath("$.mesReferencia").doesNotExist());
+    }
+
+    @Test
+    void deveCriarDespesaEcoandoMesReferenciaQuandoEnviado() throws Exception {
+        Despesa comMesReferencia = despesa(21L);
+        comMesReferencia.setMesReferencia(LocalDate.of(2026, 8, 1));
+        when(despesaService.criar(eq(1L), any(Despesa.class))).thenReturn(comMesReferencia);
+
+        mockMvc.perform(post("/api/despesas")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"descricao":"(Crédito) Mercado","valor":150.00,"data":"2026-07-10","categoriaId":5,"mesReferencia":"2026-08-01"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.mesReferencia").value("2026-08-01"));
     }
 
     @Test
@@ -162,6 +180,36 @@ class DespesaControllerTest {
     void deveRecusarRequisicaoSemAutenticacao() throws Exception {
         mockMvc.perform(get("/api/despesas"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void deveCriarDespesasEmLote() throws Exception {
+        when(despesaService.criarEmLote(eq(1L), any())).thenReturn(List.of(despesa(20L), despesa(21L)));
+
+        mockMvc.perform(post("/api/despesas/lote")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"despesas":[
+                                  {"descricao":"Uber","valor":20.00,"data":"2026-07-10","categoriaId":5},
+                                  {"descricao":"Mercado","valor":30.00,"data":"2026-07-11","categoriaId":5}
+                                ]}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.length()").value(2));
+    }
+
+    @Test
+    void deveRecusarLoteVazio() throws Exception {
+        mockMvc.perform(post("/api/despesas/lote")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"despesas":[]}
+                                """))
+                .andExpect(status().isBadRequest());
     }
 
 }

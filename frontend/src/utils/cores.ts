@@ -41,6 +41,18 @@ export function corEscalaEconomia(percentual: number): string {
   return "#005E2F"; // verde escuro — bem longe de zero
 }
 
+// Cor do badge de aviso de duplicata no Leitor de fatura, por nível de risco
+// (ver DetectorDuplicidadeFatura no backend) — todos os 4 níveis (incluindo
+// BLOCO) são "possível duplicata", então todos ficam em tons de vermelho
+// (`grouper-red` #BA0000 como âncora), variando só a tonalidade conforme a
+// confiança: mais escuro/saturado = mais certeza de que já existe.
+export function corNivelDuplicata(nivel: "ALTISSIMA" | "ALTA" | "MEDIA" | "BLOCO"): CorDificuldade {
+  if (nivel === "ALTISSIMA") return { fundo: "#8B0000", texto: "#FFFFFF" }; // vermelho mais escuro
+  if (nivel === "ALTA") return { fundo: "#BA0000", texto: "#FFFFFF" }; // grouper-red
+  if (nivel === "MEDIA") return { fundo: "#C6403A", texto: "#FFFFFF" }; // vermelho mais claro
+  return { fundo: "#D97A75", texto: "#FFFFFF" }; // BLOCO — vermelho mais claro ainda
+}
+
 // Escala de azuis do brandbook (claro → escuro) para a barra de progresso dos
 // Objetivos: quanto menor o percentual, mais claro; quanto maior, mais
 // escuro. Mesmos 5 tons de `--color-grouper-*` em `index.css` (vindos do

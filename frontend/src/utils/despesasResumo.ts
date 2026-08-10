@@ -3,6 +3,14 @@
 // serem fáceis de ler/testar (não dependem de React nem de axios).
 import type { Despesa, TipoCategoria } from "../types/financas";
 
+// "Mês que conta pro orçamento" de uma despesa: mesReferencia (setado só
+// pelo Leitor de fatura, quando a despesa "pula" pro mês em que a fatura é
+// paga) se presente, senão o mês de `data` (despesa manual). Espelha
+// DespesaSpecification.comPeriodo (COALESCE) no backend. Formato "YYYY-MM".
+export function mesEfetivoDespesa(despesa: Despesa): string {
+  return (despesa.mesReferencia ?? despesa.data).slice(0, 7);
+}
+
 // Soma o `valor` das despesas de um dado tipo (FIXA ou VARIAVEL — herdado da categoria).
 export function somaPorTipo(despesas: Despesa[], tipo: TipoCategoria): number {
   return despesas
@@ -93,27 +101,39 @@ export function variacaoCategorias(
   });
 }
 
-// Categoria que mais SUBIU (maior deltaRs > 0), ou null se ninguém subiu.
-// Fora da disputa: categorias criadas neste mês (não tinham como ter gasto
-// mês passado) e categorias sem NENHUM gasto no mês anterior (comparar com
-// zero infla a "alta" artificialmente).
+// Categorias que SUBIRAM (deltaRs > 0), da maior alta para a menor. Fora da
+// disputa: categorias criadas neste mês (não tinham como ter gasto mês
+// passado) e categorias sem NENHUM gasto no mês anterior (comparar com zero
+// infla a "alta" artificialmente).
+export function altasOrdenadas(
+  variacoes: VariacaoCategoria[],
+): VariacaoCategoria[] {
+  return variacoes
+    .filter((v) => v.deltaRs > 0 && !v.criadaNoMesAtual && v.anterior > 0)
+    .sort((a, b) => b.deltaRs - a.deltaRs);
+}
+
+// Categoria que mais SUBIU, ou null se ninguém subiu.
 export function maiorAlta(
   variacoes: VariacaoCategoria[],
 ): VariacaoCategoria | null {
-  const altas = variacoes.filter(
-    (v) => v.deltaRs > 0 && !v.criadaNoMesAtual && v.anterior > 0,
-  );
-  if (altas.length === 0) return null;
-  return altas.reduce((max, v) => (v.deltaRs > max.deltaRs ? v : max));
+  return altasOrdenadas(variacoes)[0] ?? null;
 }
 
-// Categoria que mais CAIU (deltaRs mais negativo), ou null se ninguém caiu.
-// Só concorre quem já teve pelo menos um gasto no mês atual — categoria
+// Categorias que CAÍRAM (deltaRs < 0), da maior queda para a menor. Só
+// concorre quem já teve pelo menos um gasto no mês atual — categoria
 // "zerada" só porque o mês mal começou não é uma queda de verdade ainda.
+export function baixasOrdenadas(
+  variacoes: VariacaoCategoria[],
+): VariacaoCategoria[] {
+  return variacoes
+    .filter((v) => v.deltaRs < 0 && v.atual > 0)
+    .sort((a, b) => a.deltaRs - b.deltaRs);
+}
+
+// Categoria que mais CAIU, ou null se ninguém caiu.
 export function maiorBaixa(
   variacoes: VariacaoCategoria[],
 ): VariacaoCategoria | null {
-  const baixas = variacoes.filter((v) => v.deltaRs < 0 && v.atual > 0);
-  if (baixas.length === 0) return null;
-  return baixas.reduce((min, v) => (v.deltaRs < min.deltaRs ? v : min));
+  return baixasOrdenadas(variacoes)[0] ?? null;
 }

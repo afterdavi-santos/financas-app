@@ -342,6 +342,7 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
       <NovaRendaModal
         aberto={modalAberto}
         renda={editando}
+        mesPadrao={mes}
         onClose={() => setModalAberto(false)}
         onCriada={() => {
           setModalAberto(false);

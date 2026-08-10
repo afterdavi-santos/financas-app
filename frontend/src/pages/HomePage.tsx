@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { NovaDespesaModal } from "../components/NovaDespesaModal";
 import { NovaRendaModal } from "../components/NovaRendaModal";
+import { LeitorFaturaModal } from "../components/LeitorFaturaModal";
 import { NovoInvestimentoCdbModal } from "../components/NovoInvestimentoCdbModal";
 import { ExcluirInvestimentoModal } from "../components/ExcluirInvestimentoModal";
 import { ResgatarCdbModal } from "../components/ResgatarCdbModal";
@@ -30,6 +31,7 @@ import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { rotuloTipoCategoria, dataBR, mesCurtoBR } from "../utils/rotulos";
 import {
+  hojeISO,
   mesAtualYYYYMM,
   primeiroDiaDoMes,
   ultimoDiaDoMes,
@@ -82,6 +84,7 @@ export function HomePage() {
   // Controle de qual modal está aberto.
   const [modalDespesa, setModalDespesa] = useState(false);
   const [modalRenda, setModalRenda] = useState(false);
+  const [modalLeitorFatura, setModalLeitorFatura] = useState(false);
   const [modalInvestimento, setModalInvestimento] = useState(false);
   const [modalPlano, setModalPlano] = useState(false);
   const [editandoInvestimento, setEditandoInvestimento] = useState<InvestimentoCdb | null>(null);
@@ -180,6 +183,12 @@ export function HomePage() {
       });
   }, [investimentos]);
 
+  // Data padrão do modal de nova despesa: hoje, se o mês em foco for o mês
+  // atual; senão o dia 1 do mês em foco — mesmo padrão de DespesasPage, pra
+  // já abrir o modal apontando pro mês que está sendo visto, não sempre hoje.
+  const dataPadraoNovaDespesa =
+    mes === mesAtualYYYYMM() ? hojeISO() : primeiroDiaDoMes(mes);
+
   // Derivados do estado (recalculados a cada render, sem estado extra):
   const totalDespesas = despesas.reduce((soma, d) => soma + d.valor, 0);
   const economia = renda - totalDespesas;
@@ -231,6 +240,11 @@ export function HomePage() {
     carregar();
   }
 
+  function aoImportarFatura() {
+    setModalLeitorFatura(false);
+    carregar();
+  }
+
   function abrirNovoInvestimento() {
     setEditandoInvestimento(null);
     setModalInvestimento(true);
@@ -260,57 +274,44 @@ export function HomePage() {
 
   return (
     <div className="w-full space-y-4">
-      <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-3">
-        {/* No mobile, título e avatar dividem a mesma linha (lg:block tira
-            o avatar-mobile de dentro, já que em lg+ ele mora na ponta
-            direita da página — ver abaixo). */}
-        <div className="flex items-center justify-between gap-3 lg:col-span-2 lg:block">
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-grouper-ink">
-            Início
-          </h1>
-          {/* Avatar mobile: ao lado do título. Some em lg+ (o de baixo assume). */}
-          <div className="lg:hidden">
-            <Avatar menu />
-          </div>
-        </div>
-        {/* Alinhado com a coluna direita (Economia do mês) logo abaixo: os
-            botões começam onde aquele card começa, e o avatar fica na
-            borda direita da página, como antes. O seletor de mês entra no
-            espaço vazio que já existia ali (pl-44 -> pl-6 + w-36 do input +
-            gap-2 = 24+144+8 = 176px = os mesmos 44*4px de antes), então
-            "+ Adicionar renda" continua exatamente na mesma posição. */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          {/* No mobile os 3 controles empilham (mês em cima, renda embaixo
-              dele, despesa embaixo de renda); em lg+ voltam a ficar numa
-              linha só, como sempre foi. */}
-          <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:pl-6">
-            <input
-              type="month"
-              value={mes}
-              onChange={(e) => selecionarMes(e.target.value)}
-              // O navegador só abre o seletor nativo ao clicar no ícone do
-              // calendário; showPicker() faz o clique em qualquer parte do
-              // "botão" abrir o mesmo seletor.
-              onClick={(e) => e.currentTarget.showPicker?.()}
-              className="w-full cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-3 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid lg:w-36"
-            />
-            <button
-              onClick={() => setModalRenda(true)}
-              className="w-full rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep lg:w-auto"
-            >
-              + Adicionar renda
-            </button>
-            <button
-              onClick={() => setModalDespesa(true)}
-              className="w-full rounded-md bg-grouper-ink px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-black lg:w-auto"
-            >
-              + Adicionar despesa
-            </button>
-          </div>
-          {/* Avatar desktop: posição original, na borda direita da página. */}
-          <div className="hidden lg:block">
-            <Avatar menu />
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-grouper-ink">
+          Início
+        </h1>
+        {/* Botões colados ao avatar (mesmo grupo, gap pequeno entre eles),
+            avatar sempre por último — o grupo inteiro fica na mesma linha
+            do título, na ponta direita da página, mantendo o avatar exatamente
+            onde sempre esteve. */}
+        <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:gap-3">
+          <input
+            type="month"
+            value={mes}
+            onChange={(e) => selecionarMes(e.target.value)}
+            // O navegador só abre o seletor nativo ao clicar no ícone do
+            // calendário; showPicker() faz o clique em qualquer parte do
+            // "botão" abrir o mesmo seletor.
+            onClick={(e) => e.currentTarget.showPicker?.()}
+            className="w-full cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-3 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid lg:w-36"
+          />
+          <button
+            onClick={() => setModalLeitorFatura(true)}
+            className="w-full rounded-md bg-grouper-deep px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-ink lg:w-auto"
+          >
+            Leitor de fatura
+          </button>
+          <button
+            onClick={() => setModalRenda(true)}
+            className="w-full rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep lg:w-auto"
+          >
+            + Adicionar renda
+          </button>
+          <button
+            onClick={() => setModalDespesa(true)}
+            className="w-full rounded-md bg-grouper-ink px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-black lg:w-auto"
+          >
+            + Adicionar despesa
+          </button>
+          <Avatar menu />
         </div>
       </div>
 
@@ -716,11 +717,20 @@ export function HomePage() {
         onClose={() => setModalDespesa(false)}
         onCriada={aoSalvar}
         categorias={categorias}
+        dataPadrao={dataPadraoNovaDespesa}
       />
       <NovaRendaModal
         aberto={modalRenda}
         onClose={() => setModalRenda(false)}
         onCriada={aoSalvar}
+        mesPadrao={mes}
+      />
+      <LeitorFaturaModal
+        aberto={modalLeitorFatura}
+        onClose={() => setModalLeitorFatura(false)}
+        categorias={categorias}
+        onImportado={aoImportarFatura}
+        mes={mes}
       />
       <NovoInvestimentoCdbModal
         aberto={modalInvestimento}
