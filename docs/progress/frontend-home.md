@@ -1495,3 +1495,86 @@ Fixa/Variável aparecendo só quando há nome duplicado, cabeçalhos de
 Movimentações/Planejamento numa linha só, cores dos botões de Planejamento,
 layout novo do bloco Limites, filtro de Categorias, e os textos ajustados de
 Ponto de atenção.
+
+## Parte 16 — Cor do botão e layout do popup "Plano de contenção" (2026-08-10)
+
+Sessão só de frontend, iterando com o usuário vendo cada resultado. `npm run
+build`/`npm run lint` limpos a cada mudança.
+
+### Bug: botão continuava verde com a economia bem negativa
+Reportado pelo usuário: adicionou despesas até a economia do mês ficar
+negativa, e o botão "Plano de contenção" continuou verde. Investigado com os
+números reais do usuário (renda fixa R$ 8.658,00 toda fixa; despesas R$
+8.822,76 todas variáveis, maior categoria "Farmácia e saúde" R$ 6.500):
+- **Primeira suspeita, descartada**: achei que seria despesas do tipo Fixa
+  sem nenhuma categoria variável pra cortar (nesse caso
+  `dificuldadeContencao()` reduzia a `0/0` e caía em verde por acidente) —
+  corrigido, mas não era a causa real do usuário (as despesas dele eram
+  variáveis).
+- **Causa real**: a cor vinha de uma escala baseada em "% da categoria
+  variável **selecionada** que precisa ser cortada pra fechar as contas" —
+  com os números do usuário, cortar R$ 164,76 de uma categoria de R$ 6.500
+  é só 2,5%, então caía em verde ("tranquilo"), mesmo a economia do mês
+  sendo negativa em R$. Confirmado com o usuário que isso não é bug de
+  estado, é o critério em si não bater com a expectativa dele.
+- **Decisão do usuário** (pergunta direta, 3 opções): trocar o critério
+  inteiro pra refletir a economia em si (mesma escala já usada na borda do
+  card "Economia do mês"), em vez de manter o critério antigo ou só colocar
+  um piso mínimo nele.
+
+### Cor do botão trocada de critério
+- `utils/cores.ts` — nova `corEscalaEconomiaBotao(percentual)`: mesma escala
+  de `corEscalaEconomia` (vermelho→verde por degraus de 20%, já usada na
+  borda do card "Economia do mês"), mas retornando também a cor do texto
+  (só o degrau amarelo precisa de texto escuro pra contraste; os outros 4
+  funcionam com texto branco). `corEscalaDificuldade` (antiga escala) e
+  `dificuldadeContencao()` (`utils/contencaoRendaVariavel.ts`) removidas —
+  ficaram órfãs, sem nenhum outro caller.
+- `HomePage.tsx` — `corBotaoPlano` agora vem de
+  `corEscalaEconomiaBotao(percentualEconomia)`, com `percentualEconomia =
+  economia / renda * 100` (clampado 0–100, mesma fórmula do
+  `EconomiaDestaque.tsx`).
+
+### Meta do plano: de "não fechar negativo" pra "10% de folga sobre a renda fixa"
+Pedido do usuário: em vez de mirar em economia zero (relativa à renda fixa),
+mirar em fechar o mês com pelo menos **10% de folga** sobre a renda fixa.
+`valorNecessarioReduzir` (`HomePage.tsx`) passou de `max(0, despesas −
+rendaFixa)` pra `max(0, despesas − rendaFixa * 0.9)` (constante
+`MARGEM_FOLGA_RENDA_FIXA = 0.1`, fácil de ajustar se o valor mudar).
+
+### Layout do popup
+Várias iterações pequenas, nesta ordem:
+- **Fontes maiores**: textos principais de `text-sm` → `text-base`, avisos
+  de `text-xs` → `text-sm`.
+- **Aviso de economia negativa**: primeiro só teve a cor trocada de
+  preto/cinza pra vermelho (`border-red-600 bg-red-50 text-red-700`) e o
+  valor numérico entre parênteses removido do texto; depois moveu de cima
+  (antes do texto explicativo) pra baixo da lista de categorias; **por fim,
+  removido por completo** a pedido do usuário — não existe mais.
+- **Dois parágrafos viraram um só**: a frase "Sua renda fixa não seria
+  suficiente..." e "Para não fechar o próximo mês no negativo, considere
+  reduzir..." eram `<p>` separados com cores diferentes (`grouper-navy` e
+  `grouper-ink`); viraram um único parágrafo, mesma cor (`grouper-ink`),
+  depois reduzido pra `text-sm` (pra bater com o tamanho do aviso vermelho
+  que existia até então) e por fim posto em **negrito**
+  (`font-semibold`).
+  - Texto final: "{explicação com/sem renda variável}. Para não fechar o
+    próximo mês no negativo e conseguir guardar ao menos 10% da sua renda
+    fixa, considere seguir este plano de contenção:" — não cita mais o valor
+    total a reduzir nessa frase (esse valor não está mais em nenhum texto
+    corrido, só implícito na soma dos cards de categoria).
+- **Lista de categorias virou cards**: era uma `<ul>` com `divide-y`
+  (linhas simples); virou uma lista de cards (`rounded-lg border-l-4
+  border-grouper-red bg-white shadow-sm`, `space-y-2` entre eles) — mesmo
+  padrão visual dos blocos "Ponto de atenção"/"Parabéns" de Despesas. Cada
+  card: nome + gasto atual à esquerda; valor a cortar em destaque (`text-base
+  font-semibold text-grouper-red`) + percentual como legenda menor
+  (`text-xs`) à direita.
+
+### Verificação
+`npm run build`/`npm run lint` limpos a cada mudança (só os avisos
+pré-existentes de `AuthContext`/`PerfilContext`). **Falta o usuário conferir
+visualmente**: cor do botão batendo com a economia real do mês em diferentes
+cenários, meta de 10% de folga refletida corretamente na sugestão de corte,
+e o layout novo do popup (parágrafo único em negrito, cards de categoria,
+sem o aviso vermelho).

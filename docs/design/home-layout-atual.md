@@ -398,27 +398,48 @@ Detalhes técnicos e o "porquê" em `docs/design/a11y-e-responsividade.md`
 
 #### 4.5.4 Botão + pop-up "Plano de contenção"
 - Botão (`Plano de contenção — {mês seguinte}`, sem aspas ao redor do mês)
-  no cabeçalho do card "Economia nos últimos meses" (ver 4.5.2). Agora com o
-  mesmo tratamento Khand caixa alta com tracking em `text-[13px]` (sem
-  negrito) dos outros botões secundários da Home (era texto normal, sem
-  Khand). Clicar abre o conteúdo num `Modal` genérico centralizado na tela.
-  **"Mês seguinte" é relativo ao mês em foco** (`mesSeguinteYYYYMM(mes)`, ver
-  4.1), não ao mês seguinte ao real — projeta a partir do mês que está sendo
-  visto, não de hoje.
-- **Cor do botão** (`utils/cores.ts`, `corEscalaDificuldade`): degraus
-  verde → amarelo → laranja → vermelho, baseados em `dificuldadeContencao()`
-  (`utils/contencaoRendaVariavel.ts`) — a fração das despesas extraordinárias
-  selecionadas que precisa ser cortada pra fechar o mês seguinte:
-  - até 40% → verde (`#005E2F`) | 40–70% → amarelo (`#ECA000`) | 70–90% →
-    laranja (`#D96000`) | acima de 90% → vermelho (`#BA0000`, = exatamente o
-    caso em que cortar tudo ainda não é suficiente).
-  - Cores tiradas das paletas de referência em
-    `frontend/public/brand/palettes/` (ver seção 0), não são mais tons
-    genéricos do Tailwind (`bg-red-500` etc.).
-  - Cor do texto do botão muda para garantir contraste (escuro no amarelo,
-    branco nos demais).
-- Conteúdo do modal (igual antes): texto explicativo + lista de categorias com
-  sugestão de corte, ou faixa verde "✓" se a renda fixa já cobre tudo.
+  no cabeçalho do card "Economia nos últimos meses" (ver 4.5.2). Mesmo
+  tratamento Khand caixa alta com tracking em `text-[13px]` (sem negrito) dos
+  outros botões secundários da Home. Clicar abre o conteúdo num `Modal`
+  genérico centralizado na tela. **"Mês seguinte" é relativo ao mês em foco**
+  (`mesSeguinteYYYYMM(mes)`, ver 4.1), não ao mês seguinte ao real — projeta
+  a partir do mês que está sendo visto, não de hoje.
+- **Meta do plano** (2026-08-10, mudou de critério): antes mirava em
+  economia = 0 em relação à renda fixa ("não fechar negativo"); agora mira
+  em fechar o mês com pelo menos **10% de folga** sobre a renda fixa —
+  `valorNecessarioReduzir = max(0, despesas − rendaFixa × 0.9)`
+  (`HomePage.tsx`, constante `MARGEM_FOLGA_RENDA_FIXA`).
+- **Cor do botão** (`utils/cores.ts`, `corEscalaEconomiaBotao` — 2026-08-10,
+  mudou de critério): reflete a **economia do mês em si**
+  (`economia / renda × 100`, mesma fórmula e mesma escala de degraus por 20%
+  já usada na borda do card "Economia do mês", ver `corEscalaEconomia`), não
+  mais "% da categoria variável selecionada que precisaria ser cortada" — o
+  critério antigo (`corEscalaDificuldade`/`dificuldadeContencao`, removidos)
+  podia dar verde mesmo com a economia bem negativa, se a categoria
+  escolhida pro corte fosse grande o bastante pra um corte pequeno em %
+  cobrir o buraco. Só o degrau amarelo (`#ECA000`) usa texto escuro pra
+  contraste; os outros 4 tons usam texto branco.
+- **Conteúdo do modal** (reformulado em 2026-08-10):
+  - Faixa verde "✓ Sua renda fixa (R$X) cobre as despesas deste mês (R$Y) —
+    nada precisa ser reduzido." quando não há nada a cortar (mesmo texto pros
+    dois casos — com ou sem renda variável no mês; antes tinha uma frase
+    diferente pra cada).
+  - Quando há algo a cortar: **um único parágrafo em negrito**
+    (`font-semibold`, era dois parágrafos com cores diferentes) juntando a
+    explicação (renda fixa insuficiente, com ou sem renda variável) e a
+    chamada pro corte ("...considere seguir este plano de contenção:") — não
+    cita mais o valor total a reduzir no texto corrido, só implícito na soma
+    dos cards abaixo.
+  - **Categorias em cards** (era uma lista simples com `divide-y`): cada
+    categoria vira um card branco (`rounded-lg border-l-4 border-grouper-red
+    shadow-sm`, mesmo padrão visual dos blocos "Ponto de atenção"/"Parabéns"
+    de Despesas) — nome + gasto atual à esquerda, valor a cortar em destaque
+    (vermelho, negrito) + percentual como legenda menor à direita.
+  - Aviso "não cobre" (quando cortar tudo ainda não é suficiente) continua
+    igual, faixa preta.
+  - **Aviso de economia já negativa foi removido** (existia como uma faixa
+    vermelha extra, chegou a mudar de posição algumas vezes na mesma sessão)
+    — decisão do usuário de simplificar o popup.
 
 ### 4.6 Modais
 
