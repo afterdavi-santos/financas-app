@@ -9,6 +9,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { Modal } from "./Modal";
+import { ConfirmacaoModal } from "./ConfirmacaoModal";
+import { SeletorData } from "./SeletorData";
 import {
   listarAportes,
   editarAporte,
@@ -50,6 +52,9 @@ export function LinhaTempoAportesModal({ objetivo, onClose, onAlterado }: Props)
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [editValor, setEditValor] = useState("");
   const [editData, setEditData] = useState("");
+  // Popup de confirmação de remoção (substitui o confirm() nativo). null =
+  // fechado.
+  const [confirmandoRemocaoId, setConfirmandoRemocaoId] = useState<number | null>(null);
 
   async function carregar(objetivoId: number) {
     setErro(null);
@@ -102,16 +107,17 @@ export function LinhaTempoAportesModal({ objetivo, onClose, onAlterado }: Props)
     }
   }
 
-  async function excluir(aporteId: number) {
-    if (!objetivo) return;
-    if (!confirm("Remover este aporte?")) return;
+  async function confirmarRemocao() {
+    if (!objetivo || confirmandoRemocaoId === null) return;
     setErro(null);
     try {
-      await removerAporte(objetivo.id, aporteId);
+      await removerAporte(objetivo.id, confirmandoRemocaoId);
       await carregar(objetivo.id);
       onAlterado();
     } catch (e) {
       setErro(mensagemDeErro(e));
+    } finally {
+      setConfirmandoRemocaoId(null);
     }
   }
 
@@ -170,10 +176,9 @@ export function LinhaTempoAportesModal({ objetivo, onClose, onAlterado }: Props)
               <li key={a.id} className="py-2">
                 {editandoId === a.id ? (
                   <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      type="date"
+                    <SeletorData
                       value={editData}
-                      onChange={(e) => setEditData(e.target.value)}
+                      onChange={setEditData}
                       className="rounded-md border border-slate-300 px-2 py-1 text-sm"
                     />
                     <input
@@ -215,7 +220,7 @@ export function LinhaTempoAportesModal({ objetivo, onClose, onAlterado }: Props)
                         Editar
                       </button>
                       <button
-                        onClick={() => excluir(a.id)}
+                        onClick={() => setConfirmandoRemocaoId(a.id)}
                         className="text-sm font-medium text-red-600 hover:text-red-700"
                       >
                         Excluir
@@ -228,6 +233,15 @@ export function LinhaTempoAportesModal({ objetivo, onClose, onAlterado }: Props)
           </ul>
         </div>
       )}
+
+      <ConfirmacaoModal
+        aberto={confirmandoRemocaoId !== null}
+        titulo="Remover aporte"
+        mensagem="Remover este aporte?"
+        textoConfirmar="Remover"
+        onConfirmar={confirmarRemocao}
+        onClose={() => setConfirmandoRemocaoId(null)}
+      />
     </Modal>
   );
 }

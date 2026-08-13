@@ -93,7 +93,7 @@ export function ExcluirCategoriaModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+                className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
               >
                 Cancelar
               </button>
@@ -101,7 +101,7 @@ export function ExcluirCategoriaModal({
                 type="button"
                 onClick={excluirSimples}
                 disabled={carregando}
-                className="rounded-md bg-red-600 px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-red-700 disabled:opacity-60"
+                className="rounded-md bg-red-600 px-4 py-2 font-display text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
               >
                 {carregando ? "Excluindo..." : "Excluir"}
               </button>
@@ -143,14 +143,14 @@ export function ExcluirCategoriaModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+                className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={() => categoria && onEditar(categoria)}
-                className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep"
+                className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep"
               >
                 Editar categoria
               </button>
@@ -158,7 +158,7 @@ export function ExcluirCategoriaModal({
                 type="button"
                 onClick={excluirEmCascata}
                 disabled={!confirmado || carregando}
-                className="rounded-md bg-red-600 px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-md bg-red-600 px-4 py-2 font-display text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {carregando ? "Excluindo..." : "Excluir mesmo assim"}
               </button>

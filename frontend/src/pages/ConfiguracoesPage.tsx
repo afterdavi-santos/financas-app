@@ -15,7 +15,7 @@ const classeInput =
   "w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50";
 const classeLabel = "text-sm font-medium text-grouper-navy";
 const classeBotaoSalvar =
-  "rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep disabled:opacity-60";
+  "rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep disabled:opacity-60";
 // Título de seção em Khand, igual a todos os outros cards do app.
 const classeTitulo = "font-display text-lg font-semibold text-grouper-ink";
 
@@ -117,16 +117,25 @@ function CartaoIdentidade() {
       <div className="flex items-center gap-5">
         <div className="group relative shrink-0">
           <Avatar tamanho="lg" />
+          {/* Botão já é `absolute` ancorado neste container — não usa o
+              componente <Tooltip> (que também é `relative`, quebraria essa
+              âncora); o balão aqui é um irmão posicionado à parte, ligado ao
+              hover/foco do botão via `peer`. */}
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
             disabled={carregando}
             aria-label="Alterar foto de perfil"
-            title="Alterar foto de perfil"
-            className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-grouper-mid text-white shadow-sm transition-colors hover:bg-grouper-deep disabled:opacity-60"
+            className="peer absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-grouper-mid text-white shadow-sm transition-colors hover:bg-grouper-deep disabled:opacity-60"
           >
             <IconeCamera />
           </button>
+          <span
+            role="tooltip"
+            className="pointer-events-none absolute -bottom-1 right-8 z-50 whitespace-nowrap rounded-md bg-white px-2 py-1 text-xs font-medium text-grouper-ink opacity-0 shadow-md ring-1 ring-grouper-sky/40 transition-opacity duration-150 peer-hover:opacity-100 peer-focus:opacity-100"
+          >
+            Alterar foto de perfil
+          </span>
           <input
             ref={inputRef}
             type="file"

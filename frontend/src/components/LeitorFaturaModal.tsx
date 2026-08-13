@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "./Modal";
+import { Tooltip } from "./Tooltip";
 import { SeletorCategoria, OPCAO_NOVA_CATEGORIA } from "./SeletorCategoria";
 import { useSelecao } from "../hooks/useSelecao";
 import { processarFatura } from "../api/leituraFatura";
@@ -7,9 +8,10 @@ import { criarCategoria } from "../api/categorias";
 import { criarDespesasEmLote } from "../api/despesas";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
-import { primeiroDiaDoMes } from "../utils/datas";
-import { dataBR } from "../utils/rotulos";
+import { mesAtualYYYYMM, mesSeguinteYYYYMM, primeiroDiaDoMes } from "../utils/datas";
+import { dataBR, mesCurtoBR } from "../utils/rotulos";
 import { corNivelDuplicata } from "../utils/cores";
+import { encontrarCategoriaCartaoCredito, mesPrincipalDaFatura } from "../utils/leitorFatura";
 import type { Categoria, DespesaRequest, TipoCategoria } from "../types/financas";
 import type { ItemFaturaExtraido, ItemIgnorado, NivelDuplicata } from "../types/leituraFatura";
 
@@ -101,6 +103,17 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
   const [erroSalvar, setErroSalvar] = useState<string | null>(null);
   const [carregandoSalvar, setCarregandoSalvar] = useState(false);
 
+  // Mês em que as despesas importadas vão contar no orçamento
+  // (`mesReferencia`) — decoupled do prop `mes` (usado só pra chamada de
+  // upload, ver comentário na Props). Começa igual ao `mes` da página, mas
+  // é ajustado assim que a fatura é processada (ver aoEscolherArquivo) com
+  // base no "mês principal" calculado a partir das datas reais dos itens.
+  const [mesEscolhido, setMesEscolhido] = useState(mes);
+  const [mesPrincipal, setMesPrincipal] = useState<string | null>(null);
+  // Fallback só de segurança de tipos — na prática o popup de escolha de mês
+  // só abre depois da fatura processada, quando mesPrincipal já está setado.
+  const mesPrincipalPopup = mesPrincipal ?? mesAtualYYYYMM();
+
   // O componente monta uma vez só (junto com a HomePage) e fica sempre na
   // árvore (é o Modal por dentro que entra/sai do DOM via `aberto`), então
   // `categoriasLocais` (inicializada de `categorias` só na 1ª montagem)
@@ -132,6 +145,10 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
     setErroLote(null);
     setErroSalvar(null);
     setPedindoConfirmacaoSalvarParcial(false);
+    setMesEscolhido(mes);
+    setMesPrincipal(null);
+    setPedindoEscolhaMes(false);
+    setPedindoConfirmacaoCartaoTodos(false);
   }
 
   function aoFechar() {
@@ -179,12 +196,16 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
   // salva direto, sem aviso.
   const [pedindoConfirmacaoSalvarParcial, setPedindoConfirmacaoSalvarParcial] = useState(false);
 
+  // Popup separado (próximo passo, não inline na tela de categorização) pra
+  // escolher o mês de orçamento antes de salvar de fato.
+  const [pedindoEscolhaMes, setPedindoEscolhaMes] = useState(false);
+
   function aoClicarContinuar() {
     if (itensParaCategorizar.length > 0) {
       setPedindoConfirmacaoSalvarParcial(true);
       return;
     }
-    salvarTudo();
+    setPedindoEscolhaMes(true);
   }
 
   function manterCategorizando() {
@@ -193,6 +214,15 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
 
   function confirmarSalvarParcial() {
     setPedindoConfirmacaoSalvarParcial(false);
+    setPedindoEscolhaMes(true);
+  }
+
+  function voltarDaEscolhaMes() {
+    setPedindoEscolhaMes(false);
+  }
+
+  function confirmarEscolhaMes() {
+    setPedindoEscolhaMes(false);
     salvarTudo();
   }
 
@@ -272,6 +302,19 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
       selecaoRevisao.selecionarTodos(
         itens.filter((i) => i.nivelDuplicata === null).map((i) => i.id),
       );
+
+      // Mês principal = moda das datas reais dos itens (não das linhas já
+      // mescladas). Pré-seleção (entre o próprio mês principal e o mês
+      // seguinte a ele — não o mês atual real, ver popup de escolha de mês):
+      // se a fatura é majoritariamente do mês atual, ainda deve fechar/ser
+      // paga no mês seguinte a ela; se já é de um mês passado, assume que
+      // está sendo paga no próprio mês da fatura.
+      const principal = mesPrincipalDaFatura(itens);
+      setMesPrincipal(principal);
+      if (principal) {
+        setMesEscolhido(principal === mesAtualYYYYMM() ? mesSeguinteYYYYMM(principal) : principal);
+      }
+
       setEtapa("revisao");
     } catch (e) {
       setErroUpload(mensagemDeErro(e));
@@ -318,6 +361,71 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
 
   const criandoNovaCategoriaLote = categoriaBatchId === OPCAO_NOVA_CATEGORIA;
 
+  const categoriaCartaoExistente = useMemo(
+    () => encontrarCategoriaCartaoCredito(categoriasLocais),
+    [categoriasLocais],
+  );
+
+  // Popup de aviso próprio — só aparece quando já existem itens
+  // categorizados manualmente antes de clicar no atalho (ver
+  // aplicarCategoriaCartaoATodos), pra não sobrescrever silenciosamente uma
+  // categorização que a pessoa já tinha feito.
+  const [pedindoConfirmacaoCartaoTodos, setPedindoConfirmacaoCartaoTodos] = useState(false);
+
+  // Atalho: aplica a categoria "Cartão de crédito" (criando-a se ainda não
+  // existir uma parecida). O fluxo manual em lote (selecionar + escolher
+  // outra categoria) continua disponível pra despesas que não sejam de
+  // cartão nessa mesma fatura.
+  function aplicarCategoriaCartaoATodos() {
+    setErroLote(null);
+    if (itensParaCategorizar.length === 0) return;
+    // Já há itens categorizados manualmente: pergunta antes de decidir se
+    // isso é sobrescrito (ignorado) ou preservado.
+    if (itensProntos.length > 0) {
+      setPedindoConfirmacaoCartaoTodos(true);
+      return;
+    }
+    executarCategoriaCartaoATodos(false);
+  }
+
+  function manterCartaoTodosParado() {
+    setPedindoConfirmacaoCartaoTodos(false);
+  }
+
+  // `ignorarExistentes`: false = mantém itensProntos como estão, só aplica a
+  // categoria de cartão nos restantes (`itensParaCategorizar`); true =
+  // ignora a categorização já feita e joga TUDO (os já categorizados +
+  // os restantes) na categoria de cartão.
+  async function executarCategoriaCartaoATodos(ignorarExistentes: boolean) {
+    setPedindoConfirmacaoCartaoTodos(false);
+    setErroLote(null);
+    setCarregandoLote(true);
+    try {
+      let categoriaId: number;
+      if (categoriaCartaoExistente) {
+        categoriaId = categoriaCartaoExistente.id;
+      } else {
+        const nova = await criarCategoria({ nome: "Cartão de crédito", tipo: "VARIAVEL" });
+        categoriaId = nova.id;
+        setCategoriasLocais((atual) => [...atual, nova]);
+      }
+
+      const baseProntos = ignorarExistentes
+        ? itensProntos.map(({ item }) => ({ item, categoriaId }))
+        : itensProntos;
+      setItensProntos([
+        ...baseProntos,
+        ...itensParaCategorizar.map((item) => ({ item, categoriaId })),
+      ]);
+      setItensParaCategorizar([]);
+      selecaoLote.limpar();
+    } catch (e) {
+      setErroLote(mensagemDeErro(e));
+    } finally {
+      setCarregandoLote(false);
+    }
+  }
+
   async function aplicarCategoriaAoLote() {
     setErroLote(null);
     if (!categoriaBatchId) {
@@ -362,7 +470,7 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
         valor: item.valor,
         data: item.data,
         categoriaId,
-        mesReferencia: primeiroDiaDoMes(mes),
+        mesReferencia: primeiroDiaDoMes(mesEscolhido),
       }));
       await criarDespesasEmLote(despesas);
       reiniciar();
@@ -381,7 +489,6 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
       aberto={aberto}
       onClose={tentarFechar}
       largura="max-w-4xl"
-      classeCard="border-2 border-grouper-ink"
       bordaCabecalho={false}
     >
       {etapa === "upload" && (
@@ -413,7 +520,7 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
               type="button"
               onClick={() => inputRef.current?.click()}
               disabled={carregandoUpload}
-              className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep disabled:opacity-60"
+              className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep disabled:opacity-60"
             >
               {carregandoUpload ? "Lendo fatura..." : "Selecionar CSV da fatura"}
             </button>
@@ -421,7 +528,7 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
               href="https://www.youtube.com/watch?v=6XWIS6YDm4g&pp=ygUdZXhwb3J0YXIgZmF0dXJhIG51YmFuayBlbSBjc3Y%3D"
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-md border-2 border-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-mid hover:bg-grouper-mist"
+              className="rounded-md border-2 border-grouper-mid px-4 py-2 font-display text-sm font-semibold text-grouper-mid hover:bg-grouper-mist"
             >
               Tutorial de exportação
             </a>
@@ -455,14 +562,14 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
                 <button
                   type="button"
                   onClick={voltarParaUpload}
-                  className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+                  className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
                 >
                   ← Voltar
                 </button>
                 <button
                   type="button"
                   onClick={aoFechar}
-                  className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+                  className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
                 >
                   Fechar
                 </button>
@@ -504,7 +611,7 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
                 </label>
               </div>
               <ul className="max-h-96 divide-y divide-grouper-ink/20 overflow-y-auto rounded-md border border-grouper-ink/20">
-                {linhasRevisao.map((linha) => (
+                {linhasRevisao.map((linha, indice) => (
                   <li key={linha.id} className="flex items-center gap-3 px-3 py-2.5">
                     <input
                       type="checkbox"
@@ -516,16 +623,29 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-normal text-grouper-ink">{linha.descricao}</span>
                         {linha.nivelDuplicata && (
-                          <span
-                            className="rounded-full px-2 py-0.5 text-xs font-medium"
-                            style={{
-                              backgroundColor: corNivelDuplicata(linha.nivelDuplicata).fundo,
-                              color: corNivelDuplicata(linha.nivelDuplicata).texto,
-                            }}
-                            title={RÓTULO_NIVEL[linha.nivelDuplicata]}
+                          <Tooltip
+                            texto={RÓTULO_NIVEL[linha.nivelDuplicata]}
+                            vertical={indice === 0 ? "baixo" : "cima"}
                           >
-                            ⚠ Possível duplicata
-                          </span>
+                            {/* <button>, não <span>: precisa ser focável pra
+                                o tooltip funcionar no mobile (sem :hover lá,
+                                só :focus-within — ver Tooltip.tsx). Primeiro
+                                item da lista usa vertical="baixo": o balão
+                                abre pra cima por padrão, mas sem espaço acima
+                                dentro do `overflow-y-auto` do <ul>, ele ficava
+                                cortado (mesmo padrão de Objetivos, ver
+                                a11y-e-responsividade.md). */}
+                            <button
+                              type="button"
+                              className="rounded-full px-2 py-0.5 text-xs font-medium"
+                              style={{
+                                backgroundColor: corNivelDuplicata(linha.nivelDuplicata).fundo,
+                                color: corNivelDuplicata(linha.nivelDuplicata).texto,
+                              }}
+                            >
+                              ⚠ Possível duplicata
+                            </button>
+                          </Tooltip>
                         )}
                       </div>
                       <p className="text-xs font-medium text-grouper-deep">
@@ -574,7 +694,7 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
                 <button
                   type="button"
                   onClick={voltarParaUpload}
-                  className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+                  className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
                 >
                   ← Voltar
                 </button>
@@ -582,7 +702,7 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
                   <button
                     type="button"
                     onClick={aoFechar}
-                    className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+                    className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
                   >
                     Cancelar
                   </button>
@@ -590,7 +710,7 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
                     type="button"
                     disabled={selecionadosVisiveis.length === 0}
                     onClick={continuarParaCategorizacao}
-                    className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep disabled:opacity-60"
+                    className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep disabled:opacity-60"
                   >
                     Continuar com {selecionadosVisiveis.length} selecionada(s)
                   </button>
@@ -603,15 +723,20 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
 
       {etapa === "categorizacao" && (
         <div className="space-y-4">
+          <p className="-mt-3 mb-2 text-sm font-semibold text-grouper-ink">
+            Você pode categorizar as despesas manualmente, ou adicionar todas as
+            despesas de uma vez{" "}
+            {categoriaCartaoExistente
+              ? "(na categoria Cartão de crédito)"
+              : "(criando a categoria Cartão de crédito)"}
+            .
+          </p>
+
           {erroSalvar && (
             <p className="rounded-md border-l-4 border-black bg-black/5 px-3 py-2 text-sm text-grouper-ink">
               {erroSalvar}
             </p>
           )}
-
-          <p className="text-sm text-grouper-navy">
-            {itensProntos.length} categorizada(s) · {itensParaCategorizar.length} restante(s)
-          </p>
 
           {itensParaCategorizar.length > 0 ? (
             <div className="space-y-3 rounded-md border border-grouper-ink/20 p-3">
@@ -704,10 +829,32 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
                     type="button"
                     disabled={carregandoLote}
                     onClick={aplicarCategoriaAoLote}
-                    className="w-full rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep disabled:opacity-60"
+                    className="w-full rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep disabled:opacity-60"
                   >
                     {carregandoLote ? "Aplicando..." : "Aplicar à seleção"}
                   </button>
+
+                  {/* Atalho: em praticamente toda fatura de cartão, todas as
+                      despesas são a mesma categoria — evita repetir o fluxo
+                      manual de selecionar + escolher categoria + aplicar
+                      acima. */}
+                  <div className="space-y-1 border-t border-grouper-ink/20 pt-3">
+                    <button
+                      type="button"
+                      disabled={carregandoLote}
+                      onClick={aplicarCategoriaCartaoATodos}
+                      className="w-full rounded-md bg-grouper-deep px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-ink disabled:opacity-60"
+                    >
+                      {carregandoLote
+                        ? "Aplicando..."
+                        : categoriaCartaoExistente
+                          ? "Adicionar todas as despesas na categoria Cartão de crédito"
+                          : "Criar a categoria Cartão de crédito e adicionar todas as despesas"}
+                    </button>
+                    <p className="text-center text-xs text-grouper-navy/70">
+                      ou categorize manualmente acima
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -748,7 +895,7 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
             <button
               type="button"
               onClick={voltarParaRevisao}
-              className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+              className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
             >
               ← Voltar
             </button>
@@ -756,7 +903,7 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
             <button
               type="button"
               onClick={aoFechar}
-              className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+              className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
             >
               Cancelar
             </button>
@@ -764,7 +911,7 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
               type="button"
               disabled={itensProntos.length === 0 || carregandoSalvar}
               onClick={aoClicarContinuar}
-              className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep disabled:opacity-60"
+              className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep disabled:opacity-60"
             >
               {carregandoSalvar
                 ? "Salvando..."
@@ -789,7 +936,7 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
         <div
           role="alertdialog"
           aria-modal="true"
-          className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl"
+          className="w-full max-w-sm rounded-xl border-2 border-grouper-ink bg-white p-6 shadow-xl"
           onClick={(e) => e.stopPropagation()}
         >
           <h3 className="font-display text-lg font-semibold text-grouper-ink">
@@ -802,16 +949,63 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
             <button
               type="button"
               onClick={manterAberto}
-              className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+              className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
             >
               Continuar editando
             </button>
             <button
               type="button"
               onClick={confirmarCancelamento}
-              className="rounded-md bg-red-600 px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-red-700"
+              className="rounded-md bg-red-600 px-4 py-2 font-display text-sm font-semibold text-white hover:bg-red-700"
             >
               Cancelar leitura
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Popup de aviso próprio — só aparece quando o atalho de "Cartão de
+        crédito" é clicado depois que já existem itens categorizados
+        manualmente, pra não sobrescrever essa categorização sem avisar. */}
+    {pedindoConfirmacaoCartaoTodos && (
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+        onClick={manterCartaoTodosParado}
+      >
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          className="w-full max-w-sm rounded-xl border-2 border-grouper-ink bg-white p-6 shadow-xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h3 className="font-display text-lg font-semibold text-grouper-ink">
+            Já há despesas categorizadas
+          </h3>
+          <p className="mt-2 text-sm text-grouper-navy">
+            {itensProntos.length} despesa(s) já {itensProntos.length === 1 ? "foi categorizada" : "foram categorizadas"} manualmente. O que você quer fazer?
+          </p>
+          <div className="mt-5 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => executarCategoriaCartaoATodos(false)}
+              className="w-full rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep"
+            >
+              Manter as já categorizadas e adicionar as restantes no Cartão de crédito
+            </button>
+            <button
+              type="button"
+              onClick={() => executarCategoriaCartaoATodos(true)}
+              className="w-full rounded-md border-2 border-grouper-deep px-4 py-2 font-display text-sm font-semibold text-grouper-deep hover:bg-grouper-mist"
+            >
+              Ignorar e adicionar todas no Cartão de crédito
+            </button>
+            <button
+              type="button"
+              onClick={manterCartaoTodosParado}
+              className="w-full rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
+            >
+              Cancelar
             </button>
           </div>
         </div>
@@ -828,7 +1022,7 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
         <div
           role="alertdialog"
           aria-modal="true"
-          className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl"
+          className="w-full max-w-sm rounded-xl border-2 border-grouper-ink bg-white p-6 shadow-xl"
           onClick={(e) => e.stopPropagation()}
         >
           <h3 className="font-display text-lg font-semibold text-grouper-ink">
@@ -841,16 +1035,103 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
             <button
               type="button"
               onClick={manterCategorizando}
-              className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+              className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
             >
               Continuar categorizando
             </button>
             <button
               type="button"
               onClick={confirmarSalvarParcial}
-              className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep"
+              className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep"
             >
               Continuar mesmo assim
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Popup próprio (próximo passo, não fica embutido na tela de
+        categorização) — escolha do mês de orçamento (mesReferencia) antes
+        de salvar de fato, decoupled do mês que já estava selecionado na
+        página que abriu o modal. */}
+    {pedindoEscolhaMes && (
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+        onClick={voltarDaEscolhaMes}
+      >
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          className="w-full max-w-sm rounded-xl border-2 border-grouper-ink bg-white p-6 shadow-xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h3 className="font-display text-lg font-semibold text-grouper-ink">
+            Em qual mês essas despesas devem contar?
+          </h3>
+          {mesPrincipalPopup && (
+            <p className="mt-2 text-sm text-grouper-navy">
+              Esta fatura é principalmente de{" "}
+              <span className="font-semibold text-grouper-ink">
+                {mesCurtoBR(primeiroDiaDoMes(mesPrincipalPopup))}
+              </span>
+              . Ela deve contar no mês da própria fatura ou no mês seguinte
+              (quando ela costuma ser paga)?
+            </p>
+          )}
+          <div className="mt-4 space-y-2">
+            <button
+              type="button"
+              onClick={() => setMesEscolhido(mesPrincipalPopup)}
+              className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium ${
+                mesEscolhido === mesPrincipalPopup
+                  ? "bg-grouper-sky/40 text-grouper-ink"
+                  : "text-grouper-navy hover:bg-grouper-sky/25"
+              }`}
+            >
+              <span
+                className={`h-4 w-4 shrink-0 rounded-sm border-2 ${
+                  mesEscolhido === mesPrincipalPopup
+                    ? "border-grouper-mid bg-grouper-mid"
+                    : "border-grouper-sky"
+                }`}
+              />
+              Mês da fatura ({mesCurtoBR(primeiroDiaDoMes(mesPrincipalPopup))})
+            </button>
+            <button
+              type="button"
+              onClick={() => setMesEscolhido(mesSeguinteYYYYMM(mesPrincipalPopup))}
+              className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium ${
+                mesEscolhido === mesSeguinteYYYYMM(mesPrincipalPopup)
+                  ? "bg-grouper-sky/40 text-grouper-ink"
+                  : "text-grouper-navy hover:bg-grouper-sky/25"
+              }`}
+            >
+              <span
+                className={`h-4 w-4 shrink-0 rounded-sm border-2 ${
+                  mesEscolhido === mesSeguinteYYYYMM(mesPrincipalPopup)
+                    ? "border-grouper-mid bg-grouper-mid"
+                    : "border-grouper-sky"
+                }`}
+              />
+              Mês seguinte ({mesCurtoBR(primeiroDiaDoMes(mesSeguinteYYYYMM(mesPrincipalPopup)))})
+            </button>
+          </div>
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={voltarDaEscolhaMes}
+              className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
+            >
+              ← Voltar
+            </button>
+            <button
+              type="button"
+              disabled={carregandoSalvar}
+              onClick={confirmarEscolhaMes}
+              className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep disabled:opacity-60"
+            >
+              {carregandoSalvar ? "Salvando..." : "Confirmar e salvar"}
             </button>
           </div>
         </div>

@@ -2,11 +2,12 @@
 // Manter em sincronia com os records Java garante que o TypeScript
 // avise em tempo de compilação se o formato de um payload divergir.
 
-// -> RegistroRequest.java (nome, email, senha)
+// -> RegistroRequest.java (nome, email, senha, aceitouTermos)
 export interface RegistroRequest {
   nome: string;
   email: string;
   senha: string;
+  aceitouTermos: boolean;
 }
 
 // -> LoginRequest.java (email, senha)

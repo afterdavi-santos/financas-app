@@ -1,15 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatarBRL } from "../utils/moeda";
 import { planoObjetivo } from "../utils/objetivos";
 import { corEscalaProgresso } from "../utils/cores";
 import { dataBR } from "../utils/rotulos";
 import { NovoObjetivoModal } from "./NovoObjetivoModal";
+import { ConfirmacaoModal } from "./ConfirmacaoModal";
 import { BarraSelecao } from "./BarraSelecao";
 import { SelecionarTodos } from "./SelecionarTodos";
-import { IconeEditar, IconeExcluir } from "./IconesInvestimento";
+import { IconeEditar, IconeExcluir, IconeInfo } from "./IconesInvestimento";
+import { Tooltip } from "./Tooltip";
 import { useSelecao } from "../hooks/useSelecao";
 import { excluirObjetivo } from "../api/objetivos";
 import { mensagemDeErro } from "../api/erros";
+import { aoTeclarAtivar } from "../utils/teclado";
 import type { Objetivo } from "../types/financas";
 
 interface ObjetivosResumoHomeProps {
@@ -62,7 +65,25 @@ export function ObjetivosResumoHome({
 }: ObjetivosResumoHomeProps) {
   const [fixados, setFixados] = useState<Set<number>>(lerFixados);
   const [modalAberto, setModalAberto] = useState(false);
+
+  // Um objetivo excluído (individualmente ou em lote) precisa sair de
+  // `fixados` — sem isso, o id excluído fica preso pra sempre no localStorage
+  // contando pro limite de MAX_FIXADOS, e o usuário fica impedido de fixar
+  // qualquer outro objetivo mesmo com menos de 2 realmente fixados.
+  useEffect(() => {
+    setFixados((atual) => {
+      const idsValidos = new Set(objetivos.map((o) => o.id));
+      const limpo = new Set([...atual].filter((id) => idsValidos.has(id)));
+      if (limpo.size === atual.size) return atual;
+      localStorage.setItem(CHAVE_FIXADOS, JSON.stringify([...limpo]));
+      return limpo;
+    });
+  }, [objetivos]);
   const [editando, setEditando] = useState<Objetivo | null>(null);
+  // Popup de confirmação de exclusão (substitui o confirm() nativo). null =
+  // fechado; guarda o objetivo em questão para individual, ou "LOTE" para a
+  // exclusão dos selecionados.
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState<Objetivo | "LOTE" | null>(null);
   const {
     selecionados,
     alternar,
@@ -96,33 +117,26 @@ export function ObjetivosResumoHome({
     setModalAberto(true);
   }
 
-  async function excluirItem(objetivo: Objetivo) {
-    if (!confirm(`Excluir o objetivo "${objetivo.descricao}"?`)) return;
-    try {
-      await excluirObjetivo(objetivo.id);
-      desselecionarTodos([objetivo.id]);
+  async function confirmarExclusao() {
+    if (confirmandoExclusao === "LOTE") {
+      const ids = Array.from(selecionados);
+      const resultados = await Promise.allSettled(ids.map((id) => excluirObjetivo(id)));
+      const falhas = resultados.filter((r) => r.status === "rejected").length;
+      if (falhas > 0) {
+        onErro(`${falhas} de ${ids.length} objetivo(s) não puderam ser excluídos.`);
+      }
+      limpar();
       onObjetivoCriado();
-    } catch (e) {
-      onErro(mensagemDeErro(e));
+    } else if (confirmandoExclusao) {
+      try {
+        await excluirObjetivo(confirmandoExclusao.id);
+        desselecionarTodos([confirmandoExclusao.id]);
+        onObjetivoCriado();
+      } catch (e) {
+        onErro(mensagemDeErro(e));
+      }
     }
-  }
-
-  async function excluirSelecionados() {
-    const ids = Array.from(selecionados);
-    const plural = ids.length > 1;
-    if (
-      !confirm(
-        `Excluir ${ids.length} objetivo${plural ? "s" : ""} selecionado${plural ? "s" : ""}?`,
-      )
-    )
-      return;
-    const resultados = await Promise.allSettled(ids.map((id) => excluirObjetivo(id)));
-    const falhas = resultados.filter((r) => r.status === "rejected").length;
-    if (falhas > 0) {
-      onErro(`${falhas} de ${ids.length} objetivo(s) não puderam ser excluídos.`);
-    }
-    limpar();
-    onObjetivoCriado();
+    setConfirmandoExclusao(null);
   }
 
   // Fixados primeiro (mantendo a ordem original entre si e entre os demais).
@@ -138,7 +152,7 @@ export function ObjetivosResumoHome({
         </h2>
         <button
           onClick={abrirNovo}
-          className="rounded-md bg-grouper-deep px-3 py-1.5 font-display text-[13px] uppercase tracking-wide text-white hover:bg-grouper-ink"
+          className="rounded-md bg-grouper-deep px-3 py-1.5 font-display text-[13px] text-white hover:bg-grouper-ink"
         >
           + Adicionar objetivo
         </button>
@@ -154,7 +168,7 @@ export function ObjetivosResumoHome({
               <BarraSelecao
                 quantidade={selecionados.size}
                 texto={`${selecionados.size} objetivo${selecionados.size > 1 ? "s" : ""} selecionado${selecionados.size > 1 ? "s" : ""}`}
-                onExcluir={excluirSelecionados}
+                onExcluir={() => setConfirmandoExclusao("LOTE")}
                 onCancelar={limpar}
               />
               <div className="mb-3 mt-3">
@@ -174,22 +188,48 @@ export function ObjetivosResumoHome({
               objetivos.length > 2 ? "max-h-44 overflow-y-auto pr-1" : ""
             }`}
           >
-            {objetivosOrdenados.map((obj) => {
+            {objetivosOrdenados.map((obj, indice) => {
               const plano = planoObjetivo(obj, rendaFixaMensal);
               const fixado = fixados.has(obj.id);
               const selecionado = selecionados.has(obj.id);
+              // No primeiro item não há espaço acima dentro da lista com
+              // rolagem própria — o tooltip abre pra baixo (ver Tooltip.tsx).
+              const vertical = indice === 0 ? "baixo" : "cima";
               return (
                 <li key={obj.id}>
                   <div
+                    role="button"
+                    tabIndex={0}
                     onClick={() => alternar(obj.id)}
-                    className={`cursor-pointer rounded-md px-3 py-2.5 transition-all ${
+                    onKeyDown={aoTeclarAtivar(() => alternar(obj.id))}
+                    className={`cursor-pointer rounded-md px-3 py-2.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-grouper-mid ${
                       selecionado
                         ? "bg-grouper-sky/30"
                         : "hover:bg-grouper-sky/20 hover:shadow-md"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-grouper-ink">{obj.descricao}</p>
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <p className="text-grouper-ink">{obj.descricao}</p>
+                        {obj.incentivo && (
+                          <Tooltip texto={obj.incentivo} vertical={vertical}>
+                            {/* <button>, não <span>: precisa ser focável pra
+                                o tooltip (Tooltip.tsx usa :focus-within)
+                                funcionar no mobile — lá não existe :hover,
+                                então tocar precisa focar pra revelar o
+                                balão. stopPropagation pra não também
+                                selecionar a linha ao tocar. */}
+                            <button
+                              type="button"
+                              onClick={(e) => e.stopPropagation()}
+                              className="shrink-0 text-grouper-navy/70 hover:text-grouper-navy"
+                              aria-label="Incentivo"
+                            >
+                              <IconeInfo className="h-3.5 w-3.5" />
+                            </button>
+                          </Tooltip>
+                        )}
+                      </div>
                       <div
                         className="flex shrink-0 items-center gap-2"
                         onClick={(e) => e.stopPropagation()}
@@ -197,24 +237,35 @@ export function ObjetivosResumoHome({
                         <span className="text-sm font-semibold text-grouper-deep">
                           {plano.progresso.toFixed(0)}%
                         </span>
-                        <button
-                          onClick={() => alternarFixado(obj.id)}
-                          aria-label={fixado ? "Desafixar objetivo" : "Fixar objetivo"}
-                          title={
-                            fixado
-                              ? "Desafixar objetivo"
-                              : fixados.size >= MAX_FIXADOS
-                                ? `Você já fixou ${MAX_FIXADOS} objetivos`
-                                : "Fixar objetivo na Home"
-                          }
-                          className={`transition-colors ${
-                            fixado
-                              ? "text-grouper-mid"
-                              : "text-grouper-navy/30 hover:text-grouper-navy/60"
-                          }`}
-                        >
-                          <IconeFixar preenchido={fixado} />
-                        </button>
+                        {(() => {
+                          const botao = (
+                            <button
+                              onClick={() => alternarFixado(obj.id)}
+                              aria-label={fixado ? "Desafixar objetivo" : "Fixar objetivo"}
+                              className={`transition-colors ${
+                                fixado
+                                  ? "text-grouper-mid"
+                                  : "text-grouper-navy/30 hover:text-grouper-navy/60"
+                              }`}
+                            >
+                              <IconeFixar preenchido={fixado} />
+                            </button>
+                          );
+                          // Só mostra tooltip quando o limite já foi
+                          // atingido (explica por que o clique não faz
+                          // nada) — nos outros casos (fixar/desafixar
+                          // normal) o ícone não tem texto nenhum.
+                          if (fixado || fixados.size < MAX_FIXADOS) return botao;
+                          return (
+                            <Tooltip
+                              texto={`Só é possível fixar ${MAX_FIXADOS}`}
+                              posicao="direita"
+                              vertical={vertical}
+                            >
+                              {botao}
+                            </Tooltip>
+                          );
+                        })()}
                       </div>
                     </div>
                     <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-grouper-mist">
@@ -235,22 +286,24 @@ export function ObjetivosResumoHome({
                         onClick={(e) => e.stopPropagation()}
                       >
                         <span className="truncate">meta para {dataBR(obj.dataAlvo)}</span>
-                        <button
-                          onClick={() => abrirEdicao(obj)}
-                          aria-label="Editar"
-                          title="Editar"
-                          className="shrink-0 rounded-md border border-grouper-mid/30 bg-white p-1 text-grouper-mid hover:bg-grouper-mist"
-                        >
-                          <IconeEditar className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => excluirItem(obj)}
-                          aria-label="Excluir"
-                          title="Excluir"
-                          className="shrink-0 rounded-md border border-red-300 bg-white p-1 text-red-600 hover:bg-red-50"
-                        >
-                          <IconeExcluir className="h-3.5 w-3.5" />
-                        </button>
+                        <Tooltip texto="Editar" posicao="direita" vertical={vertical}>
+                          <button
+                            onClick={() => abrirEdicao(obj)}
+                            aria-label="Editar"
+                            className="shrink-0 rounded-md border border-grouper-mid/30 bg-white p-1 text-grouper-mid hover:bg-grouper-mist"
+                          >
+                            <IconeEditar className="h-3.5 w-3.5" />
+                          </button>
+                        </Tooltip>
+                        <Tooltip texto="Excluir" posicao="direita" vertical={vertical}>
+                          <button
+                            onClick={() => setConfirmandoExclusao(obj)}
+                            aria-label="Excluir"
+                            className="shrink-0 rounded-md border border-red-300 bg-white p-1 text-red-600 hover:bg-red-50"
+                          >
+                            <IconeExcluir className="h-3.5 w-3.5" />
+                          </button>
+                        </Tooltip>
                       </div>
                     </div>
                   </div>
@@ -273,6 +326,18 @@ export function ObjetivosResumoHome({
           setEditando(null);
           onObjetivoCriado();
         }}
+      />
+
+      <ConfirmacaoModal
+        aberto={confirmandoExclusao !== null}
+        titulo={confirmandoExclusao === "LOTE" ? "Excluir objetivos" : "Excluir objetivo"}
+        mensagem={
+          confirmandoExclusao === "LOTE"
+            ? `Excluir ${selecionados.size} objetivo${selecionados.size > 1 ? "s" : ""} selecionado${selecionados.size > 1 ? "s" : ""}?`
+            : `Excluir o objetivo "${confirmandoExclusao?.descricao}"?`
+        }
+        onConfirmar={confirmarExclusao}
+        onClose={() => setConfirmandoExclusao(null)}
       />
     </section>
   );

@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Modal } from "./Modal";
+import { SeletorMes } from "./SeletorMes";
 import { criarRenda, atualizarRenda } from "../api/rendas";
 import { mensagemDeErro } from "../api/erros";
 import { primeiroDiaDoMesISO } from "../utils/datas";
 import type { Renda, TipoRenda } from "../types/financas";
 
 // Modal do form de renda: descricao, valor e mês de referência.
-// O <input type="month"> devolve "YYYY-MM"; o backend espera "YYYY-MM-DD",
-// então completamos com "-01" (1º dia do mês) ao enviar.
+// O SeletorMes devolve "YYYY-MM"; o backend espera "YYYY-MM-DD", então
+// completamos com "-01" (1º dia do mês) ao enviar.
 // `renda` (opcional) coloca o modal em modo EDIÇÃO — prefill + PUT em vez de POST.
 // `mesPadrao` (opcional, "YYYY-MM") define o mês inicial do form — as telas
 // com seletor de mês (Home, Rendas) passam o mês em foco, pra já abrir o
@@ -21,7 +22,7 @@ interface Props {
   mesPadrao?: string;
 }
 
-// "2026-07-01" -> "2026-07" (valor que o <input type="month"> entende).
+// "2026-07-01" -> "2026-07" (valor que o SeletorMes entende).
 function mesInicial(): string {
   return primeiroDiaDoMesISO().slice(0, 7);
 }
@@ -131,14 +132,7 @@ export function NovaRendaModal({ aberto, onClose, onCriada, renda, mesPadrao }: 
             >
               Mês
             </label>
-            <input
-              id="renda-mes"
-              type="month"
-              required
-              value={mes}
-              onChange={(e) => setMes(e.target.value)}
-              className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
-            />
+            <SeletorMes id="renda-mes" value={mes} onChange={setMes} variant="formulario" />
           </div>
         </div>
 
@@ -173,14 +167,14 @@ export function NovaRendaModal({ aberto, onClose, onCriada, renda, mesPadrao }: 
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+            className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={carregando}
-            className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep disabled:opacity-60"
+            className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep disabled:opacity-60"
           >
             {carregando ? "Salvando..." : "Salvar"}
           </button>

@@ -41,12 +41,24 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-grouper-ink p-4">
+      <img
+        src="/brand/Garoupa_fundo_login.png"
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-15"
+      />
       <form
         onSubmit={aoEnviar}
-        className="w-full max-w-sm bg-white rounded-xl shadow-md p-8 space-y-5"
+        className="relative z-10 w-full max-w-sm bg-grouper-ink border border-white/10 rounded-xl shadow-xl p-8 space-y-5"
       >
-        <h1 className="text-2xl font-bold text-slate-800 text-center">
+        <img
+          src="/brand/logomarca-branca.svg"
+          alt="Logo"
+          className="h-24 w-auto mx-auto"
+        />
+
+        <h1 className="font-display text-2xl font-bold text-white text-center">
           Entrar
         </h1>
 
@@ -69,7 +81,7 @@ export function LoginPage() {
         )}
 
         <div className="space-y-1">
-          <label htmlFor="email" className="text-sm font-medium text-slate-700">
+          <label htmlFor="email" className="text-sm font-medium text-white/80">
             E-mail
           </label>
           <input
@@ -78,12 +90,12 @@ export function LoginPage() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-md border border-white/20 bg-white/10 px-3 py-2 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-grouper-mid"
           />
         </div>
 
         <div className="space-y-1">
-          <label htmlFor="senha" className="text-sm font-medium text-slate-700">
+          <label htmlFor="senha" className="text-sm font-medium text-white/80">
             Senha
           </label>
           <input
@@ -92,21 +104,21 @@ export function LoginPage() {
             required
             value={senha}
             onChange={(e) => setSenha(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-md border border-white/20 bg-white/10 px-3 py-2 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-grouper-mid"
           />
         </div>
 
         <button
           type="submit"
           disabled={carregando}
-          className="w-full bg-blue-600 text-white font-medium rounded-md py-2 hover:bg-blue-700 disabled:opacity-60"
+          className="w-full bg-grouper-mid text-white font-medium rounded-md py-2 hover:bg-grouper-deep disabled:opacity-60"
         >
           {carregando ? "Entrando..." : "Entrar"}
         </button>
 
-        <p className="text-sm text-center text-slate-600">
+        <p className="text-sm text-center text-white/70">
           Não tem conta?{" "}
-          <Link to="/registrar" className="text-blue-600 hover:underline">
+          <Link to="/registrar" className="text-grouper-sky hover:underline">
             Criar conta
           </Link>
         </p>

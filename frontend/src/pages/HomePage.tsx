@@ -5,17 +5,20 @@ import { NovaRendaModal } from "../components/NovaRendaModal";
 import { LeitorFaturaModal } from "../components/LeitorFaturaModal";
 import { NovoInvestimentoCdbModal } from "../components/NovoInvestimentoCdbModal";
 import { ExcluirInvestimentoModal } from "../components/ExcluirInvestimentoModal";
+import { ConfirmacaoModal } from "../components/ConfirmacaoModal";
 import { ResgatarCdbModal } from "../components/ResgatarCdbModal";
 import { InvestirMaisModal } from "../components/InvestirMaisModal";
 import { BarraSelecao } from "../components/BarraSelecao";
 import { SelecionarTodos } from "../components/SelecionarTodos";
 import { IconeEditar, IconeExcluir } from "../components/IconesInvestimento";
+import { Tooltip } from "../components/Tooltip";
 import { Modal } from "../components/Modal";
 import { StatCard } from "../components/StatCard";
 import { EconomiaDestaque } from "../components/EconomiaDestaque";
 import { GraficoEconomiaHome, type PontoEconomia } from "../components/GraficoEconomiaHome";
 import { ObjetivosResumoHome } from "../components/ObjetivosResumoHome";
 import { Avatar } from "../components/Avatar";
+import { SeletorMes } from "../components/SeletorMes";
 import { useSelecao } from "../hooks/useSelecao";
 import { listarCategorias } from "../api/categorias";
 import { listarDespesas } from "../api/despesas";
@@ -38,8 +41,9 @@ import {
   mesSeguinteYYYYMM,
   primeiroDiaMesesAtrasDoMes,
 } from "../utils/datas";
-import { planoContencao, dificuldadeContencao } from "../utils/contencaoRendaVariavel";
-import { corEscalaDificuldade } from "../utils/cores";
+import { planoContencao } from "../utils/contencaoRendaVariavel";
+import { corEscalaEconomiaBotao } from "../utils/cores";
+import { aoTeclarAtivar } from "../utils/teclado";
 import type {
   Categoria,
   Despesa,
@@ -89,6 +93,7 @@ export function HomePage() {
   const [modalPlano, setModalPlano] = useState(false);
   const [editandoInvestimento, setEditandoInvestimento] = useState<InvestimentoCdb | null>(null);
   const [excluindoInvestimento, setExcluindoInvestimento] = useState<InvestimentoCdb | null>(null);
+  const [confirmandoLoteCdb, setConfirmandoLoteCdb] = useState(false);
   const [resgatando, setResgatando] = useState<InvestimentoCdb | null>(null);
   const [investindoMaisEm, setInvestindoMaisEm] = useState<InvestimentoCdb | null>(null);
   const {
@@ -162,8 +167,8 @@ export function HomePage() {
   // Troca o mês em foco — usada tanto pelo seletor de mês quanto ao clicar
   // numa coluna do gráfico "Economia nos últimos meses" (mesmo efeito).
   function selecionarMes(novoMes: string) {
-    // O "Limpar" do seletor nativo manda "" — mês em foco não pode ficar
-    // vazio (quebraria os cálculos do mês), então ignora.
+    // Guarda defensiva — mês em foco não pode ficar vazio (quebraria os
+    // cálculos do mês).
     if (!novoMes) return;
     setMes(novoMes);
   }
@@ -209,10 +214,12 @@ export function HomePage() {
     .sort((a, b) => b.data.localeCompare(a.data))
     .slice(0, 5);
 
-  // Plano de contenção: só faz sentido reduzir despesas se a renda FIXA sozinha
-  // não bastaria para cobrir as despesas deste mês (ou seja, o mês só "fechou"
-  // graças à renda variável). Se a renda fixa já cobre tudo, não há risco real
-  // para o mês seguinte — a seção continua visível, mas sem sugestão de corte.
+  // Plano de contenção: a meta não é mais só "não fechar negativo" (economia
+  // = 0 em relação à renda fixa), e sim fechar com pelo menos 10% de folga
+  // sobre a renda fixa — ou seja, despesas <= 90% da renda fixa. Se a renda
+  // fixa já cobre as despesas com essa folga, não há risco real pro mês
+  // seguinte — a seção continua visível, mas sem sugestão de corte.
+  const MARGEM_FOLGA_RENDA_FIXA = 0.1;
   const rendasDoMes = rendas.filter(
     (r) => r.mesReferencia === primeiroDiaDoMes(mes),
   );
@@ -222,13 +229,19 @@ export function HomePage() {
   const rendaVariavelMes = rendasDoMes
     .filter((r) => r.tipo === "FREELA" || r.tipo === "RETORNO_INVESTIMENTOS")
     .reduce((soma, r) => soma + r.valor, 0);
-  const valorNecessarioReduzir = Math.max(0, totalDespesas - rendaFixaMes);
+  const valorNecessarioReduzir = Math.max(
+    0,
+    totalDespesas - rendaFixaMes * (1 - MARGEM_FOLGA_RENDA_FIXA),
+  );
   const despesasExtraordinarias = despesas.filter(
     (d) => d.tipo === "VARIAVEL",
   );
   const plano = planoContencao(despesasExtraordinarias, valorNecessarioReduzir);
-  const dificuldadePlano = dificuldadeContencao(plano);
-  const corBotaoPlano = corEscalaDificuldade(dificuldadePlano);
+  // Cor do botão baseada na economia do mês em si (mesma escala da borda do
+  // card "Economia do mês"), não mais em "% da categoria selecionada a
+  // cortar" — ver `corEscalaEconomiaBotao`.
+  const percentualEconomia = renda > 0 ? Math.max(0, Math.min(100, (economia / renda) * 100)) : 0;
+  const corBotaoPlano = corEscalaEconomiaBotao(percentualEconomia);
   // Mês seguinte ao mês em foco (não necessariamente o mês seguinte ao
   // real): o plano de contenção projeta a partir do mês selecionado.
   const rotuloProximoMes = mesCurtoBR(`${mesSeguinteYYYYMM(mes)}-01`);
@@ -261,8 +274,6 @@ export function HomePage() {
 
   async function excluirInvestimentosSelecionados() {
     const ids = Array.from(cdbSelecionados);
-    const plural = ids.length > 1;
-    if (!confirm(`Excluir ${ids.length} investimento${plural ? "s" : ""} selecionado${plural ? "s" : ""}?`)) return;
     const resultados = await Promise.allSettled(ids.map((id) => excluirInvestimentoCdb(id)));
     const falhas = resultados.filter((r) => r.status === "rejected").length;
     if (falhas > 0) {
@@ -270,48 +281,47 @@ export function HomePage() {
     }
     limparCdb();
     carregar();
+    setConfirmandoLoteCdb(false);
   }
 
   return (
     <div className="w-full space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-grouper-ink">
-          Início
+        <h1 className="order-1 font-display text-3xl font-semibold tracking-tight text-grouper-ink lg:order-none">
+          Visão geral
         </h1>
-        {/* Botões colados ao avatar (mesmo grupo, gap pequeno entre eles),
-            avatar sempre por último — o grupo inteiro fica na mesma linha
-            do título, na ponta direita da página, mantendo o avatar exatamente
-            onde sempre esteve. */}
-        <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:gap-3">
-          <input
-            type="month"
-            value={mes}
-            onChange={(e) => selecionarMes(e.target.value)}
-            // O navegador só abre o seletor nativo ao clicar no ícone do
-            // calendário; showPicker() faz o clique em qualquer parte do
-            // "botão" abrir o mesmo seletor.
-            onClick={(e) => e.currentTarget.showPicker?.()}
-            className="w-full cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-3 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid lg:w-36"
-          />
+        {/* No mobile, o avatar (order-2) fica ao lado do título (order-1),
+            e os botões (order-3) empilham abaixo — por isso este wrapper
+            vira `contents` abaixo de `lg`, "achatando" os filhos pra serem
+            itens diretos do flex de fora, onde o `order` de cada um se
+            aplica. Em `lg`+ ele volta a ser um flex de verdade e todo mundo
+            reseta pra `order-none`, restaurando a posição original (avatar
+            sempre por último, colado aos botões). */}
+        <div className="contents lg:flex lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:gap-3">
+          <div className="order-3 w-full lg:order-none lg:w-auto">
+            <SeletorMes value={mes} onChange={selecionarMes} />
+          </div>
           <button
             onClick={() => setModalLeitorFatura(true)}
-            className="w-full rounded-md bg-grouper-deep px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-ink lg:w-auto"
+            className="order-3 w-full rounded-md bg-grouper-deep px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-ink lg:order-none lg:w-auto"
           >
             Leitor de fatura
           </button>
           <button
             onClick={() => setModalRenda(true)}
-            className="w-full rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep lg:w-auto"
+            className="order-3 w-full rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep lg:order-none lg:w-auto"
           >
             + Adicionar renda
           </button>
           <button
             onClick={() => setModalDespesa(true)}
-            className="w-full rounded-md bg-grouper-ink px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-black lg:w-auto"
+            className="order-3 w-full rounded-md bg-grouper-ink px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-black lg:order-none lg:w-auto"
           >
             + Adicionar despesa
           </button>
-          <Avatar menu />
+          <div className="order-2 lg:order-none lg:contents">
+            <Avatar menu />
+          </div>
         </div>
       </div>
 
@@ -367,7 +377,7 @@ export function HomePage() {
                 <button
                   key={aba.chave}
                   onClick={() => setAbaResumoMobile(aba.chave)}
-                  className={`rounded-md py-2 font-display text-xs font-semibold uppercase tracking-wide transition-colors ${
+                  className={`rounded-md py-2 font-display text-xs font-semibold transition-colors ${
                     abaResumoMobile === aba.chave
                       ? "bg-grouper-mid text-white"
                       : "text-grouper-navy/70 hover:bg-grouper-mist"
@@ -481,7 +491,7 @@ export function HomePage() {
                     backgroundColor: corBotaoPlano.fundo,
                     color: corBotaoPlano.texto,
                   }}
-                  className="rounded-md px-3 py-1.5 font-display text-[13px] uppercase tracking-wide shadow-sm transition hover:brightness-95"
+                  className="rounded-md px-3 py-1.5 font-display text-[13px] shadow-sm transition hover:brightness-95"
                 >
                   Plano de contenção — {rotuloProximoMes}
                 </button>
@@ -501,7 +511,7 @@ export function HomePage() {
                 </h2>
                 <button
                   onClick={abrirNovoInvestimento}
-                  className="rounded-md bg-grouper-deep px-3 py-1.5 font-display text-[13px] uppercase tracking-wide text-white hover:bg-grouper-ink"
+                  className="rounded-md bg-grouper-deep px-3 py-1.5 font-display text-[13px] text-white hover:bg-grouper-ink"
                 >
                   + Novo investimento
                 </button>
@@ -517,7 +527,7 @@ export function HomePage() {
                       <BarraSelecao
                         quantidade={cdbSelecionados.size}
                         texto={`${cdbSelecionados.size} investimento${cdbSelecionados.size > 1 ? "s" : ""} selecionado${cdbSelecionados.size > 1 ? "s" : ""}`}
-                        onExcluir={excluirInvestimentosSelecionados}
+                        onExcluir={() => setConfirmandoLoteCdb(true)}
                         onCancelar={limparCdb}
                       />
                       <div className="mb-3">
@@ -537,14 +547,21 @@ export function HomePage() {
                       investimentos.length > 2 ? "max-h-72 overflow-y-auto pr-1" : ""
                     }`}
                   >
-                  {investimentos.map((inv) => {
+                  {investimentos.map((inv, indice) => {
                     const posicao = posicoesCdb[inv.id];
                     const selecionado = cdbSelecionados.has(inv.id);
+                    // No primeiro item não há espaço acima dentro da lista
+                    // com rolagem própria — o tooltip abre pra baixo (ver
+                    // Tooltip.tsx).
+                    const vertical = indice === 0 ? "baixo" : "cima";
                     return (
                       <li key={inv.id}>
                         <div
+                          role="button"
+                          tabIndex={0}
                           onClick={() => alternarCdb(inv.id)}
-                          className={`cursor-pointer rounded-md px-3 py-3 transition-colors ${
+                          onKeyDown={aoTeclarAtivar(() => alternarCdb(inv.id))}
+                          className={`cursor-pointer rounded-md px-3 py-3 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-grouper-mid ${
                             selecionado ? "bg-grouper-sky/30" : "hover:bg-grouper-sky/20"
                           }`}
                         >
@@ -562,12 +579,9 @@ export function HomePage() {
                                 {dataBR(inv.dataAplicacao)}
                               </span>
                               {inv.objetivoId != null && (
-                                <span
-                                  title={`Vinculado ao objetivo "${inv.objetivoDescricao}"`}
-                                  className="text-sm"
-                                >
-                                  🔗
-                                </span>
+                                <Tooltip texto={`Vinculado ao objetivo "${inv.objetivoDescricao}"`} posicao="direita">
+                                  <span className="text-sm">🔗</span>
+                                </Tooltip>
                               )}
                             </div>
                           </div>
@@ -609,22 +623,24 @@ export function HomePage() {
                             >
                               Resgatar
                             </button>
-                            <button
-                              onClick={() => abrirEdicaoInvestimento(inv)}
-                              aria-label="Editar"
-                              title="Editar"
-                              className="rounded-md border border-grouper-mid/30 bg-white p-1 text-grouper-mid hover:bg-grouper-mist"
-                            >
-                              <IconeEditar className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={() => excluirInvestimento(inv)}
-                              aria-label="Excluir"
-                              title="Excluir"
-                              className="rounded-md border border-red-300 bg-white p-1 text-red-600 hover:bg-red-50"
-                            >
-                              <IconeExcluir className="h-3.5 w-3.5" />
-                            </button>
+                            <Tooltip texto="Editar" posicao="direita" vertical={vertical}>
+                              <button
+                                onClick={() => abrirEdicaoInvestimento(inv)}
+                                aria-label="Editar"
+                                className="rounded-md border border-grouper-mid/30 bg-white p-1 text-grouper-mid hover:bg-grouper-mist"
+                              >
+                                <IconeEditar className="h-3.5 w-3.5" />
+                              </button>
+                            </Tooltip>
+                            <Tooltip texto="Excluir" posicao="direita" vertical={vertical}>
+                              <button
+                                onClick={() => excluirInvestimento(inv)}
+                                aria-label="Excluir"
+                                className="rounded-md border border-red-300 bg-white p-1 text-red-600 hover:bg-red-50"
+                              >
+                                <IconeExcluir className="h-3.5 w-3.5" />
+                              </button>
+                            </Tooltip>
                             {posicao && (
                               <span className="ml-auto text-xs font-medium text-grouper-mid">
                                 Rendeu {formatarBRL(posicao.rendimentoBruto)}
@@ -656,44 +672,39 @@ export function HomePage() {
         <div className="space-y-3">
           {plano ? (
             <>
-              {economia < 0 && (
-                <p className="rounded-md border-l-4 border-black bg-black/5 px-3 py-2 text-xs text-grouper-ink">
-                  ⚠ Atenção: mesmo com a ajuda da renda variável, este mês já
-                  fechou no negativo (economia de {formatarBRL(economia)}).
-                  Isso torna ainda mais urgente reduzir estas despesas.
-                </p>
-              )}
-              <p className="text-sm text-grouper-navy">
+              <p className="text-sm font-semibold text-grouper-ink">
                 {rendaVariavelMes > 0
-                  ? `Sua renda fixa (${formatarBRL(rendaFixaMes)}) não seria suficiente para cobrir as despesas deste mês (${formatarBRL(totalDespesas)}) sem a ajuda de ${formatarBRL(rendaVariavelMes)} em renda variável (freelas e retornos de investimento) — valores sem garantia de se repetir.`
-                  : `As despesas deste mês (${formatarBRL(totalDespesas)}) já superam sua renda fixa (${formatarBRL(rendaFixaMes)}), mesmo sem nenhuma renda variável este mês.`}
+                  ? `Sua renda fixa (${formatarBRL(rendaFixaMes)}) não seria suficiente para cobrir as despesas deste mês (${formatarBRL(totalDespesas)}) sem a ajuda de ${formatarBRL(rendaVariavelMes)} em renda variável. `
+                  : `As despesas deste mês (${formatarBRL(totalDespesas)}) já superam sua renda fixa (${formatarBRL(rendaFixaMes)}). `}
+                Para não fechar o próximo mês no negativo e conseguir guardar
+                ao menos 10% da sua renda fixa, considere seguir este plano
+                de contenção:
               </p>
-              <p className="text-sm text-grouper-ink">
-                Para não fechar o próximo mês no negativo, considere reduzir
-                estas despesas variáveis em{" "}
-                {formatarBRL(plano.totalReducaoSugerida)}:
-              </p>
-              <ul className="divide-y divide-grouper-sky/15">
+              <ul className="space-y-2">
                 {plano.categorias.map((c) => (
                   <li
                     key={c.nome}
-                    className="flex items-center justify-between py-2 text-sm"
+                    className="flex items-center justify-between gap-3 rounded-lg border-l-4 border-grouper-red bg-white px-3 py-2.5 shadow-sm"
                   >
-                    <span className="text-grouper-navy">
+                    <span className="text-sm text-grouper-navy">
                       {c.nome}{" "}
                       <span className="text-grouper-navy/50">
                         ({formatarBRL(c.gastoAtual)})
                       </span>
                     </span>
-                    <span className="font-medium text-grouper-ink">
-                      -{formatarBRL(c.reducaoSugerida)} (
-                      {c.percentualReducao.toFixed(0)}%)
+                    <span className="shrink-0 text-right">
+                      <span className="block text-base font-semibold text-grouper-red">
+                        -{formatarBRL(c.reducaoSugerida)}
+                      </span>
+                      <span className="text-xs font-medium text-grouper-navy/60">
+                        {c.percentualReducao.toFixed(0)}% da categoria
+                      </span>
                     </span>
                   </li>
                 ))}
               </ul>
               {!plano.cobreQueda && (
-                <p className="rounded-md border-l-4 border-black bg-black/5 px-3 py-2 text-xs text-grouper-ink">
+                <p className="rounded-md border-l-4 border-black bg-black/5 px-3 py-2 text-sm text-grouper-ink">
                   ⚠ Mesmo reduzindo todas as despesas variáveis a
                   zero, ainda faltariam {formatarBRL(plano.faltante)} para
                   fechar o próximo mês só com a renda fixa. Vale revisar
@@ -702,11 +713,9 @@ export function HomePage() {
               )}
             </>
           ) : (
-            <p className="rounded-md border-l-4 border-grouper-mid bg-grouper-mist px-3 py-2 text-sm text-grouper-ink">
+            <p className="rounded-md border-l-4 border-grouper-mid bg-grouper-mist px-3 py-2 text-base text-grouper-ink">
               ✓{" "}
-              {rendaVariavelMes > 0
-                ? `Este mês você teve ${formatarBRL(rendaVariavelMes)} em renda variável, mas sua renda fixa (${formatarBRL(rendaFixaMes)}) já cobre sozinha as despesas do mês (${formatarBRL(totalDespesas)}) — nada precisa ser reduzido.`
-                : `Sua renda fixa (${formatarBRL(rendaFixaMes)}) cobre as despesas deste mês (${formatarBRL(totalDespesas)}) — nada precisa ser reduzido.`}
+              {`Sua renda fixa (${formatarBRL(rendaFixaMes)}) cobre as despesas deste mês (${formatarBRL(totalDespesas)}) — nada precisa ser reduzido.`}
             </p>
           )}
         </div>
@@ -750,6 +759,13 @@ export function HomePage() {
           setExcluindoInvestimento(null);
           carregar();
         }}
+      />
+      <ConfirmacaoModal
+        aberto={confirmandoLoteCdb}
+        titulo="Excluir investimentos"
+        mensagem={`Excluir ${cdbSelecionados.size} investimento${cdbSelecionados.size > 1 ? "s" : ""} selecionado${cdbSelecionados.size > 1 ? "s" : ""}?`}
+        onConfirmar={excluirInvestimentosSelecionados}
+        onClose={() => setConfirmandoLoteCdb(false)}
       />
       <ResgatarCdbModal
         investimento={resgatando}

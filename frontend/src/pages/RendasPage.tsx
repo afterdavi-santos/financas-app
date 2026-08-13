@@ -1,18 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { PageHeader } from "../components/PageHeader";
-import { StatCard } from "../components/StatCard";
+import { StatCard, TAMANHO_BASE_REM, TAMANHO_MINIMO_REM } from "../components/StatCard";
 import { NovaRendaModal } from "../components/NovaRendaModal";
 import { BarraSelecao } from "../components/BarraSelecao";
 import { SelecionarTodos } from "../components/SelecionarTodos";
+import { ConfirmacaoModal } from "../components/ConfirmacaoModal";
 import { IconeEditar, IconeExcluir } from "../components/IconesInvestimento";
+import { Tooltip } from "../components/Tooltip";
 import { GraficoRendaMensal, type PontoRenda } from "../components/GraficoRendaMensal";
+import { SeletorMes } from "../components/SeletorMes";
 import { useSelecao } from "../hooks/useSelecao";
+import { useAjustarFonteSincronizada } from "../hooks/useAjustarFonteSincronizada";
 import { listarRendas, excluirRenda } from "../api/rendas";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { rotuloTipoRenda, mesBR, mesCurtoBR } from "../utils/rotulos";
 import { mesAtualYYYYMM, mesAnteriorYYYYMM } from "../utils/datas";
+import { aoTeclarAtivar } from "../utils/teclado";
 import type { Renda } from "../types/financas";
 
 // Filtro da lista "Todas as rendas do mês" (canto direito do cabeçalho da
@@ -52,6 +57,10 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
     desselecionarTodos,
     todosSelecionados,
   } = useSelecao();
+  // Popup de confirmação de exclusão (substitui o confirm() nativo). null =
+  // fechado; guarda a renda em questão para individual, ou "LOTE" para a
+  // exclusão dos selecionados.
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState<Renda | "LOTE" | null>(null);
 
   function abrirNova() {
     setEditando(null);
@@ -97,6 +106,15 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
     return { totalFixa, totalExtra };
   }, [rendasDoMes]);
 
+  // Faz "Renda fixa" e "Renda variável" usarem sempre o mesmo tamanho de
+  // fonte no valor (o menor dos dois que couber) — mesmo mecanismo de
+  // DespesasPage.tsx.
+  const refValorStatCard = useAjustarFonteSincronizada(
+    [totalFixa, totalExtra],
+    TAMANHO_BASE_REM,
+    TAMANHO_MINIMO_REM,
+  );
+
   // Histórico dos últimos 6 meses (a partir do mês em foco, ele incluso) para
   // o gráfico "Variação de renda" da coluna direita — `listarRendas()` já
   // traz tudo, então não precisa de nova chamada à API, só filtrar.
@@ -129,39 +147,34 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
     )
     .sort((a, b) => b.mesReferencia.localeCompare(a.mesReferencia));
 
-  async function excluir(renda: Renda) {
-    const mensagem = renda.recorrente
-      ? `A renda "${renda.descricao}" é fixa e recorrente. Excluí-la remove só o mês atual e para as próximas repetições — os meses anteriores continuam registrados. Continuar?`
-      : `Excluir a renda "${renda.descricao}"?`;
-    if (!confirm(mensagem)) return;
-    try {
-      await excluirRenda(renda.id);
-      desselecionarTodos([renda.id]);
+  async function confirmarExclusao() {
+    if (confirmandoExclusao === "LOTE") {
+      const ids = Array.from(selecionados);
+      const resultados = await Promise.allSettled(ids.map((id) => excluirRenda(id)));
+      const falhas = resultados.filter((r) => r.status === "rejected").length;
+      if (falhas > 0) {
+        setErro(`${falhas} de ${ids.length} renda(s) não puderam ser excluídas.`);
+      }
+      limpar();
       carregar();
-    } catch (e) {
-      setErro(mensagemDeErro(e));
+    } else if (confirmandoExclusao) {
+      try {
+        await excluirRenda(confirmandoExclusao.id);
+        desselecionarTodos([confirmandoExclusao.id]);
+        carregar();
+      } catch (e) {
+        setErro(mensagemDeErro(e));
+      }
     }
-  }
-
-  async function excluirSelecionadas() {
-    const ids = Array.from(selecionados);
-    const plural = ids.length > 1;
-    if (!confirm(`Excluir ${ids.length} renda${plural ? "s" : ""} selecionada${plural ? "s" : ""}?`)) return;
-    const resultados = await Promise.allSettled(ids.map((id) => excluirRenda(id)));
-    const falhas = resultados.filter((r) => r.status === "rejected").length;
-    if (falhas > 0) {
-      setErro(`${falhas} de ${ids.length} renda(s) não puderam ser excluídas.`);
-    }
-    limpar();
-    carregar();
+    setConfirmandoExclusao(null);
   }
 
   // Troca o mês em foco — usada tanto pelo seletor de mês quanto ao clicar
   // numa coluna do gráfico "Variação de renda nos últimos meses" (mesmo
   // efeito).
   function selecionarMes(novoMes: string) {
-    // O "Limpar" do seletor nativo manda "" — mês em foco não pode ficar
-    // vazio (quebraria os cálculos do mês), então ignora.
+    // Guarda defensiva — mês em foco não pode ficar vazio (quebraria os
+    // cálculos do mês).
     if (!novoMes) return;
     limpar(); // seleção era da lista do mês anterior
     setMes(novoMes);
@@ -169,16 +182,7 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
 
   const controlesCabecalho = (
     <>
-      <input
-        type="month"
-        value={mes}
-        onChange={(e) => selecionarMes(e.target.value)}
-        // O navegador só abre o seletor nativo ao clicar no ícone do
-        // calendário; showPicker() faz o clique em qualquer parte do "botão"
-        // abrir o mesmo seletor.
-        onClick={(e) => e.currentTarget.showPicker?.()}
-        className="w-full cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-3 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid lg:w-36"
-      />
+      <SeletorMes value={mes} onChange={selecionarMes} />
       <button
         onClick={abrirNova}
         className="w-full rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep lg:w-auto"
@@ -215,11 +219,17 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
 
       {!carregando && (
         <div className="grid grid-cols-2 gap-4">
-          <StatCard titulo="Renda fixa" valor={totalFixa} destaque="positivo" />
+          <StatCard
+            titulo="Renda fixa"
+            valor={totalFixa}
+            destaque="positivo"
+            valorRef={refValorStatCard(0)}
+          />
           <StatCard
             titulo="Renda variável"
             valor={totalExtra}
             destaque="positivo"
+            valorRef={refValorStatCard(1)}
           />
         </div>
       )}
@@ -260,7 +270,7 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
               <BarraSelecao
                 quantidade={selecionados.size}
                 texto={`${selecionados.size} renda${selecionados.size > 1 ? "s" : ""} selecionada${selecionados.size > 1 ? "s" : ""}`}
-                onExcluir={excluirSelecionadas}
+                onExcluir={() => setConfirmandoExclusao("LOTE")}
                 onCancelar={limpar}
               />
               <div className="my-3">
@@ -288,13 +298,19 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
                 ordenadas.length > 3 ? "max-h-49 overflow-y-auto pr-1" : ""
               }`}
             >
-              {ordenadas.map((renda) => {
+              {ordenadas.map((renda, indice) => {
                 const selecionado = selecionados.has(renda.id);
+                // No primeiro item não há espaço acima dentro da lista com
+                // rolagem própria — o tooltip abre pra baixo (ver Tooltip.tsx).
+                const vertical = indice === 0 ? "baixo" : "cima";
                 return (
                   <li key={renda.id}>
                     <div
+                      role="button"
+                      tabIndex={0}
                       onClick={() => alternar(renda.id)}
-                      className={`flex cursor-pointer items-center justify-between rounded-md px-3 py-3 transition-colors ${
+                      onKeyDown={aoTeclarAtivar(() => alternar(renda.id))}
+                      className={`flex cursor-pointer items-center justify-between rounded-md px-3 py-3 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-grouper-mid ${
                         selecionado ? "bg-grouper-sky/30" : "hover:bg-grouper-sky/20"
                       }`}
                     >
@@ -313,22 +329,24 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
                         <span className="font-semibold text-grouper-deep">
                           {formatarBRL(renda.valor)}
                         </span>
-                        <button
-                          onClick={() => abrirEdicao(renda)}
-                          aria-label="Editar"
-                          title="Editar"
-                          className="rounded-md border border-grouper-mid/30 bg-white p-1 text-grouper-mid hover:bg-grouper-mist"
-                        >
-                          <IconeEditar className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => excluir(renda)}
-                          aria-label="Excluir"
-                          title="Excluir"
-                          className="rounded-md border border-red-300 bg-white p-1 text-red-600 hover:bg-red-50"
-                        >
-                          <IconeExcluir className="h-3.5 w-3.5" />
-                        </button>
+                        <Tooltip texto="Editar" posicao="direita" vertical={vertical}>
+                          <button
+                            onClick={() => abrirEdicao(renda)}
+                            aria-label="Editar"
+                            className="rounded-md border border-grouper-mid/30 bg-white p-1 text-grouper-mid hover:bg-grouper-mist"
+                          >
+                            <IconeEditar className="h-3.5 w-3.5" />
+                          </button>
+                        </Tooltip>
+                        <Tooltip texto="Excluir" posicao="direita" vertical={vertical}>
+                          <button
+                            onClick={() => setConfirmandoExclusao(renda)}
+                            aria-label="Excluir"
+                            className="rounded-md border border-red-300 bg-white p-1 text-red-600 hover:bg-red-50"
+                          >
+                            <IconeExcluir className="h-3.5 w-3.5" />
+                          </button>
+                        </Tooltip>
                       </div>
                     </div>
                   </li>
@@ -348,6 +366,20 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
           setModalAberto(false);
           carregar();
         }}
+      />
+
+      <ConfirmacaoModal
+        aberto={confirmandoExclusao !== null}
+        titulo={confirmandoExclusao === "LOTE" ? "Excluir rendas" : "Excluir renda"}
+        mensagem={
+          confirmandoExclusao === "LOTE"
+            ? `Excluir ${selecionados.size} renda${selecionados.size > 1 ? "s" : ""} selecionada${selecionados.size > 1 ? "s" : ""}?`
+            : confirmandoExclusao?.recorrente
+              ? `A renda "${confirmandoExclusao.descricao}" é fixa e recorrente. Excluí-la remove só o mês atual e para as próximas repetições — os meses anteriores continuam registrados. Continuar?`
+              : `Excluir a renda "${confirmandoExclusao?.descricao}"?`
+        }
+        onConfirmar={confirmarExclusao}
+        onClose={() => setConfirmandoExclusao(null)}
       />
     </div>
   );

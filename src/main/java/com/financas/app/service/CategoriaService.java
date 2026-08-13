@@ -1,6 +1,7 @@
 package com.financas.app.service;
 
 import com.financas.app.exception.CategoriaEmUsoException;
+import com.financas.app.exception.CategoriaJaExisteException;
 import com.financas.app.exception.RecursoNaoEncontradoException;
 import com.financas.app.model.Categoria;
 import com.financas.app.model.Usuario;
@@ -45,6 +46,10 @@ public class CategoriaService {
     }
 
     public Categoria criar(Long usuarioId, Categoria categoria) {
+        if (categoriaRepository.existsByNomeIgnoreCaseAndTipoAndUsuarioId(
+                categoria.getNome(), categoria.getTipo(), usuarioId)) {
+            throw new CategoriaJaExisteException();
+        }
         categoria.setUsuario(buscarUsuarioOuFalhar(usuarioId));
         categoria.setDataCriacao(LocalDateTime.now());
         return categoriaRepository.save(categoria);
@@ -73,6 +78,10 @@ public class CategoriaService {
 
     public Categoria atualizar(Long usuarioId, Long categoriaId, Categoria dadosAtualizados) {
         Categoria categoria = buscarOuFalhar(categoriaId, usuarioId);
+        if (categoriaRepository.existsByNomeIgnoreCaseAndTipoAndUsuarioIdAndIdNot(
+                dadosAtualizados.getNome(), dadosAtualizados.getTipo(), usuarioId, categoriaId)) {
+            throw new CategoriaJaExisteException();
+        }
         categoria.setNome(dadosAtualizados.getNome());
         categoria.setTipo(dadosAtualizados.getTipo());
         return categoriaRepository.save(categoria);

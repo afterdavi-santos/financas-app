@@ -3,34 +3,29 @@ import { Modal } from "./Modal";
 import {
   posicaoInvestimentoCdb,
   simularResgateCdb,
-  simularResgateTotalCdb,
   resgatarInvestimentoCdb,
-  resgatarTotalCdb,
 } from "../api/investimentosCdb";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import type { InvestimentoCdb, PosicaoCdb, SimulacaoResgate } from "../types/financas";
 
-// Popup de resgate (parcial ou total). Cada botão ("Resgatar" e "Resgatar
-// tudo") funciona em DOIS cliques, sem passo de "calcular" separado:
-// 1º clique -> simula e mostra o detalhamento de impostos, o próprio botão
-// vira "Confirmar resgate"; 2º clique -> efetiva o resgate.
+// Popup de resgate parcial. O botão "Resgatar" funciona em DOIS cliques, sem
+// passo de "calcular" separado: 1º clique -> simula e mostra o detalhamento
+// de impostos, o próprio botão vira "Confirmar resgate"; 2º clique -> efetiva
+// o resgate.
 interface Props {
   investimento: InvestimentoCdb | null;
   onClose: () => void;
   onResgatado: () => void;
 }
 
-type Modo = "parcial" | "total";
-
 export function ResgatarCdbModal({ investimento, onClose, onResgatado }: Props) {
   const [posicao, setPosicao] = useState<PosicaoCdb | null>(null);
   const [valor, setValor] = useState("");
   const [simulacao, setSimulacao] = useState<SimulacaoResgate | null>(null);
-  // Qual dos dois fluxos está com a simulação pronta, aguardando confirmação.
-  const [modoPendente, setModoPendente] = useState<Modo | null>(null);
-  // Qual botão está processando no momento (calculando ou confirmando).
-  const [processando, setProcessando] = useState<Modo | null>(null);
+  // Simulação pronta, aguardando confirmação (2º clique).
+  const [simulacaoPendente, setSimulacaoPendente] = useState(false);
+  const [processando, setProcessando] = useState(false);
   const [carregandoPosicao, setCarregandoPosicao] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -40,7 +35,7 @@ export function ResgatarCdbModal({ investimento, onClose, onResgatado }: Props) 
     setErro(null);
     setValor("");
     setSimulacao(null);
-    setModoPendente(null);
+    setSimulacaoPendente(false);
     setCarregandoPosicao(true);
     posicaoInvestimentoCdb(investimento.id)
       .then(setPosicao)
@@ -50,68 +45,44 @@ export function ResgatarCdbModal({ investimento, onClose, onResgatado }: Props) 
 
   function aoMudarValor(novoValor: string) {
     setValor(novoValor);
-    // Valor mudou: uma simulação parcial pendente não vale mais.
-    if (modoPendente === "parcial") {
-      setModoPendente(null);
+    // Valor mudou: a simulação pendente não vale mais.
+    if (simulacaoPendente) {
+      setSimulacaoPendente(false);
       setSimulacao(null);
     }
   }
 
-  async function clicarParcial() {
+  async function clicarResgatar() {
     if (!investimento) return;
-    if (modoPendente === "parcial") {
-      await confirmar("parcial");
+    if (simulacaoPendente) {
+      await confirmar();
       return;
     }
     setErro(null);
-    setProcessando("parcial");
+    setProcessando(true);
     try {
       setSimulacao(await simularResgateCdb(investimento.id, Number(valor)));
-      setModoPendente("parcial");
+      setSimulacaoPendente(true);
     } catch (e) {
       setErro(mensagemDeErro(e));
     } finally {
-      setProcessando(null);
+      setProcessando(false);
     }
   }
 
-  async function clicarTudo() {
-    if (!investimento) return;
-    if (modoPendente === "total") {
-      await confirmar("total");
-      return;
-    }
-    setErro(null);
-    setProcessando("total");
-    try {
-      setSimulacao(await simularResgateTotalCdb(investimento.id));
-      setModoPendente("total");
-    } catch (e) {
-      setErro(mensagemDeErro(e));
-    } finally {
-      setProcessando(null);
-    }
-  }
-
-  async function confirmar(modo: Modo) {
+  async function confirmar() {
     if (!investimento) return;
     setErro(null);
-    setProcessando(modo);
+    setProcessando(true);
     try {
-      if (modo === "total") {
-        await resgatarTotalCdb(investimento.id);
-      } else {
-        await resgatarInvestimentoCdb(investimento.id, Number(valor));
-      }
+      await resgatarInvestimentoCdb(investimento.id, Number(valor));
       onResgatado();
     } catch (e) {
       setErro(mensagemDeErro(e));
     } finally {
-      setProcessando(null);
+      setProcessando(false);
     }
   }
-
-  const outroEmAndamento = processando !== null;
 
   return (
     <Modal
@@ -187,31 +158,17 @@ export function ResgatarCdbModal({ investimento, onClose, onResgatado }: Props) 
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={clicarParcial}
-            disabled={!valor || (outroEmAndamento && processando !== "parcial")}
-            className="flex-1 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+            onClick={clicarResgatar}
+            disabled={!valor || processando}
+            className="flex-1 rounded-md bg-grouper-mid px-4 py-2 text-sm font-medium text-white hover:bg-grouper-deep disabled:opacity-60"
           >
-            {processando === "parcial"
-              ? modoPendente === "parcial"
+            {processando
+              ? simulacaoPendente
                 ? "Confirmando..."
                 : "Calculando..."
-              : modoPendente === "parcial"
+              : simulacaoPendente
                 ? "Confirmar resgate"
                 : "Resgatar"}
-          </button>
-          <button
-            type="button"
-            onClick={clicarTudo}
-            disabled={outroEmAndamento && processando !== "total"}
-            className="flex-1 rounded-md bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300 disabled:opacity-60"
-          >
-            {processando === "total"
-              ? modoPendente === "total"
-                ? "Confirmando..."
-                : "Calculando..."
-              : modoPendente === "total"
-                ? "Confirmar resgate"
-                : "Resgatar tudo"}
           </button>
         </div>
 

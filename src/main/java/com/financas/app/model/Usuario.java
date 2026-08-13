@@ -33,6 +33,8 @@ public class Usuario {
 
     private LocalDateTime dataCriacao;
 
+    private LocalDateTime termosAceitosEm;
+
     @Column(columnDefinition = "bytea")
     private byte[] foto;
 

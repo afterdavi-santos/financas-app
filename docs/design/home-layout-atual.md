@@ -29,8 +29,10 @@ O app já passou por uma repaginação baseada num brandbook próprio. A identid
   em `frontend/public/brand/palettes/` — uma vermelho→amarelo e outra verde→amarelo,
   7 tons cada. `utils/cores.ts` reaproveita tons específicos dessas paletas em três
   escalas por degraus (não é degradê contínuo):
-  - `corEscalaDificuldade()` — botão "Plano de contenção" (seção 4.5.4): 4 degraus
-    verde/amarelo/laranja/vermelho por urgência.
+  - `corEscalaEconomiaBotao()` — botão "Plano de contenção" (seção 4.5.4):
+    mesma escala de 5 degraus de `corEscalaEconomia()` abaixo, aplicada à
+    economia do mês em si (era `corEscalaDificuldade()`, 4 degraus por
+    "% da categoria a cortar", removida em 2026-08-10 — ver seção 4.5.4).
   - `corEscalaEconomia()` — borda do card "Economia do mês" (seção 4.5.1): 5 degraus
     de 20% (2 vermelhos, 1 amarelo, 2 verdes) por quão perto de zero a economia está
     em relação à renda do mês.
@@ -67,14 +69,20 @@ Arquivos principais:
 | `frontend/src/components/Layout.tsx` | Casca da aplicação (menu + área de conteúdo) |
 | `frontend/src/components/Sidebar.tsx` | Menu lateral |
 | `frontend/src/pages/HomePage.tsx` | Tela Home |
-| `frontend/src/components/StatCard.tsx` | Card de estatística compartilhado — usado em Despesas **e** na Home (Renda do mês / Despesas do mês) |
-| `frontend/src/components/EconomiaDestaque.tsx` | Card grande da Economia do mês na Home (valor + variação % vs mês anterior + borda de cor variável — ver 4.5.1) |
+| `frontend/src/components/StatCard.tsx` | Card de estatística compartilhado — usado em Despesas **e** na Home (Renda do mês / Despesas do mês). Fonte do valor se ajusta dinamicamente à largura disponível (ver `hooks/useAjustarFonte.ts`, seção 4.4.1) |
+| `frontend/src/components/EconomiaDestaque.tsx` | Card grande da Economia do mês na Home (valor + variação % vs mês anterior + borda de cor variável — ver 4.5.1). Mesmo ajuste dinâmico de fonte do `StatCard` |
+| `frontend/src/components/SeletorMes.tsx` | Seletor de mês próprio (botão + popup HTML/CSS), substitui o `<input type="month">` nativo — ver 4.1 |
+| `frontend/src/components/SeletorData.tsx` | Seletor de dia completo próprio, substitui todo `<input type="date">` nativo dos modais (Nova despesa, Aportar, Novo objetivo, Novo investimento CDB, etc.) |
+| `frontend/src/components/GradeAnos.tsx` | Grade de anos em blocos de 12 (navegável), usada dentro do popup de `SeletorMes`/`SeletorData` ao clicar no rótulo do ano — pular direto pra um ano distante sem precisar avançar um por um |
 | `frontend/src/components/GraficoEconomiaHome.tsx` | Gráfico de barras (Recharts) da economia dos últimos 6 meses, na Home |
 | `frontend/src/components/ObjetivosResumoHome.tsx` | Lista condensada de objetivos da Home, com barra de progresso (escala de azul), seleção/edição/exclusão (mesmo padrão do Investimento CDB), rolagem (>2 itens), fixar (pin) até 2 objetivos, data da meta e botão "+ Adicionar objetivo" |
 | `frontend/src/components/IconesInvestimento.tsx` | Ícones SVG (editar/excluir) usados nas ações do card de Investimento CDB da Home |
 | `frontend/src/components/Modal.tsx` | Modal genérico reaproveitável (título Khand + `grouper-ink` + conteúdo + fechar por X/backdrop/Esc) — usado por todos os popups de formulário e pelo pop-up de Plano de contenção |
-| `frontend/src/utils/cores.ts` | `corEscalaDificuldade()`, `corEscalaEconomia()` e `corEscalaProgresso()` — as três escalas de cor por degraus da Home (ver seção 0) |
-| `frontend/src/utils/contencaoRendaVariavel.ts` | `planoContencao()` (cálculo do plano) + `dificuldadeContencao()` (0 a 1, usada por `corEscalaDificuldade`) |
+| `frontend/src/utils/cores.ts` | `corEscalaEconomiaBotao()`, `corEscalaEconomia()` e `corEscalaProgresso()` — as escalas de cor por degraus da Home (ver seção 0) |
+| `frontend/src/utils/contencaoRendaVariavel.ts` | `planoContencao()` (cálculo do plano de contenção) |
+| `frontend/src/hooks/useAjustarFonte.ts` | Encolhe a fonte de um valor até caber na largura do card (usado por `StatCard`/`EconomiaDestaque`), em vez de um breakpoint fixo — reage ao espaço real disponível em qualquer largura de tela |
+| `frontend/src/hooks/useAjustarFonteSincronizada.ts` | Como acima, mas coordena vários cards ao mesmo tempo: todos usam o menor tamanho entre eles (ex.: "Despesas fixas"/"Despesas variáveis" em Movimentações, ver `movimentacoes-layout-atual.md`) |
+| `frontend/src/hooks/usePosicaoPopup.ts` | Posiciona (via portal no `<body>`) os popups de `SeletorMes`/`SeletorData`, escapando do `overflow-y-auto` do card de `Modal.tsx` |
 | `frontend/src/components/PageHeader.tsx` | Cabeçalho padrão de outras páginas (Home tem o seu próprio, inline) |
 | `frontend/src/components/SimularDespesaModal.tsx` | **Órfão no momento** — não é mais chamado por nenhuma página (o botão "Simular despesa" foi removido da Home); o componente continua no repo mas sem callers |
 | `frontend/src/components/Avatar.tsx` | Avatar compartilhado (Home/Movimentações) — foto ou iniciais, prop `menu` abre popup "Editar perfil" |
@@ -172,18 +180,21 @@ telas estreitas (`grid-cols-1` abaixo do breakpoint `lg`).
   imediatamente após o último botão.
 - **Seletor de mês + 3 botões + avatar**, nessa ordem, todos no mesmo grupo à
   direita:
-  1. **Seletor de mês** (`<input type="month">`, "cara de botão" — borda
-     dupla `grouper-mid`, fundo branco, Khand `font-semibold` **caixa alta
-     com tracking** (`uppercase tracking-wide`, mesmo tratamento Khand dos
-     botões "+ Adicionar" ao lado), sombra leve, hover `grouper-mist`,
-     `onClick` chama `showPicker()` pra abrir o seletor clicando em qualquer
-     parte do campo, não só no ícone do calendário — mesmo tratamento usado
-     em Despesas/Rendas, ver `movimentacoes-layout-atual.md`. O "x" nativo de
-     limpar o campo (`::-webkit-clear-button`) é escondido via CSS global em
-     `index.css` (Chrome/Edge) — e, mesmo que o usuário limpe pelo popup do
-     calendário nativo (ainda possível, não é estilizável), o handler
-     `selecionarMes` ignora valor vazio (`if (!novoMes) return`) em vez de
-     quebrar os cálculos do mês. Define o **mês em foco** (estado `mes`,
+  1. **Seletor de mês** (`components/SeletorMes.tsx`, variante
+     `cabecalho` — botão "cara de botão": borda dupla `grouper-mid`, fundo
+     branco, Khand `font-semibold` **caixa alta com tracking**
+     (`uppercase tracking-wide`, mesmo tratamento Khand dos botões
+     "+ Adicionar" ao lado), sombra leve, hover `grouper-mist`). **Não é
+     mais um `<input type="month">` nativo** (2026-08-11) — o calendário
+     nativo do navegador não é estilizável nem reposicionável via CSS e
+     podia vazar da borda da tela no mobile; agora é um popup HTML/CSS
+     próprio (grade de meses + `GradeAnos.tsx` pra pular direto a um ano
+     distante), posicionado via portal no `<body>` (`hooks/
+     usePosicaoPopup.ts`) pra nunca ficar cortado nem vazar da tela, em
+     qualquer navegador. Mesmo componente usado em Despesas/Rendas, ver
+     `movimentacoes-layout-atual.md`. `selecionarMes` ignora valor vazio
+     (`if (!novoMes) return`) em vez de quebrar os cálculos do mês. Define
+     o **mês em foco** (estado `mes`,
      padrão o mês atual): todos os cards, a lista e o gráfico da Home
      mostram dados desse mês, não necessariamente "hoje". Largura fixa
      `w-44` (176px — era `w-36`/144px até 2026-08-10, aumentada porque a
@@ -241,8 +252,20 @@ Detalhes técnicos e o "porquê" em `docs/design/a11y-e-responsividade.md`
 - Topo da coluna esquerda: grid de 2 colunas com os `StatCard`s de Renda
   (borda `grouper-green`) e Despesas (borda `grouper-red`) — as duas únicas
   exceções de verde/vermelho fora das escalas por degraus (ver seção 0).
-- Rótulo (`text-sm`, `grouper-ink`, maiúsculo, `font-semibold`) e valor
-  (`text-3xl` Khand `font-bold`) — ambos em negrito.
+- Rótulo (`text-xs sm:text-sm` — reduzido no mobile pra não quebrar linha em
+  títulos maiores como "Despesas variáveis" em Movimentações, ver
+  `movimentacoes-layout-atual.md` —, `grouper-ink`, maiúsculo,
+  `font-semibold`) e valor (base `text-3xl` Khand `font-bold`) — ambos em
+  negrito.
+- **Fonte do valor é dinâmica** (2026-08-11, `hooks/useAjustarFonte.ts`):
+  em vez de um breakpoint fixo, encolhe de verdade só o quanto precisar
+  (medindo `scrollWidth`/`clientWidth`) até o valor caber no card, com
+  `truncate` como rede de segurança final — cobre valores grandes/com mais
+  casas decimais em qualquer largura de tela. Em Despesas/Rendas
+  (`movimentacoes-layout-atual.md`), os dois cards lado a lado (fixas/
+  variáveis) usam `hooks/useAjustarFonteSincronizada.ts` pra sempre mostrar
+  o valor no **mesmo** tamanho de fonte (o menor entre os dois), em vez de
+  cada um encolher independente.
 - **No mobile** esses 2 cards (e o de Economia do mês, 4.5.1) somem daqui
   e viram um **seletor de 3 abas** ("Renda" / "Despesas" / "Economia"),
   logo abaixo do cabeçalho (ver 4.1.1): abas em linha, mostrando o card da
@@ -324,8 +347,10 @@ Detalhes técnicos e o "porquê" em `docs/design/a11y-e-responsividade.md`
 
 #### 4.5.1 "Economia do mês" em destaque (`EconomiaDestaque`)
 - Card branco (`p-5`): rótulo pequeno em cima (Khand, `font-semibold`,
-  maiúsculo), valor em Khand `font-bold` (`text-3xl`), cor `grouper-deep` se
-  positiva/`grouper-ink` se negativa.
+  maiúsculo), valor em Khand `font-bold` (base `text-3xl`, com o mesmo
+  ajuste dinâmico de fonte do `StatCard` — ver 4.4.1 —, já que este card
+  vive na coluna direita estreita e um valor negativo grande podia vazar),
+  cor `grouper-deep` se positiva/`grouper-ink` se negativa.
 - **Borda esquerda de cor variável** (`corEscalaEconomia()`, aplicada via
   `style` inline pois é uma escala de 5 hex específicos, não classes Tailwind
   fixas): calcula `economia / renda * 100` (0–100, negativo vira 0) e escolhe
@@ -494,11 +519,11 @@ próprios desde antes (`ExcluirCategoriaModal`/
 | Negrito | Usado com intenção, não por padrão: títulos de seção (Objetivos, Últimas despesas, Economia nos últimos meses, Investimento CDB) e os `StatCard`s (Renda/Despesas do mês) ficam em negrito; itens de lista (nome do investimento, descrição do objetivo, itens de últimas despesas) e o valor atual do investimento **não** ficam — já testamos deixar os nomes em negrito, mas foi revertido (ver 4.4.2/4.4.3) |
 | Informações de menor destaque | Cor `text-grouper-deep` (azul) + `font-medium`, `text-xs` — usado no valor/meta de Objetivos, subtexto de Últimas despesas e Investimento CDB (data), e nos blocos de Planejamento (seção 6). Antes era `text-grouper-navy/60` (cinza-azulado apagado); trocado por ter mais contraste/cor sem virar texto principal |
 | Listas longas | Padrão repetido em Objetivos (>2 itens, `max-h-44`) e Investimento CDB (>2 itens, `max-h-72`): em vez de esticar o card, a lista vira `max-h-* overflow-y-auto` com rolagem própria. Divisórias entre itens (`divide-y`) em `divide-grouper-sky/45` (tom mais escuro que o `/15` original, pra ficar visível) |
-| Seleção por clique | Padrão do Investimento CDB, replicado em Objetivos (ver 4.4.2): sem checkbox visível — a linha inteira é clicável (`onClick` no item) e o fundo muda pra indicar selecionado (`bg-grouper-sky/30`); hover dá um feedback mais sutil (`hover:bg-grouper-sky/20`) — em Objetivos o hover também ganhou `hover:shadow-md` |
+| Seleção por clique | Padrão do Investimento CDB, replicado em Objetivos, Rendas, Despesas e nos blocos de Planejamento: sem checkbox visível — a linha inteira é clicável (`onClick` no item) e o fundo muda pra indicar selecionado (`bg-grouper-sky/30`); hover dá um feedback mais sutil (`hover:bg-grouper-sky/20`) — em Objetivos o hover também ganhou `hover:shadow-md`. Também alcançável por teclado (2026-08-11, `utils/teclado.ts`): `role="button"` + `tabIndex={0}` + Enter/Espaço ativa igual ao clique, com anel de foco visível (`focus-visible:ring-2`) — antes só funcionava no mouse/toque |
 | Espaçamento | Compactado numa passada de "caber na tela sem rolar" — `space-y-4`/`gap-4` entre seções, padding dos cards em geral `p-5` (Objetivos, Últimas despesas, Investimento CDB — Últimas despesas usava `p-4`, ajustado pra `p-5` pra alinhar o título com os outros dois) |
 | Tipografia | Inter (`font-display`, era Khand até 2026-08-10) para títulos/números/botões/rótulos; Hind (`font-body`) para texto corrido, itens de lista e o valor atual do investimento CDB (ver 4.5.3) |
-| Seletor de mês nativo | O "x" de limpar (`::-webkit-clear-button`) é escondido via CSS global (`index.css`) em Chrome/Edge. Mesmo assim, se o usuário limpar pelo popup nativo do calendário (não estilizável), o handler `selecionarMes` ignora string vazia em vez de deixar o mês em foco quebrar — mesmo padrão na Home e em Despesas/Rendas |
-| Tooltip próprio do app | `components/Tooltip.tsx` (2026-08-10) substitui o atributo `title` nativo do navegador (cor controlada pelo SO/tema, não estilizável) em todo botão/ícone que precisa de legenda — fundo branco, texto `grouper-ink`, aparece no hover **e** no foco por teclado (`focus-within`), mas tira o próprio foco ao sair com o mouse (senão ficava preso na tela até outro clique, já que clicar também foca o botão). Prop `posicao` ("centro" padrão ou "direita") evita que o balão vaze pra fora de listas com `overflow-y-auto` quando o gatilho está na borda direita (ex.: ícones de editar/excluir, sempre os últimos de uma linha). Prop `vertical` ("cima" padrão ou "baixo", 2026-08-10) resolve o mesmo problema no eixo Y — sem espaço acima, o balão do **primeiro item** de uma lista com rolagem própria ficava cortado; aplicado nesse item em todas as listas afetadas |
+| Seletor de mês/data | **Não são mais `<input type="month"/"date">` nativos** (2026-08-11) — ver `components/SeletorMes.tsx`/`SeletorData.tsx` na tabela de arquivos principais. O CSS que escondia o "x" de limpar dos inputs nativos foi removido (não existem mais); o handler `selecionarMes` continua ignorando string vazia (guarda defensiva) |
+| Tooltip próprio do app | `components/Tooltip.tsx` (2026-08-10) substitui o atributo `title` nativo do navegador (cor controlada pelo SO/tema, não estilizável) em todo botão/ícone que precisa de legenda — fundo branco, texto `grouper-ink`, aparece no hover **e** no foco por teclado (`focus-within`), mas tira o próprio foco ao sair com o mouse (senão ficava preso na tela até outro clique, já que clicar também foca o botão). **O elemento-gatilho precisa ser focável** (`<button>`, não `<span>`) pra funcionar no mobile, onde não existe `:hover` — achado real em 2026-08-11: o ícone ⓘ de incentivo dos Objetivos e o selo "Possível duplicata" do Leitor de fatura usavam `<span>` e eram inacessíveis no toque; corrigidos pra `<button>`. Prop `posicao` ("centro" padrão ou "direita") evita que o balão vaze pra fora de listas com `overflow-y-auto` quando o gatilho está na borda direita (ex.: ícones de editar/excluir, sempre os últimos de uma linha). Prop `vertical` ("cima" padrão ou "baixo", 2026-08-10) resolve o mesmo problema no eixo Y — sem espaço acima, o balão do **primeiro item** de uma lista com rolagem própria ficava cortado; aplicado nesse item em todas as listas afetadas |
 
 ## 6. Pontos que já pulam aos olhos como possíveis melhorias
 

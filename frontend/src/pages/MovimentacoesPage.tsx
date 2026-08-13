@@ -20,58 +20,61 @@ export function MovimentacoesPage() {
   const [graficoSlot, setGraficoSlot] = useState<HTMLDivElement | null>(null);
 
   return (
-    <div className="w-full space-y-2">
-      {/* No mobile, título e avatar dividem a mesma linha — mesmo padrão da
-          Home. Em lg+ o avatar sai daqui e volta pra ponta direita da linha
-          das abas, como sempre foi (ver mais abaixo). */}
-      <div className="flex items-center justify-between gap-3 lg:block">
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-grouper-ink">
+    // No mobile isto vira um único `flex-wrap`: título, avatar, abas,
+    // botões, conteúdo e gráfico ficam todos no mesmo contexto, pra dar
+    // pra reordenar livremente via `order` (as abas precisam aparecer
+    // ACIMA dos botões no mobile, mas os botões ficam na linha do título
+    // no desktop — os dois wrappers abaixo (`contents lg:flex`/`lg:grid`)
+    // "evaporam" no mobile exatamente pra permitir isso). No desktop volta
+    // a ser um empilhamento simples de 2 blocos (linha do título, grid).
+    <div className="flex w-full flex-wrap gap-3 lg:block lg:space-y-2">
+      {/* Título + botões (portados por DespesasPage/RendasPage) + avatar —
+          no desktop formam uma linha só; no mobile "evapora" (contents) e
+          cada filho vira um item solto do flex-wrap acima, reordenável. */}
+      <div className="contents lg:flex lg:items-center lg:justify-between lg:gap-3">
+        <h1 className="order-1 font-display text-3xl font-semibold tracking-tight text-grouper-ink lg:order-none">
           Movimentações
         </h1>
-        <div className="lg:hidden">
-          <Avatar menu />
+        {/* Botões (headerSlot) + avatar agrupados num único wrapper —
+            precisam ficar colados entre si, então não podem ser dois
+            filhos soltos do `justify-between` de cima (senão o espaço
+            "sobra" entre eles em vez de ficar só entre o título e o
+            grupo). Mesma estrutura usada na Home. */}
+        <div className="contents lg:flex lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:gap-3">
+          <div
+            ref={setHeaderSlot}
+            className="order-4 flex w-full flex-col gap-2 lg:order-none lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:gap-3"
+          />
+          <div className="order-2 lg:order-none">
+            <Avatar menu />
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Linha das abas + controles ocupa a largura toda da página (3
-            colunas), pra empurrar os controles e o avatar até a borda
-            direita, com as abas ficando à esquerda como antes. */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-grouper-sky/20 lg:col-span-3">
-          <div className="flex gap-6">
-            {ABAS.map((item) => (
-              <button
-                key={item.chave}
-                onClick={() => setAba(item.chave)}
-                className={`-mb-px border-b-2 px-1 pb-3 font-display text-sm font-semibold uppercase tracking-wide transition-colors ${
-                  aba === item.chave
-                    ? "border-grouper-mid text-grouper-mid"
-                    : "border-transparent text-grouper-navy/50 hover:text-grouper-navy"
-                }`}
-              >
-                {item.rotulo}
-              </button>
-            ))}
-          </div>
-          <div className="flex w-full flex-col gap-2 pb-3 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:gap-3">
-            {/* No mobile o seletor de mês e o botão de adicionar (portados
-                por DespesasPage/RendasPage) empilham em largura total —
-                mesmo padrão da Home (ver classes deles nos dois arquivos). */}
-            <div
-              ref={setHeaderSlot}
-              className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:gap-2"
-            />
-            {/* Avatar desktop: volta pra ponta direita da linha das abas. */}
-            <div className="hidden lg:block">
-              <Avatar menu />
-            </div>
-          </div>
+      {/* Abas + conteúdo + gráfico — no desktop é o grid de 3 colunas de
+          sempre; no mobile "evapora" também, pras abas (order-3) poderem
+          ficar entre o avatar (order-2) e os botões (order-4) acima. */}
+      <div className="contents lg:grid lg:grid-cols-3 lg:gap-4">
+        <div className="order-3 flex w-full gap-6 border-b border-grouper-sky/20 lg:order-none lg:col-span-3">
+          {ABAS.map((item) => (
+            <button
+              key={item.chave}
+              onClick={() => setAba(item.chave)}
+              className={`-mb-px border-b-2 px-1 pb-3 font-display text-sm font-semibold transition-colors ${
+                aba === item.chave
+                  ? "border-grouper-mid text-grouper-mid"
+                  : "border-transparent text-grouper-navy/50 hover:text-grouper-navy"
+              }`}
+            >
+              {item.rotulo}
+            </button>
+          ))}
         </div>
 
         {/* col-span-2: mesma largura da coluna esquerda da Home, pra os cards
             (Despesas fixas/variáveis, Renda fixa/variável) ficarem
             do mesmo tamanho dos StatCards de Renda/Despesas do mês de lá. */}
-        <div className="space-y-6 lg:col-span-2">
+        <div className="order-5 w-full space-y-6 lg:order-none lg:col-span-2">
           {aba === "despesas" ? (
             <DespesasPage headerSlot={headerSlot} graficoSlot={graficoSlot} />
           ) : (
@@ -81,7 +84,7 @@ export function MovimentacoesPage() {
 
         {/* Coluna direita (antes vazia): recebe via portal o gráfico mensal
             da aba ativa (despesas ou variação de renda). */}
-        <div ref={setGraficoSlot} />
+        <div ref={setGraficoSlot} className="order-6 w-full lg:order-none" />
       </div>
     </div>
   );

@@ -51,7 +51,7 @@ class AuthControllerTest {
         mockMvc.perform(post("/api/auth/registrar")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"nome":"Davi","email":"davi@exemplo.com","senha":"senha123"}
+                                {"nome":"Davi","email":"davi@exemplo.com","senha":"senha123","aceitouTermos":true}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(1))
@@ -64,7 +64,17 @@ class AuthControllerTest {
         mockMvc.perform(post("/api/auth/registrar")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"nome":"Davi","email":"nao-e-email","senha":"senha123"}
+                                {"nome":"Davi","email":"nao-e-email","senha":"senha123","aceitouTermos":true}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void deveRecusarRegistroSemAceitarTermos() throws Exception {
+        mockMvc.perform(post("/api/auth/registrar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nome":"Davi","email":"davi@exemplo.com","senha":"senha123","aceitouTermos":false}
                                 """))
                 .andExpect(status().isBadRequest());
     }
@@ -76,7 +86,7 @@ class AuthControllerTest {
         mockMvc.perform(post("/api/auth/registrar")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"nome":"Davi","email":"davi@exemplo.com","senha":"senha123"}
+                                {"nome":"Davi","email":"davi@exemplo.com","senha":"senha123","aceitouTermos":true}
                                 """))
                 .andExpect(status().isConflict());
     }

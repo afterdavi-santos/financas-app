@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { rotuloTipoCategoria } from "../utils/rotulos";
 import type { Categoria } from "../types/financas";
 
 // Valor especial que sinaliza "abrir o formulário de nova categoria inline" —
@@ -49,6 +50,18 @@ export function SeletorCategoria({
 
   const categoriaSelecionada = categorias.find((c) => String(c.id) === valor);
 
+  // Nomes duplicados só podem existir entre tipos diferentes (Fixa/Variável
+  // — o backend impede duas categorias iguais do mesmo tipo). Quando isso
+  // acontece, cada opção ganha uma tag com o tipo pra diferenciar.
+  const nomesDuplicados = useMemo(() => {
+    const contagem = new Map<string, number>();
+    for (const c of categorias) {
+      const chave = c.nome.trim().toLowerCase();
+      contagem.set(chave, (contagem.get(chave) ?? 0) + 1);
+    }
+    return new Set([...contagem].filter(([, n]) => n > 1).map(([nome]) => nome));
+  }, [categorias]);
+
   return (
     <div className={desabilitado ? "pointer-events-none opacity-60" : ""}>
       <input
@@ -56,7 +69,13 @@ export function SeletorCategoria({
         value={busca}
         onChange={(e) => setBusca(e.target.value)}
         disabled={desabilitado}
-        placeholder={categoriaSelecionada ? categoriaSelecionada.nome : "Buscar categoria..."}
+        placeholder={
+          categoriaSelecionada
+            ? nomesDuplicados.has(categoriaSelecionada.nome.trim().toLowerCase())
+              ? `${categoriaSelecionada.nome} (${rotuloTipoCategoria[categoriaSelecionada.tipo]})`
+              : categoriaSelecionada.nome
+            : "Buscar categoria..."
+        }
         aria-label="Buscar categoria"
         className="w-full rounded-t-md border border-b-0 border-grouper-sky/40 px-3 py-2 text-sm text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
       />
@@ -83,22 +102,36 @@ export function SeletorCategoria({
         {ordenadas.length === 0 ? (
           <p className="px-3 py-2 text-sm text-grouper-navy/60">Nenhuma categoria encontrada.</p>
         ) : (
-          ordenadas.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              role="option"
-              aria-selected={String(c.id) === valor}
-              onClick={() => onChange(String(c.id))}
-              className={`block w-full border-b border-grouper-sky/10 px-3 py-2 text-left text-sm last:border-b-0 ${
-                String(c.id) === valor
-                  ? "bg-grouper-sky/30 text-grouper-ink"
-                  : "text-grouper-ink hover:bg-grouper-mist"
-              }`}
-            >
-              {c.nome}
-            </button>
-          ))
+          ordenadas.map((c) => {
+            const duplicado = nomesDuplicados.has(c.nome.trim().toLowerCase());
+            return (
+              <button
+                key={c.id}
+                type="button"
+                role="option"
+                aria-selected={String(c.id) === valor}
+                onClick={() => onChange(String(c.id))}
+                className={`flex w-full items-center gap-1.5 border-b border-grouper-sky/10 px-3 py-2 text-left text-sm last:border-b-0 ${
+                  String(c.id) === valor
+                    ? "bg-grouper-sky/30 text-grouper-ink"
+                    : "text-grouper-ink hover:bg-grouper-mist"
+                }`}
+              >
+                {duplicado && (
+                  <span
+                    className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                      c.tipo === "FIXA"
+                        ? "bg-grouper-deep/15 text-grouper-deep"
+                        : "bg-grouper-mid/15 text-grouper-mid"
+                    }`}
+                  >
+                    {rotuloTipoCategoria[c.tipo]}
+                  </span>
+                )}
+                <span>{c.nome}</span>
+              </button>
+            );
+          })
         )}
       </div>
     </div>

@@ -112,14 +112,14 @@ export function NovaCategoriaModal({ aberto, onClose, onCriada, categoria, categ
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+            className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={carregando}
-            className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep disabled:opacity-60"
+            className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep disabled:opacity-60"
           >
             {carregando ? "Salvando..." : "Salvar"}
           </button>

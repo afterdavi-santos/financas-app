@@ -109,8 +109,10 @@ linha do título, ver seção 2):
   agora é opcional — sem ele, some o `<h1>` e só os botões aparecem (usado
   aqui porque o nome "Despesas"/"Rendas" já está na aba ativa, então repetir
   como título seria redundante).
-- Cada aba tem seu próprio input de mês (`type="month"`, estado local),
-  formato `"YYYY-MM"`. Em Rendas isso é **novo** — antes a lista mostrava
+- Cada aba tem seu próprio seletor de mês (`components/SeletorMes.tsx`,
+  não mais `<input type="month">` nativo desde 2026-08-11 — ver
+  `home-layout-atual.md` seção 4.1), estado local, formato `"YYYY-MM"`. Em
+  Rendas isso é **novo** — antes a lista mostrava
   todas as rendas de todos os meses; agora filtra por `mesReferencia` (client-
   side, já que a API não filtra por mês) igual Despesas já fazia.
 - **Aba Despesas** ganhou o botão **Leitor de fatura** entre o seletor de mês
@@ -135,6 +137,17 @@ O seletor de mês e o botão "+ Adicionar despesa/renda" (portados via
 pra lado a lado em `lg`+ — mesmas classes usadas na Home. Detalhes técnicos
 em `docs/design/a11y-e-responsividade.md` (seção 2.3).
 
+**Ordem no mobile** (2026-08-11, pedido do usuário): abaixo de `lg`, as
+abas (Despesas | Rendas) aparecem **acima** dos controles (seletor de mês,
+Leitor de fatura, + Adicionar) — título → avatar → abas → controles →
+conteúdo → gráfico. No desktop nada muda (título+controles+avatar numa
+linha, abas numa linha própria abaixo, como sempre foi). Os dois wrappers
+que hoje têm posições bem diferentes em cada breakpoint (a linha do título
+e o grid de abas+conteúdo+gráfico) viraram `contents`/`lg:flex`/`lg:grid`
+— no mobile "evaporam" pra um único `flex-wrap` reordenável via `order`
+(mesma técnica de outras reordenações mobile do app); no desktop cada um
+volta a ser uma caixa real, reconstituindo a estrutura de sempre.
+
 ## 6. Conteúdo de cada aba
 
 Igual descrito no doc da Home (seções 4.4.1 a 4.5.3 lá tratam de padrões
@@ -145,6 +158,13 @@ compartilhados), já com a identidade da marca aplicada:
   fixas" / "Despesas variáveis" (nome exibido; o tipo no backend continua
   `EXTRAORDINARIA`). **Não são mais clicáveis** (sem `onClick`, sem "Ver
   detalhes →") — a lista completa abaixo já cobre esse caso via filtro.
+  **Fonte do valor sincronizada entre os dois** (2026-08-11,
+  `hooks/useAjustarFonteSincronizada.ts`, via prop `valorRef` do
+  `StatCard`): os dois sempre mostram o valor no mesmo tamanho de fonte (o
+  menor que couber nos dois), em vez de cada um encolher sozinho — mesmo
+  mecanismo em Rendas (Renda fixa/variável). Título dos cards em
+  `text-xs sm:text-sm` (reduzido no mobile pra "Despesas variáveis" não
+  quebrar linha).
 - **Linha de 3 colunas** (`grid sm:grid-cols-3`, empilha em coluna única
   abaixo do breakpoint `sm`), juntos ocupando a mesma largura que "Despesas
   por categoria" ocupava sozinha antes:
@@ -248,22 +268,20 @@ compartilhados), já com a identidade da marca aplicada:
     `#1C4562`/`grouper-navy`, mais claro). Mesmo ajuste no gráfico de renda
     (abaixo) e no de Economia da Home.
 
-**Seletor de mês** (Despesas e Rendas): o `<input type="month">` do
-cabeçalho ganhou "cara de botão" — borda `border-2 border-grouper-mid`,
-fundo branco, `font-display font-semibold` **caixa alta com tracking**
-(`uppercase tracking-wide`, largura fixa `w-44` — igualado ao seletor de mês
-da Home, que era o único com esse tratamento até agora; era `w-36` até
-2026-08-10, aumentada junto com a troca de fonte pra Inter, ver
-`frontend-home.md` Parte 14), sombra leve e hover
-`hover:bg-grouper-mist` — em vez da borda fina `grouper-sky/40` genérica de
-campo de formulário. Também ganhou `onClick` chamando
-`e.currentTarget.showPicker?.()`, pra abrir o seletor nativo clicando em
-qualquer parte do campo — antes só o ícone do calendário (a parte clicável
-nativa do navegador) abria. O "x" nativo de limpar
-(`::-webkit-clear-button`) é escondido via CSS global (`index.css`,
-Chrome/Edge); mesmo assim, se o usuário limpar pelo popup do calendário (não
-estilizável), `selecionarMes` ignora string vazia em vez de deixar o mês em
-foco quebrar (mesmo guard da Home).
+**Seletor de mês** (Despesas e Rendas): `components/SeletorMes.tsx`
+(variante `cabecalho`, não mais `<input type="month">` nativo desde
+2026-08-11 — ver `home-layout-atual.md` seção 4.1) com "cara de botão" —
+borda `border-2 border-grouper-mid`, fundo branco, `font-display
+font-semibold` **caixa alta com tracking** (`uppercase tracking-wide`,
+largura fixa `w-44` — igualado ao seletor de mês da Home, que era o único
+com esse tratamento até agora; era `w-36` até 2026-08-10, aumentada junto
+com a troca de fonte pra Inter, ver `frontend-home.md` Parte 14), sombra
+leve e hover `hover:bg-grouper-mist` — em vez da borda fina
+`grouper-sky/40` genérica de campo de formulário. `selecionarMes` ignora
+string vazia (guarda defensiva) em vez de deixar o mês em foco quebrar
+(mesmo guard da Home). Ao clicar no rótulo do mês/ano dentro do popup, abre
+`GradeAnos.tsx` — pula direto pra um ano distante sem precisar avançar um
+por um.
 
 **Rendas** (`RendasPage.tsx`) — agora com o mesmo tratamento dado à lista de
 Despesas (ver acima):

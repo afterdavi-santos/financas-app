@@ -145,7 +145,7 @@ export function VincularInvestimentoModal({
                 ))}
               </select>
             </div>
-            <p className="text-xs text-slate-500">
+            <p className="text-sm text-slate-600">
               O progresso desta meta passará a acompanhar a posição do
               investimento em tempo real, no lugar dos aportes manuais.
             </p>

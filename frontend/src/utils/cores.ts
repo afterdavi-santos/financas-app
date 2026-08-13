@@ -1,30 +1,8 @@
-// Escala verde → amarelo → laranja → vermelho usada só para sinalizar
-// dificuldade/urgência (ex.: botão do Plano de contenção) — exceção
-// deliberada à paleta do brandbook (que normalmente não usa essas cores),
-// reservada para esse tipo de alerta, assim como o preto já é reservado
-// para alarme real em outras partes da Home.
-//
-// As cores vêm das paletas vermelho→amarelo e verde→amarelo em
-// `frontend/public/brand/palettes/` (não são mais tons genéricos do
-// Tailwind).
-//
-// Faixas por degraus (não é um degradê contínuo): baseadas no percentual de
-// `dificuldadeContencao` (0 a 1) — quanto das despesas extraordinárias
-// selecionadas precisa ser cortado para fechar o próximo mês.
-//   até 40%   → verde   (tranquilo)
-//   40 a 70%  → amarelo (atenção)
-//   70 a 90%  → laranja (alerta)
-//   acima de 90% → vermelho (crítico — mal dá pra cortar mais que isso)
+// Par fundo+texto (usado onde a cor pinta o FUNDO inteiro de um elemento,
+// não só uma borda fina — aí o texto precisa de contraste garantido).
 export interface CorDificuldade {
   fundo: string;
   texto: string;
-}
-
-export function corEscalaDificuldade(percentual: number): CorDificuldade {
-  if (percentual > 0.9) return { fundo: "#BA0000", texto: "#FFFFFF" }; // vermelho
-  if (percentual > 0.7) return { fundo: "#D96000", texto: "#FFFFFF" }; // laranja
-  if (percentual > 0.4) return { fundo: "#ECA000", texto: "#102241" }; // amarelo
-  return { fundo: "#005E2F", texto: "#FFFFFF" }; // verde
 }
 
 // Escala vermelho → amarelo → verde para a borda do card "Economia do mês":
@@ -39,6 +17,22 @@ export function corEscalaEconomia(percentual: number): string {
   if (percentual < 60) return "#ECA000"; // amarelo
   if (percentual < 80) return "#568E3F"; // verde claro
   return "#005E2F"; // verde escuro — bem longe de zero
+}
+
+// Mesma escala de `corEscalaEconomia`, mas com a cor do texto pareada —
+// usada no botão "Plano de contenção" (fundo inteiro pintado, não só uma
+// borda). Antes esse botão usava uma escala própria baseada em "% da
+// categoria variável selecionada que precisa ser cortada", que podia dar
+// verde mesmo com a economia do mês negativa (bastava a categoria escolhida
+// ser grande o suficiente pra um corte pequeno, em %, já cobrir o buraco).
+// Trocado a pedido do usuário pra refletir a economia em si, igual à borda
+// do card "Economia do mês".
+export function corEscalaEconomiaBotao(percentual: number): CorDificuldade {
+  const fundo = corEscalaEconomia(percentual);
+  // Só o amarelo (#ECA000) precisa de texto escuro pra contraste; os outros
+  // 4 tons da escala já são escuros/saturados o bastante pro texto branco.
+  const texto = fundo === "#ECA000" ? "#102241" : "#FFFFFF";
+  return { fundo, texto };
 }
 
 // Cor do badge de aviso de duplicata no Leitor de fatura, por nível de risco

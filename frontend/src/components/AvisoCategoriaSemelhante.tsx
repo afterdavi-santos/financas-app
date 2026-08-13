@@ -40,7 +40,7 @@ export function AvisoCategoriaSemelhante({ sugestoes, onSelecionar }: Props) {
         </div>
       ) : (
         <p className="mt-0.5 text-xs text-amber-700">
-          Você pode continuar criando mesmo assim, se for uma categoria diferente.
+          Você pode criar categorias com o mesmo nome, desde que sejam de tipos diferentes.
         </p>
       )}
     </div>

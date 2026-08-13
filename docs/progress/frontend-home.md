@@ -1578,3 +1578,262 @@ visualmente**: cor do botão batendo com a economia real do mês em diferentes
 cenários, meta de 10% de folga refletida corretamente na sugestão de corte,
 e o layout novo do popup (parágrafo único em negrito, cards de categoria,
 sem o aviso vermelho).
+
+## Parte 17 — Seletores de data/mês próprios, ajuste dinâmico de fonte e correções de mobile (2026-08-11)
+
+Sessão longa de ajustes de responsividade, guiada pelo usuário testando com
+emulação de dispositivo (iPhone) no DevTools do próprio navegador (o
+`resize_window` do Claude in Chrome não funciona neste ambiente — verificação
+feita via medições JS de `scrollWidth`/`clientWidth`/`getBoundingClientRect`
+em vez de screenshot, que se mostrou instável nesta sessão). `npm run
+build`/`npm run lint` limpos a cada mudança.
+
+### Avatar e seletor de mês fora do lugar no mobile (bugs de regressão)
+Dois ajustes de responsividade anteriores (avatar ao lado do título, sem
+mais ficar abaixo dos botões) tinham introduzido regressões:
+- **Avatar "subindo" pra posição errada só na Home**: o wrapper do
+  `SeletorMes` tinha perdido a classe `w-full` numa limpeza de código —
+  sem ela, o item não força quebra de linha no `flex-wrap` mobile e fica
+  flutuando na linha do título junto do avatar. Corrigido (`order-3 w-full
+  lg:order-none lg:w-auto`).
+- Confirmado que Movimentações/Planejamento não tinham o mesmo bug (o
+  wrapper lá manteve o `w-full`).
+
+### Seletores de mês/data nativos substituídos por componentes próprios
+Pedido inicial: o seletor de mês (`<input type="month">`) vazava da tela no
+mobile ao abrir o calendário — investigado e confirmado que o **popup nativo
+do navegador não é estilizável nem reposicionável via CSS** (é como um
+`<select>` nativo). Única solução real: construir o próprio seletor.
+
+- **`components/SeletorMes.tsx`** (novo) — botão + popup HTML/CSS próprio
+  (mês em grade 3×4, navegação de ano). Duas variantes: `cabecalho`
+  (botão "cara de botão", usado nos filtros de mês da Home/Movimentações) e
+  `formulario` (campo fino, usado dentro de modais, ex.: mês da renda em
+  `NovaRendaModal`).
+- **`components/SeletorData.tsx`** (novo) — mesma ideia pra dia completo
+  (grade de 7×6, navegação de mês), substituindo **todos** os
+  `<input type="date">` do app: `NovaDespesaModal`, `AportarModal`,
+  `LinhaTempoAportesModal`, `NovoObjetivoModal`, `NovoInvestimentoCdbModal`
+  (2 campos). Recebe `min`/`max` (equivalente aos atributos nativos) e uma
+  `className` que reaproveita exatamente a do `<input>` antigo de cada
+  formulário, pra não mudar a aparência.
+- **`components/GradeAnos.tsx`** (novo) — grade de anos em blocos de 12,
+  navegável. Pedido do usuário: sem ela, pular de 2026 pra 2045 num
+  objetivo exigia clicar "próximo ano" 19 vezes. Agora o rótulo do
+  ano/mês-ano nos dois seletores é clicável e abre essa grade (~3 cliques
+  pra qualquer ano). Ano volta a ficar **centralizado** entre as setas ‹›
+  (chegou a ir pro canto esquerdo, revertido por pedido do usuário — "fica
+  melhor no meio"); o botão "Este mês"/"Hoje" ficou alinhado à **esquerda**
+  (era centralizado).
+- **CSS órfão removido**: a regra em `index.css` que escondia o "x" de
+  limpar dos `<input type="date"/"month">` nativos (não existem mais).
+
+#### Bug: popup cortado pela borda do modal
+Os popups de `SeletorMes`/`SeletorData` (`position: absolute` dentro do
+próprio componente) ficavam cortados pelo `overflow-y-auto` do card de
+`Modal.tsx`. Corrigido com `hooks/usePosicaoPopup.ts` (novo): os popups
+passaram a renderizar via `createPortal` direto no `<body>`
+(`position: fixed`, com clamp pra nunca vazar da tela), escapando de
+qualquer `overflow` de ancestral. Exigiu ajustar a detecção de "clique
+fora" pra considerar gatilho **e** popup (não estão mais no mesmo galho do
+DOM).
+
+#### Bug: popup indo pro canto esquerdo no primeiro clique
+Só no `SeletorMes` (não no `SeletorData`): no primeiríssimo clique, o popup
+usava `min-w-[15rem]` (largura só mínima) em vez de largura fixa — antes de
+virar `position: fixed`, um `<div>` de bloco solto no `<body>` sem largura
+fixa ocupa a página inteira, e o `usePosicaoPopup` media essa largura errada
+nesse instante, jogando o cálculo pro canto esquerdo. Corrigido trocando
+`min-w-[15rem]` por `w-60` (largura fixa) — e, como blindagem geral no
+hook, o estado inicial do popup agora já nasce `position: fixed` (fora da
+tela) em vez de `{}`, pra nenhum popup futuro cair nessa mesma pegadinha.
+
+#### Bug real encontrado ao dar suporte a mês/ano vazio: crash geral
+Ao abrir um modal pela primeira vez, o campo de data começava com `value=""`
+(o `useEffect` de preenchimento só roda depois do primeiro render) —
+`"".split("-").map(Number)` virava `NaN`, e `new Array(NaN)` no cálculo do
+grid do calendário derrubava a árvore React inteira (tela em branco).
+Corrigido com fallback pra hoje (`value || hojeISO()`) nos dois
+componentes.
+
+#### Bug real de posicionamento: ResizeObserver se autodisparando
+No hook de sincronizar fonte entre dois cards (ver seção abaixo), o
+`ResizeObserver` observava os próprios elementos cujo `font-size` a função
+mutava — mudar o tamanho de um elemento observado dispara o observer de
+novo, criando um loop que deixava o resultado preso num valor intermediário
+errado. Corrigido nos dois hooks de fonte dinâmica (`useAjustarFonte.ts` e
+`useAjustarFonteSincronizada.ts`) trocando `ResizeObserver` por um listener
+de `window.resize` (sinal externo real, não afetado pelas próprias
+mutações).
+
+### Valores em R$ vazando dos cards (fonte dinâmica)
+Reportado: no mobile, "Despesas variáveis" (Movimentações) vazava a última
+casa decimal do card. Causa: `StatCard.tsx` usava `text-3xl` fixo, e no
+`grid-cols-2` fixo (sem breakpoint) da tela valores como "R$ 8.822,76" não
+cabiam na metade da largura.
+- **`hooks/useAjustarFonte.ts`** (novo) — em vez de um breakpoint fixo
+  (`sm:text-3xl`, tentativa inicial revertida a pedido do usuário: "não
+  podemos deixar mais dinâmico?"), mede o texto de verdade
+  (`scrollWidth`/`clientWidth`) e encolhe a fonte em passos de `0.125rem`
+  até caber, com piso mínimo — funciona pra qualquer tamanho de valor, em
+  qualquer largura de tela, sem depender de um breakpoint "adivinhado".
+  `truncate` como rede de segurança final.
+- **`hooks/useAjustarFonteSincronizada.ts`** (novo) — pedido do usuário:
+  fazer o valor menor "acompanhar" o maior entre dois cards vizinhos (ex.:
+  Despesas fixas R$ 0,00 vs. Despesas variáveis R$ 8.822,76), em vez de
+  cada um encolher sozinho e ficarem com tamanhos de fonte diferentes.
+  Mede o tamanho ideal de cada elemento independentemente e aplica o
+  **menor** a todos. Conectado via nova prop `valorRef` do `StatCard`
+  (usada em `DespesasPage`/`RendasPage`; sem ela, `StatCard` continua se
+  ajustando sozinho, como na Home).
+- **Título dos `StatCard`s** ("Despesas fixas"/"Despesas variáveis")
+  também ganhou `text-xs sm:text-sm` (breakpoint fixo aqui, não dinâmico —
+  pedido específico do usuário só pra evitar quebra de linha no nome, não
+  pra acompanhar o valor).
+- **`EconomiaDestaque.tsx`** (card "Economia do mês" da Home) tinha o
+  mesmíssimo problema (`text-3xl` fixo, sem truncate) e não tinha sido
+  corrigido junto — achado numa varredura geral pedida pelo usuário depois
+  (ver seção "Varredura geral" abaixo) e corrigido com o mesmo
+  `useAjustarFonte`.
+
+### Tooltip do incentivo inacessível no mobile
+Pergunta do usuário ("como funciona no mobile, informação que só aparece no
+hover?") levou a um achado real: `Tooltip.tsx` mostra o balão via `:hover`
+(inexistente em touch) e `:focus-within` como alternativa — mas o ícone ⓘ
+do incentivo (`ObjetivosResumoHome.tsx`, `PlanejamentoObjetivos.tsx`) e o
+selo "Possível duplicata" (`LeitorFaturaModal.tsx`) usavam `<span>`, não
+focável, então no mobile essa informação era **inacessível de verdade**.
+Corrigido trocando por `<button type="button">` (foco no toque revela o
+tooltip; toque fora esconde) + `stopPropagation` nos dois primeiros pra não
+também disparar a seleção da linha do objetivo.
+
+### Estrela de fixar objetivo: tooltip removido (quase todo)
+Pedido do usuário: tirar o texto que aparecia ao fixar/desafixar um
+objetivo (`ObjetivosResumoHome.tsx`). Removido o `<Tooltip>` ao redor do
+botão de fixar — mas mantido **só** para o caso de limite atingido ("Só é
+possível fixar 2"), a pedido do usuário logo em seguida ("deixe só o texto
+quando já tiver 2 fixados").
+
+### Movimentações: abas acima dos botões no mobile
+Pedido do usuário: a divisão Despesas/Rendas devia aparecer **acima** dos
+botões principais (seletor de mês, Leitor de fatura, Adicionar) no mobile,
+não abaixo. Como as abas viviam dentro do grid (pro `lg:col-span-3` do
+desktop) e os botões viviam na linha do título (pro layout de uma linha só
+do desktop), os dois wrappers (`MovimentacoesPage.tsx`) viraram
+`contents`/`lg:flex`/`lg:grid` — no mobile tudo "evapora" pra um único
+`flex-wrap` reordenável via `order` (título → avatar → **abas** → botões →
+conteúdo → gráfico); no desktop cada wrapper volta a ser uma caixa real,
+reconstituindo a estrutura de sempre (título+controles+avatar numa linha,
+grid com abas+conteúdo+gráfico embaixo). Verificado pixel-a-pixel igual no
+desktop antes/depois.
+
+### Varredura geral (pedida pelo usuário) + correções
+"Super vasculhada" em todo o frontend, mobile e desktop, **reportada antes
+de aplicar** qualquer coisa (scan automatizado de overflow horizontal —
+`scrollWidth`/`getBoundingClientRect` — em todas as páginas e em **todos os
+modais** do app, abrindo cada um; grep por `confirm()`/`alert()` nativo
+remanescente, `title=` nativo, tooltips hover-only órfãos, imagens sem
+`alt`). Achados (2, ambos corrigidos depois de aprovados):
+1. `EconomiaDestaque.tsx` com o mesmo bug de `text-3xl` fixo do `StatCard`
+   (ver seção acima).
+2. **Linhas de lista selecionáveis não alcançáveis via teclado**: o padrão
+   "clique na linha inteira pra selecionar" (sem checkbox visível, usado em
+   7 arquivos — `RendasPage`, `DespesasPage`, `HomePage` (Investimento
+   CDB), `ObjetivosResumoHome`, `PlanejamentoLimites`,
+   `PlanejamentoObjetivos`, `PlanejamentoCategorias`) usava `<div onClick>`
+   sem `role`, `tabIndex` ou handler de teclado — funcionava no
+   mouse/toque, mas não no teclado. Corrigido com `utils/teclado.ts`
+   (`aoTeclarAtivar`, novo) + `role="button"` `tabIndex={0}` `onKeyDown` +
+   anel de foco visível (`focus-visible:ring-2`) nos 7 lugares. Pré-existia
+   antes desta sessão, não era uma regressão.
+
+### Verificação
+`npm run build`/`npm run lint` limpos a cada mudança. Testado via medições
+JS (não screenshot, instável nesta sessão) em viewport mobile emulado
+(iPhone, ~440px) e em aba desktop separada (~1536px): sem overflow
+horizontal em nenhuma página/modal, popups de data sempre dentro da tela,
+troca de mês/ano funcionando (inclusive pulo direto de 2026→2045),
+sincronização de fonte entre cards confirmada (`1.5rem` nos dois), consoles
+sempre sem erros. **Falta o usuário conferir visualmente** — a aba com
+emulação de dispositivo foi fechada no meio da sessão.
+
+## Parte 18 — Leitor de fatura: atalho "Cartão de crédito" + escolha do mês da fatura (2026-08-13)
+
+Duas melhorias pedidas pelo usuário na etapa final (`categorizacao`) do
+`LeitorFaturaModal.tsx`, que hoje só tinha o fluxo manual de
+selecionar-itens + escolher-categoria + aplicar em lote. Só frontend —
+nenhuma mudança de backend.
+
+### Atalho "Cartão de crédito"
+Na prática, quase toda fatura importada é uma única categoria — o atalho
+evita repetir o fluxo manual pra esse caso comum.
+- Novo utilitário puro `utils/leitorFatura.ts`:
+  `encontrarCategoriaCartaoCredito(categorias)` — casa o nome da categoria
+  contra um regex tolerante a acento/ordem das palavras
+  (`/(cart[aã]o.*cr[eé]dito|cr[eé]dito.*cart[aã]o)/i`), e
+  `mesPrincipalDaFatura(itens)` (ver seção seguinte).
+- Botão de atalho no painel de categoria (mesma largura de
+  `SeletorCategoria`, `lg:w-64`), abaixo do "Aplicar à seleção" existente,
+  separado por uma linha divisória. Texto dinâmico: "Criar a categoria
+  Cartão de crédito e adicionar todas as despesas" (categoria ainda não
+  existe) ou "Adicionar todas as despesas na categoria Cartão de crédito"
+  (já existe uma parecida) — nesse segundo caso o nome exibido é sempre
+  fixo "Cartão de crédito", não o nome exato encontrado. Cor `grouper-deep`
+  (mais escura que o `grouper-mid` do resto do painel, pra se destacar).
+  Texto de instrução equivalente ("Você pode categorizar as despesas
+  manualmente, ou adicionar todas de uma vez...") logo abaixo do título do
+  modal, em negrito (`font-semibold text-grouper-ink`), aproximado do
+  título com `-mt-3`.
+- **Popup de confirmação** (`pedindoConfirmacaoCartaoTodos`) quando o
+  atalho é clicado depois que já existem itens categorizados manualmente
+  (`itensProntos.length > 0`) — evita sobrescrever silenciosamente uma
+  categorização já feita. Três opções: manter os já categorizados e aplicar
+  o atalho só nos restantes (comportamento padrão quando não há conflito),
+  ignorar e jogar TUDO (já categorizados + restantes) na categoria de
+  cartão, ou cancelar. Sem itens já categorizados, aplica direto sem popup.
+- Removida a linha "N categorizada(s) · N restante(s)" (pedido do usuário,
+  informação considerada redundante com a lista visível).
+
+### Escolha do mês da fatura (mesReferencia)
+Antes, `mesReferencia` de toda despesa importada era sempre herdado
+silenciosamente do filtro de mês já selecionado na página que abriu o
+modal (prop `mes`) — sem chance de revisão dentro do próprio Leitor de
+fatura, mesmo sabendo que a fatura pode fechar num mês e ser paga no
+seguinte.
+- `mesPrincipalDaFatura(itens)` (`utils/leitorFatura.ts`): moda das datas
+  reais (`item.data`, não as linhas já mescladas) dos itens extraídos, em
+  "YYYY-MM"; empate resolvido pelo mês mais recente.
+- Novo estado `mesEscolhido` (decoupled do prop `mes`, que continua sendo
+  usado só na chamada de upload `processarFatura(arquivo, mes)` — o
+  backend usa isso só pra preencher `item.mesReferencia`, que o frontend já
+  sobrescrevia por conta própria em `salvarTudo`, então nada mudou aí).
+  Calculado logo após a fatura ser processada, junto com `mesPrincipal`.
+- **Pré-seleção**: se o mês principal da fatura é o mês atual real (ainda
+  não fechou), assume que vai ser paga no mês seguinte a ela; se já é um
+  mês passado, assume que está sendo paga no próprio mês da fatura.
+- **Popup próprio** (`pedindoEscolhaMes`, não embutido na tela de
+  categorização — pedido do usuário) abre ao clicar em "Continuar" na
+  etapa de categorização (depois do aviso de itens não categorizados, se
+  houver). Pergunta é ancorada no **mês da própria fatura**, não no mês
+  real de hoje: as duas opções são "Mês da fatura ({mês principal})" e
+  "Mês seguinte ({mês principal + 1})" — ex.: fatura majoritariamente de
+  julho pergunta entre julho e agosto, não entre o mês real atual e o
+  seguinte a ele. Cada opção é um único `<button>` com um quadradinho
+  indicador (`rounded-sm border-2`, preenchido de `grouper-mid` quando
+  selecionado) ao lado do texto — clicar tanto no quadrado quanto no nome
+  seleciona a opção, já que os dois estão dentro do mesmo botão. "← Voltar"
+  fecha o popup sem salvar (volta pra categorização); "Confirmar e salvar"
+  chama `salvarTudo()`, que agora usa `mesEscolhido` em vez do `mes` da
+  página.
+- `reiniciar()` restaura `mesEscolhido`/`mesPrincipal`/os dois popups novos
+  ao fechar o modal, mesmo padrão dos demais estados internos.
+
+### Verificação
+`npm run build` e `npm run lint` limpos a cada mudança. **Falta o usuário
+testar ponta a ponta no navegador** (fluxo sugerido: importar fatura sem
+categoria de cartão ainda → atalho cria e categoriza tudo; importar outra
+já tendo uma categoria parecida com variação de acento/ordem → atalho
+reconhece e reaplica a existente; categorizar alguns itens manualmente e
+só depois clicar no atalho → popup de conflito aparece com as 3 opções;
+conferir que o popup de escolha de mês pergunta relativo ao mês da fatura,
+não ao mês real de hoje, e que o `mesReferencia` salvo bate com a escolha).

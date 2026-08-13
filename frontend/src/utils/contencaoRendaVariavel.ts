@@ -86,15 +86,3 @@ export function planoContencao(
     faltante: cobreQueda ? 0 : valorNecessarioReduzir - soma,
   };
 }
-
-// Quão difícil será seguir o plano no mês seguinte, de 0 (nada a cortar) a 1
-// (cortando 100% das despesas extraordinárias selecionadas e ainda assim
-// insuficiente). Como a redução é distribuída linearmente por categoria (ver
-// comentário acima), essa razão já é uniforme entre todas elas — não precisa
-// de média ponderada.
-export function dificuldadeContencao(plano: PlanoContencao | null): number {
-  if (!plano) return 0;
-  const somaSelecionadas = plano.categorias.reduce((s, c) => s + c.gastoAtual, 0);
-  if (somaSelecionadas <= 0) return 0;
-  return Math.min(1, plano.totalReducaoSugerida / somaSelecionadas);
-}

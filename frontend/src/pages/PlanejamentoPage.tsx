@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { PlanejamentoObjetivos } from "../components/PlanejamentoObjetivos";
 import { PlanejamentoCategorias } from "../components/PlanejamentoCategorias";
 import { PlanejamentoLimites } from "../components/PlanejamentoLimites";
+import { Avatar } from "../components/Avatar";
 
 // Página "Planejamento": junta Objetivos, Categorias e Limites (antes 3 itens
 // de menu separados) numa única view, sem abas — diferente de Movimentações,
@@ -17,18 +19,40 @@ import { PlanejamentoLimites } from "../components/PlanejamentoLimites";
 // em vez de tentar espremer 3 blocos empilhados na altura pensada pra um
 // grid de 3 colunas lado a lado.
 export function PlanejamentoPage() {
+  // Nó onde os 3 blocos portam seus botões "+ Novo X", pra aparecerem juntos
+  // na linha do título — mesmo mecanismo (`headerSlot` via portal) usado em
+  // Movimentações.
+  const [headerSlot, setHeaderSlot] = useState<HTMLDivElement | null>(null);
+
   return (
     <div className="flex w-full flex-col gap-4 lg:h-[calc(100vh-4rem)]">
-      <h1 className="shrink-0 font-display text-3xl font-semibold tracking-tight text-grouper-ink">
-        Planejamento
-      </h1>
+      {/* Título + botões (portados por Objetivos/Limites/Categorias) + avatar
+          numa linha só, mesmo padrão do cabeçalho da Home — empilha em
+          largura total abaixo de `lg`. */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
+        <h1 className="order-1 font-display text-3xl font-semibold tracking-tight text-grouper-ink lg:order-none">
+          Planejamento
+        </h1>
+        {/* No mobile, o avatar (order-2) fica ao lado do título (order-1) e
+            os controles portados (order-3) empilham abaixo — mesma técnica
+            `contents`/`order` usada na Home. */}
+        <div className="contents lg:flex lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:gap-3">
+          <div
+            ref={setHeaderSlot}
+            className="order-3 flex w-full flex-col gap-2 lg:order-none lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:gap-2"
+          />
+          <div className="order-2 lg:order-none lg:contents">
+            <Avatar menu />
+          </div>
+        </div>
+      </div>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="grid min-h-0 gap-4 lg:grid-rows-2 lg:col-span-2">
-          <PlanejamentoObjetivos />
-          <PlanejamentoLimites />
+          <PlanejamentoObjetivos headerSlot={headerSlot} />
+          <PlanejamentoLimites headerSlot={headerSlot} />
         </div>
-        <PlanejamentoCategorias />
+        <PlanejamentoCategorias headerSlot={headerSlot} />
       </div>
     </div>
   );

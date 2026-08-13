@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
+
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -33,6 +35,11 @@ public class AuthController {
         usuario.setNome(request.nome());
         usuario.setEmail(request.email());
         usuario.setSenha(request.senha());
+        // A validação (@AssertTrue) já garante aceitouTermos == true aqui,
+        // mas o guard fica explícito porque é o que decide a data do aceite.
+        if (request.aceitouTermos()) {
+            usuario.setTermosAceitosEm(LocalDateTime.now());
+        }
         Usuario criado = usuarioService.cadastrar(usuario);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new UsuarioResponse(criado.getId(), criado.getNome(), criado.getEmail()));

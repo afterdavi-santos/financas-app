@@ -8,6 +8,7 @@ import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { hojeISO } from "../utils/datas";
 import { SeletorCategoria, OPCAO_NOVA_CATEGORIA } from "./SeletorCategoria";
+import { SeletorData } from "./SeletorData";
 import { AvisoCategoriaSemelhante } from "./AvisoCategoriaSemelhante";
 import { useCategoriasSemelhantes } from "../hooks/useCategoriasSemelhantes";
 import type { Categoria, Despesa, StatusLimite, TipoCategoria } from "../types/financas";
@@ -199,12 +200,10 @@ export function NovaDespesaModal({
               >
                 Data
               </label>
-              <input
+              <SeletorData
                 id="data"
-                type="date"
-                required
                 value={data}
-                onChange={(e) => setData(e.target.value)}
+                onChange={setData}
                 className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
               />
             </div>
@@ -296,14 +295,14 @@ export function NovaDespesaModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+              className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={carregando}
-              className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep disabled:opacity-60"
+              className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep disabled:opacity-60"
             >
               {carregando ? "Salvando..." : "Salvar"}
             </button>

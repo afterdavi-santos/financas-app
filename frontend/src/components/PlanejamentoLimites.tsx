@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { NovoLimiteModal } from "./NovoLimiteModal";
+import { ConfirmacaoModal } from "./ConfirmacaoModal";
 import { BarraSelecao } from "./BarraSelecao";
 import { SelecionarTodos } from "./SelecionarTodos";
 import { IconeEditar, IconeExcluir } from "./IconesInvestimento";
+import { Tooltip } from "./Tooltip";
 import { useSelecao } from "../hooks/useSelecao";
 import { listarCategorias } from "../api/categorias";
 import { listarLimites, statusLimite, excluirLimite } from "../api/limites";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { primeiroDiaDoMesISO } from "../utils/datas";
+import { aoTeclarAtivar } from "../utils/teclado";
 import type { Categoria, LimiteCategoria, StatusLimite } from "../types/financas";
 
 interface Linha {
@@ -28,13 +32,24 @@ function corDaBarra(estourado: boolean, proporcao: number): string {
 // Bloco "Limites" da página Planejamento — mesmo conteúdo que antes vivia em
 // /limites, agora encaixado numa coluna do grid de 3 blocos, com rolagem
 // interna própria (ver PlanejamentoPage) em vez de rolar a página.
-export function PlanejamentoLimites() {
+interface Props {
+  // Nó onde o botão "+ Novo limite" é portado, pra aparecer junto com os
+  // outros dois blocos na linha do título (ver PlanejamentoPage). Sem ele
+  // (uso fora de Planejamento), o botão cai no cabeçalho local do bloco.
+  headerSlot?: HTMLDivElement | null;
+}
+
+export function PlanejamentoLimites({ headerSlot }: Props = {}) {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState<LimiteCategoria | null>(null);
+  // Popup de confirmação de exclusão (substitui o confirm() nativo). null =
+  // fechado; guarda a linha em questão para individual, ou "LOTE" para a
+  // exclusão dos selecionados.
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState<Linha | "LOTE" | null>(null);
   const {
     selecionados,
     alternar,
@@ -82,6 +97,16 @@ export function PlanejamentoLimites() {
     carregar();
   }, []);
 
+  // Categorias podem ter sido criadas/editadas no bloco "Categorias" (ao
+  // lado) depois da carga inicial — sem isso, o select de "+ Novo limite"
+  // ficava desatualizado até um F5. Refaz a busca toda vez que o modal abre.
+  useEffect(() => {
+    if (!modalAberto) return;
+    listarCategorias()
+      .then(setCategorias)
+      .catch((e) => setErro(mensagemDeErro(e)));
+  }, [modalAberto]);
+
   // useMemo: sem isso, um novo array a cada render reinicia o efeito de
   // useCategoriasSemelhantes (dentro do NovoLimiteModal) indefinidamente
   // (loop infinito de render).
@@ -90,29 +115,36 @@ export function PlanejamentoLimites() {
     return categorias.filter((c) => !comLimite.has(c.id));
   }, [categorias, linhas]);
 
-  async function excluir(linha: Linha) {
-    if (!confirm(`Excluir o limite de "${linha.limite.categoria.nome}"?`)) return;
-    try {
-      await excluirLimite(linha.limite.id);
-      desselecionarTodos([linha.limite.id]);
+  async function confirmarExclusao() {
+    if (confirmandoExclusao === "LOTE") {
+      const ids = Array.from(selecionados);
+      const resultados = await Promise.allSettled(ids.map((id) => excluirLimite(id)));
+      const falhas = resultados.filter((r) => r.status === "rejected").length;
+      if (falhas > 0) {
+        setErro(`${falhas} de ${ids.length} limite(s) não puderam ser excluídos.`);
+      }
+      limpar();
       carregar();
-    } catch (e) {
-      setErro(mensagemDeErro(e));
+    } else if (confirmandoExclusao) {
+      try {
+        await excluirLimite(confirmandoExclusao.limite.id);
+        desselecionarTodos([confirmandoExclusao.limite.id]);
+        carregar();
+      } catch (e) {
+        setErro(mensagemDeErro(e));
+      }
     }
+    setConfirmandoExclusao(null);
   }
 
-  async function excluirSelecionados() {
-    const ids = Array.from(selecionados);
-    const plural = ids.length > 1;
-    if (!confirm(`Excluir ${ids.length} limite${plural ? "s" : ""} selecionado${plural ? "s" : ""}?`)) return;
-    const resultados = await Promise.allSettled(ids.map((id) => excluirLimite(id)));
-    const falhas = resultados.filter((r) => r.status === "rejected").length;
-    if (falhas > 0) {
-      setErro(`${falhas} de ${ids.length} limite(s) não puderam ser excluídos.`);
-    }
-    limpar();
-    carregar();
-  }
+  const botaoNovo = (
+    <button
+      onClick={abrirNovo}
+      className="w-full rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep lg:w-auto"
+    >
+      + Adicionar limite
+    </button>
+  );
 
   return (
     <section className="flex h-full flex-col overflow-hidden rounded-lg border border-grouper-sky/20 bg-white shadow-sm">
@@ -120,12 +152,7 @@ export function PlanejamentoLimites() {
         <h2 className="font-display text-lg font-semibold text-grouper-ink">
           Limites
         </h2>
-        <button
-          onClick={abrirNovo}
-          className="rounded-md bg-grouper-deep px-3 py-1.5 font-display text-[13px] uppercase tracking-wide text-white hover:bg-grouper-ink"
-        >
-          + Novo limite
-        </button>
+        {headerSlot ? createPortal(botaoNovo, headerSlot) : botaoNovo}
       </div>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
@@ -143,7 +170,7 @@ export function PlanejamentoLimites() {
             <BarraSelecao
               quantidade={selecionados.size}
               texto={`${selecionados.size} limite${selecionados.size > 1 ? "s" : ""} selecionado${selecionados.size > 1 ? "s" : ""}`}
-              onExcluir={excluirSelecionados}
+              onExcluir={() => setConfirmandoExclusao("LOTE")}
               onCancelar={limpar}
             />
             <SelecionarTodos
@@ -169,29 +196,29 @@ export function PlanejamentoLimites() {
                 linhas.length > 3 ? "max-h-60 overflow-y-auto pr-1" : ""
               }`}
             >
-              {linhas.map(({ limite, status }) => {
+              {linhas.map(({ limite, status }, indice) => {
                 const proporcao =
                   status.valorLimite > 0 ? status.valorGasto / status.valorLimite : 0;
                 const largura = Math.min(proporcao, 1) * 100;
                 const selecionado = selecionados.has(limite.id);
+                // No primeiro item não há espaço acima dentro do bloco com
+                // rolagem própria — o tooltip abre pra baixo (ver Tooltip.tsx).
+                const vertical = indice === 0 ? "baixo" : "cima";
                 return (
                   <li key={limite.id}>
                     <div
+                      role="button"
+                      tabIndex={0}
                       onClick={() => alternar(limite.id)}
-                      className={`cursor-pointer rounded-md px-2 py-1 transition-colors ${
+                      onKeyDown={aoTeclarAtivar(() => alternar(limite.id))}
+                      className={`cursor-pointer rounded-md px-2 py-1 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-grouper-mid ${
                         selecionado ? "bg-grouper-sky/30" : "hover:bg-grouper-sky/20"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="text-[15px] text-grouper-ink">
-                            {limite.categoria.nome}
-                          </p>
-                          <p className="text-[13px] font-medium text-grouper-deep">
-                            {formatarBRL(status.valorGasto)} de{" "}
-                            {formatarBRL(status.valorLimite)}
-                          </p>
-                        </div>
+                        <p className="text-[15px] text-grouper-ink">
+                          {limite.categoria.nome}
+                        </p>
                         <div
                           className="flex shrink-0 items-center gap-1.5"
                           onClick={(e) => e.stopPropagation()}
@@ -201,22 +228,24 @@ export function PlanejamentoLimites() {
                               Estourou
                             </span>
                           )}
-                          <button
-                            onClick={() => abrirEdicao(limite)}
-                            aria-label="Editar"
-                            title="Editar"
-                            className="rounded-md border border-grouper-mid/30 bg-white p-1 text-grouper-mid hover:bg-grouper-mist"
-                          >
-                            <IconeEditar className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => excluir({ limite, status })}
-                            aria-label="Excluir"
-                            title="Excluir"
-                            className="rounded-md border border-red-300 bg-white p-1 text-red-600 hover:bg-red-50"
-                          >
-                            <IconeExcluir className="h-3.5 w-3.5" />
-                          </button>
+                          <Tooltip texto="Editar" posicao="direita" vertical={vertical}>
+                            <button
+                              onClick={() => abrirEdicao(limite)}
+                              aria-label="Editar"
+                              className="rounded-md border border-grouper-mid/30 bg-white p-1 text-grouper-mid hover:bg-grouper-mist"
+                            >
+                              <IconeEditar className="h-3.5 w-3.5" />
+                            </button>
+                          </Tooltip>
+                          <Tooltip texto="Excluir" posicao="direita" vertical={vertical}>
+                            <button
+                              onClick={() => setConfirmandoExclusao({ limite, status })}
+                              aria-label="Excluir"
+                              className="rounded-md border border-red-300 bg-white p-1 text-red-600 hover:bg-red-50"
+                            >
+                              <IconeExcluir className="h-3.5 w-3.5" />
+                            </button>
+                          </Tooltip>
                         </div>
                       </div>
 
@@ -226,9 +255,13 @@ export function PlanejamentoLimites() {
                           style={{ width: `${largura}%` }}
                         />
                       </div>
-                      <p className="mt-0.5 text-right text-[13px] font-medium text-grouper-deep">
-                        {Math.round(proporcao * 100)}% do limite
-                      </p>
+                      <div className="mt-0.5 flex items-center justify-between gap-2 text-[13px] font-medium text-grouper-deep">
+                        <span>
+                          {formatarBRL(status.valorGasto)} de{" "}
+                          {formatarBRL(status.valorLimite)}
+                        </span>
+                        <span>{Math.round(proporcao * 100)}% do limite</span>
+                      </div>
                     </div>
                   </li>
                 );
@@ -246,6 +279,18 @@ export function PlanejamentoLimites() {
           carregar();
         }}
         categorias={editando ? categorias : categoriasSemLimite}
+      />
+
+      <ConfirmacaoModal
+        aberto={confirmandoExclusao !== null}
+        titulo={confirmandoExclusao === "LOTE" ? "Excluir limites" : "Excluir limite"}
+        mensagem={
+          confirmandoExclusao === "LOTE"
+            ? `Excluir ${selecionados.size} limite${selecionados.size > 1 ? "s" : ""} selecionado${selecionados.size > 1 ? "s" : ""}?`
+            : `Excluir o limite de "${confirmandoExclusao?.limite.categoria.nome}"?`
+        }
+        onConfirmar={confirmarExclusao}
+        onClose={() => setConfirmandoExclusao(null)}
       />
     </section>
   );

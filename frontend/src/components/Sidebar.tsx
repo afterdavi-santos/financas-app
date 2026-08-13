@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 
 // Itens de navegação do menu lateral.
 const itens = [
-  { rotulo: "Início", para: "/", ativo: true },
+  { rotulo: "Visão geral", para: "/", ativo: true },
   { rotulo: "Movimentações", para: "/movimentacoes", ativo: true },
   { rotulo: "Planejamento", para: "/planejamento", ativo: true },
 ];
@@ -72,7 +72,7 @@ export function Sidebar({ aberto, onFechar }: SidebarProps) {
 
         <nav aria-label="Menu principal" className="relative flex-1 overflow-hidden p-3">
           <img
-            src="/brand/garoupas_fundo.jpeg"
+            src="/brand/garoupas_fundo_1.png"
             alt=""
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-15"
@@ -101,7 +101,6 @@ export function Sidebar({ aberto, onFechar }: SidebarProps) {
                 <span
                   key={item.rotulo}
                   className="flex items-center justify-between rounded-md px-3 py-2 text-sm text-white/30 cursor-not-allowed"
-                  title="Em breve"
                 >
                   {item.rotulo}
                   <span className="text-[10px] uppercase tracking-wide text-white/20">

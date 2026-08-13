@@ -23,8 +23,9 @@ interface ModalProps {
   children: ReactNode;
   // Largura máxima (classe Tailwind). Default estreito; telas com gráfico usam mais.
   largura?: string;
-  // Classes extras no card (ex.: borda de destaque) — opcional, sem afetar
-  // os outros callers que não passam nada.
+  // Classes extras no card — default é a borda azul-marinho (grouper-ink)
+  // que todo popup do app usa; um caller pode sobrescrever passando outra
+  // coisa (ou "" pra remover).
   classeCard?: string;
   // Linha divisória abaixo do título — ligada por padrão (comportamento
   // antigo de todos os callers); alguns popups preferem sem.
@@ -42,7 +43,7 @@ export function Modal({
   onClose,
   children,
   largura = "max-w-md",
-  classeCard = "",
+  classeCard = "border-2 border-grouper-ink",
   bordaCabecalho = true,
 }: ModalProps) {
   const tituloId = useId();

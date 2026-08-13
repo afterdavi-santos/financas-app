@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Modal } from "./Modal";
+import { SeletorData } from "./SeletorData";
 import { aportarObjetivo } from "../api/objetivos";
 import { mensagemDeErro } from "../api/erros";
 import { hojeISO } from "../utils/datas";
@@ -86,12 +87,10 @@ export function AportarModal({ objetivo, onClose, onAportado }: Props) {
           >
             Data do aporte
           </label>
-          <input
+          <SeletorData
             id="aporte-data"
-            type="date"
-            required
             value={data}
-            onChange={(e) => setData(e.target.value)}
+            onChange={setData}
             className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>

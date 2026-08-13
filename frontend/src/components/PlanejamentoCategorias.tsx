@@ -1,20 +1,39 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { NovaCategoriaModal } from "./NovaCategoriaModal";
 import { ExcluirCategoriaModal } from "./ExcluirCategoriaModal";
 import { ExcluirCategoriasSelecionadasModal } from "./ExcluirCategoriasSelecionadasModal";
 import { BarraSelecao } from "./BarraSelecao";
 import { SelecionarTodos } from "./SelecionarTodos";
 import { IconeEditar, IconeExcluir } from "./IconesInvestimento";
+import { Tooltip } from "./Tooltip";
 import { useSelecao } from "../hooks/useSelecao";
 import { listarCategorias } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
 import { rotuloTipoCategoria } from "../utils/rotulos";
-import type { Categoria } from "../types/financas";
+import { aoTeclarAtivar } from "../utils/teclado";
+import type { Categoria, TipoCategoria } from "../types/financas";
+
+// Filtro Todas/Fixas/Variáveis — mesmo padrão de "Despesas por categoria"
+// em Movimentações (ver DespesasPage.tsx).
+type FiltroTipo = "TODAS" | TipoCategoria;
+const FILTROS: { chave: FiltroTipo; rotulo: string }[] = [
+  { chave: "TODAS", rotulo: "Todas" },
+  { chave: "FIXA", rotulo: "Fixas" },
+  { chave: "VARIAVEL", rotulo: "Variáveis" },
+];
 
 // Bloco "Categorias" da página Planejamento — mesmo conteúdo que antes vivia
 // em /categorias, agora encaixado numa coluna do grid de 3 blocos, com
 // rolagem interna própria (ver PlanejamentoPage) em vez de rolar a página.
-export function PlanejamentoCategorias() {
+interface Props {
+  // Nó onde o botão "+ Nova categoria" é portado, pra aparecer junto com os
+  // outros dois blocos na linha do título (ver PlanejamentoPage). Sem ele
+  // (uso fora de Planejamento), o botão cai no cabeçalho local do bloco.
+  headerSlot?: HTMLDivElement | null;
+}
+
+export function PlanejamentoCategorias({ headerSlot }: Props = {}) {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -22,6 +41,7 @@ export function PlanejamentoCategorias() {
   const [editando, setEditando] = useState<Categoria | null>(null);
   const [categoriaParaExcluir, setCategoriaParaExcluir] = useState<Categoria | null>(null);
   const [modalLoteAberto, setModalLoteAberto] = useState(false);
+  const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>("TODAS");
   const {
     selecionados,
     alternar,
@@ -57,18 +77,41 @@ export function PlanejamentoCategorias() {
     carregar();
   }, []);
 
+  const categoriasFiltradas = categorias.filter(
+    (c) => filtroTipo === "TODAS" || c.tipo === filtroTipo,
+  );
+
+  const botaoNovo = (
+    <button
+      onClick={abrirNova}
+      className="w-full rounded-md bg-grouper-ink px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-black lg:w-auto"
+    >
+      + Adicionar categoria
+    </button>
+  );
+
   return (
     <section className="flex h-full flex-col overflow-hidden rounded-lg border border-grouper-sky/20 bg-white shadow-sm">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-grouper-sky/20 p-4">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-grouper-sky/20 p-4">
         <h2 className="font-display text-lg font-semibold text-grouper-ink">
           Categorias
         </h2>
-        <button
-          onClick={abrirNova}
-          className="rounded-md bg-grouper-deep px-3 py-1.5 font-display text-[13px] uppercase tracking-wide text-white hover:bg-grouper-ink"
-        >
-          + Nova categoria
-        </button>
+        <div className="flex items-center gap-1">
+          {FILTROS.map((f) => (
+            <button
+              key={f.chave}
+              onClick={() => setFiltroTipo(f.chave)}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                filtroTipo === f.chave
+                  ? "bg-grouper-sky/40 text-grouper-ink"
+                  : "text-grouper-navy/60 hover:bg-grouper-sky/25 hover:text-grouper-ink"
+              }`}
+            >
+              {f.rotulo}
+            </button>
+          ))}
+        </div>
+        {headerSlot ? createPortal(botaoNovo, headerSlot) : botaoNovo}
       </div>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
@@ -90,11 +133,11 @@ export function PlanejamentoCategorias() {
               onCancelar={limpar}
             />
             <SelecionarTodos
-              marcado={todosSelecionados(categorias.map((c) => c.id))}
+              marcado={todosSelecionados(categoriasFiltradas.map((c) => c.id))}
               onAlternar={() =>
-                todosSelecionados(categorias.map((c) => c.id))
+                todosSelecionados(categoriasFiltradas.map((c) => c.id))
                   ? limpar()
-                  : selecionarTodos(categorias.map((c) => c.id))
+                  : selecionarTodos(categoriasFiltradas.map((c) => c.id))
               }
             />
           </>
@@ -102,19 +145,27 @@ export function PlanejamentoCategorias() {
 
         {carregando ? (
           <p className="text-sm text-grouper-navy/60">Carregando...</p>
-        ) : categorias.length === 0 ? (
+        ) : categoriasFiltradas.length === 0 ? (
           <p className="text-sm text-grouper-navy/60">
-            Nenhuma categoria criada ainda.
+            {filtroTipo === "TODAS"
+              ? "Nenhuma categoria criada ainda."
+              : `Nenhuma categoria ${filtroTipo === "FIXA" ? "fixa" : "variável"} ainda.`}
           </p>
         ) : (
             <ul className="divide-y divide-grouper-navy/25">
-              {categorias.map((cat) => {
+              {categoriasFiltradas.map((cat, indice) => {
                 const selecionado = selecionados.has(cat.id);
+                // No primeiro item não há espaço acima dentro do bloco com
+                // rolagem própria — o tooltip abre pra baixo (ver Tooltip.tsx).
+                const vertical = indice === 0 ? "baixo" : "cima";
                 return (
                   <li key={cat.id}>
                     <div
+                      role="button"
+                      tabIndex={0}
                       onClick={() => alternar(cat.id)}
-                      className={`flex cursor-pointer items-center justify-between rounded-md px-2 py-2.5 transition-colors ${
+                      onKeyDown={aoTeclarAtivar(() => alternar(cat.id))}
+                      className={`flex cursor-pointer items-center justify-between rounded-md px-2 py-2.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-grouper-mid ${
                         selecionado ? "bg-grouper-sky/30" : "hover:bg-grouper-sky/20"
                       }`}
                     >
@@ -128,22 +179,24 @@ export function PlanejamentoCategorias() {
                         className="flex shrink-0 items-center gap-1.5"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <button
-                          onClick={() => abrirEdicao(cat)}
-                          aria-label="Editar"
-                          title="Editar"
-                          className="rounded-md border border-grouper-mid/30 bg-white p-1 text-grouper-mid hover:bg-grouper-mist"
-                        >
-                          <IconeEditar className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setCategoriaParaExcluir(cat)}
-                          aria-label="Excluir"
-                          title="Excluir"
-                          className="rounded-md border border-red-300 bg-white p-1 text-red-600 hover:bg-red-50"
-                        >
-                          <IconeExcluir className="h-3.5 w-3.5" />
-                        </button>
+                        <Tooltip texto="Editar" posicao="direita" vertical={vertical}>
+                          <button
+                            onClick={() => abrirEdicao(cat)}
+                            aria-label="Editar"
+                            className="rounded-md border border-grouper-mid/30 bg-white p-1 text-grouper-mid hover:bg-grouper-mist"
+                          >
+                            <IconeEditar className="h-3.5 w-3.5" />
+                          </button>
+                        </Tooltip>
+                        <Tooltip texto="Excluir" posicao="direita" vertical={vertical}>
+                          <button
+                            onClick={() => setCategoriaParaExcluir(cat)}
+                            aria-label="Excluir"
+                            className="rounded-md border border-red-300 bg-white p-1 text-red-600 hover:bg-red-50"
+                          >
+                            <IconeExcluir className="h-3.5 w-3.5" />
+                          </button>
+                        </Tooltip>
                       </div>
                     </div>
                   </li>

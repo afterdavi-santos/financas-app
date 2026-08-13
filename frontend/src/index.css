@@ -11,18 +11,12 @@
   --color-grouper-green: #005E2F; /* paleta verde→amarelo — positivo (renda, economia) */
   --color-grouper-red: #ba0000; /* paleta vermelho→amarelo — negativo (despesa) */
 
-  --font-display: "Khand", sans-serif;
+  /* Teste: Inter no lugar de Khand nos títulos — trocar de volta pra
+     "Khand", sans-serif" se não gostar do resultado. */
+  --font-display: "Inter", sans-serif;
   --font-body: "Hind", sans-serif;
 }
 
 body {
   font-family: var(--font-body);
-}
-
-/* Remove o "x" (Limpar) dos seletores de data/mês nativos — não faz sentido
-   permitir deixar o campo vazio, já que mês/data em foco é sempre obrigatório
-   nesses seletores. */
-input[type="date"]::-webkit-clear-button,
-input[type="month"]::-webkit-clear-button {
-  display: none;
 }

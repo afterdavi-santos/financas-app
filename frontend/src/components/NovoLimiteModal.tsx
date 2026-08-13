@@ -109,14 +109,23 @@ export function NovoLimiteModal({
           >
             Categoria
           </label>
-          <SeletorCategoria
-            id="limite-categoria"
-            categorias={categorias}
-            valor={categoriaId}
-            onChange={setCategoriaId}
-            permitirNovaCategoria={!editando}
-            desabilitado={editando}
-          />
+          {editando ? (
+            // Categoria não é editável aqui (o backend só atualiza o valor
+            // do limite) — mostra só o nome, sem a lista/rolagem do seletor.
+            <p
+              id="limite-categoria"
+              className="w-full rounded-md border border-grouper-sky/40 bg-grouper-mist px-3 py-2 text-grouper-ink"
+            >
+              {limite.categoria.nome}
+            </p>
+          ) : (
+            <SeletorCategoria
+              id="limite-categoria"
+              categorias={categorias}
+              valor={categoriaId}
+              onChange={setCategoriaId}
+            />
+          )}
         </div>
 
         {criandoNovaCategoria && (
@@ -195,14 +204,14 @@ export function NovoLimiteModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+            className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={carregando}
-            className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep disabled:opacity-60"
+            className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep disabled:opacity-60"
           >
             {carregando ? "Salvando..." : "Salvar"}
           </button>

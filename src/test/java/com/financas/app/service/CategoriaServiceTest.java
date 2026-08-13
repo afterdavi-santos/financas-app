@@ -1,6 +1,7 @@
 package com.financas.app.service;
 
 import com.financas.app.exception.CategoriaEmUsoException;
+import com.financas.app.exception.CategoriaJaExisteException;
 import com.financas.app.exception.RecursoNaoEncontradoException;
 import com.financas.app.model.Categoria;
 import com.financas.app.model.Usuario;
@@ -88,6 +89,37 @@ class CategoriaServiceTest {
     }
 
     @Test
+    void deveFalharAoCriarCategoriaComMesmoNomeETipoJaExistente() {
+        Categoria categoria = new Categoria();
+        categoria.setNome("Mercado");
+        categoria.setTipo(TipoCategoria.VARIAVEL);
+
+        when(categoriaRepository.existsByNomeIgnoreCaseAndTipoAndUsuarioId("Mercado", TipoCategoria.VARIAVEL, 1L))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> categoriaService.criar(1L, categoria))
+                .isInstanceOf(CategoriaJaExisteException.class);
+
+        verify(categoriaRepository, never()).save(any());
+    }
+
+    @Test
+    void devePermitirCriarCategoriaComMesmoNomeDeTipoDiferente() {
+        Categoria categoria = new Categoria();
+        categoria.setNome("Mercado");
+        categoria.setTipo(TipoCategoria.FIXA);
+
+        when(categoriaRepository.existsByNomeIgnoreCaseAndTipoAndUsuarioId("Mercado", TipoCategoria.FIXA, 1L))
+                .thenReturn(false);
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioComId(1L)));
+        when(categoriaRepository.save(any(Categoria.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Categoria salva = categoriaService.criar(1L, categoria);
+
+        assertThat(salva.getTipo()).isEqualTo(TipoCategoria.FIXA);
+    }
+
+    @Test
     void deveFalharAoCriarCategoriaParaUsuarioInexistente() {
         when(usuarioRepository.findById(99L)).thenReturn(Optional.empty());
 
@@ -120,6 +152,23 @@ class CategoriaServiceTest {
 
         assertThat(atualizada.getNome()).isEqualTo("Supermercado");
         assertThat(atualizada.getTipo()).isEqualTo(TipoCategoria.FIXA);
+    }
+
+    @Test
+    void deveFalharAoAtualizarCategoriaParaNomeETipoJaUsadosPorOutra() {
+        Categoria existente = categoriaDoUsuario(10L, 1L);
+        Categoria dadosAtualizados = new Categoria();
+        dadosAtualizados.setNome("Lazer");
+        dadosAtualizados.setTipo(TipoCategoria.VARIAVEL);
+
+        when(categoriaRepository.findById(10L)).thenReturn(Optional.of(existente));
+        when(categoriaRepository.existsByNomeIgnoreCaseAndTipoAndUsuarioIdAndIdNot(
+                "Lazer", TipoCategoria.VARIAVEL, 1L, 10L)).thenReturn(true);
+
+        assertThatThrownBy(() -> categoriaService.atualizar(1L, 10L, dadosAtualizados))
+                .isInstanceOf(CategoriaJaExisteException.class);
+
+        verify(categoriaRepository, never()).save(any());
     }
 
     @Test

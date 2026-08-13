@@ -46,7 +46,7 @@ export function InvestirMaisModal({ investimento, onClose, onInvestido }: Props)
           </p>
         )}
 
-        <p className="text-xs text-slate-500">
+        <p className="text-sm text-slate-600">
           O valor extra passa a render junto com o saldo atual, a partir de
           hoje.
         </p>
@@ -83,7 +83,7 @@ export function InvestirMaisModal({ investimento, onClose, onInvestido }: Props)
           <button
             type="submit"
             disabled={carregando}
-            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+            className="rounded-md bg-grouper-mid px-4 py-2 text-sm font-medium text-white hover:bg-grouper-deep disabled:opacity-60"
           >
             {carregando ? "Investindo..." : "Investir"}
           </button>

@@ -72,6 +72,25 @@ superior) toda vez que troca de página.
   ideia no eixo vertical: use `vertical="baixo"` (2026-08-10) no **primeiro
   item** de uma lista com rolagem própria, senão o balão (que abre pra cima
   por padrão) fica cortado por não ter espaço acima dentro do container.
+  **O elemento-gatilho do `Tooltip` precisa ser focável** (`<button>`, nunca
+  `<span>`) — `:focus-within` é a única forma do balão aparecer no mobile,
+  onde não existe `:hover`; um `<span>` como gatilho deixa a informação
+  simplesmente inacessível no toque (achado real em 2026-08-11: ícone ⓘ de
+  incentivo dos Objetivos e selo "Possível duplicata" do Leitor de fatura).
+- Linha de lista clicável sem checkbox (padrão "seleção por clique", ver
+  `home-layout-atual.md` seção 5) → sempre `role="button"` + `tabIndex={0}`
+  + `onKeyDown` ativando no Enter/Espaço (`utils/teclado.ts`,
+  `aoTeclarAtivar`, 2026-08-11) + `focus-visible:ring-2` — um `<div
+  onClick>` sozinho funciona no mouse/toque mas é invisível pro teclado.
+- Seletor de mês/dia → usar `components/SeletorMes.tsx`/`SeletorData.tsx`
+  (2026-08-11), nunca `<input type="month"/"date">` nativo — o calendário
+  nativo do navegador não é estilizável nem reposicionável via CSS e pode
+  vazar da borda da tela no mobile (é como um `<select>` nativo).
+- Popup/dropdown próprio dentro de um `Modal.tsx` (que tem
+  `overflow-y-auto`) → posicionar via `hooks/usePosicaoPopup.ts` +
+  `createPortal(..., document.body)` (2026-08-11), não `position: absolute`
+  direto no componente — um popup absoluto normal fica cortado pelo
+  `overflow-y-auto` do card do modal quando abre perto do fim dele.
 - Novo overlay/popover → reaproveitar `Modal.tsx` quando fizer sentido, em
   vez de reinventar fechar-por-Esc/backdrop. Pra uma confirmação simples
   ("Excluir X?"), reaproveitar `components/ConfirmacaoModal.tsx`
@@ -84,6 +103,13 @@ superior) toda vez que troca de página.
   em AA; evite introduzir tons `/40`, `/50`, `/60` de opacidade em texto
   pequeno — foi exatamente o que trocamos por `grouper-deep` sólido nas
   informações secundárias da Home/Movimentações/Planejamento.
+- Valor de texto que pode crescer sem limite (R$ com mais casas/milhares
+  num card estreito) → `hooks/useAjustarFonte.ts` (encolhe a fonte até
+  caber, medindo `scrollWidth`/`clientWidth`) em vez de um breakpoint fixo
+  tipo `sm:text-3xl` — um breakpoint "adivinhado" ainda estoura pra valores
+  maiores que o previsto. Pra vários cards que devem mostrar o valor no
+  mesmo tamanho (ex.: dois StatCards lado a lado), use
+  `hooks/useAjustarFonteSincronizada.ts`.
 
 ## 2. Responsividade (mobile-first)
 

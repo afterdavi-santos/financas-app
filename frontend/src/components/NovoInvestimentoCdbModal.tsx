@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Modal } from "./Modal";
+import { SeletorData } from "./SeletorData";
 import { criarInvestimentoCdb, atualizarInvestimentoCdb } from "../api/investimentosCdb";
 import { criarObjetivo, vincularInvestimento, desvincularInvestimento } from "../api/objetivos";
 import { cdiAtual } from "../api/cdi";
@@ -205,13 +206,11 @@ export function NovoInvestimentoCdbModal({
               >
                 Data de aplicação
               </label>
-              <input
+              <SeletorData
                 id="cdb-data"
-                type="date"
-                required
                 max={hojeISO()}
                 value={dataAplicacao}
-                onChange={(e) => setDataAplicacao(e.target.value)}
+                onChange={setDataAplicacao}
                 className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
               />
             </div>
@@ -260,7 +259,7 @@ export function NovoInvestimentoCdbModal({
             <option value={OPCAO_NOVO_OBJETIVO}>+ Novo objetivo...</option>
           </select>
           {objetivoSelecionado && !criandoNovoObjetivo && (
-            <p className="text-xs text-grouper-navy/60">
+            <p className="text-sm text-grouper-navy">
               O progresso desta meta passa a acompanhar a posição do
               investimento em tempo real, no lugar dos aportes manuais.
             </p>
@@ -332,12 +331,10 @@ export function NovoInvestimentoCdbModal({
                 >
                   Data-alvo
                 </label>
-                <input
+                <SeletorData
                   id="cdb-novo-obj-data"
-                  type="date"
-                  required
                   value={novoObjDataAlvo}
-                  onChange={(e) => setNovoObjDataAlvo(e.target.value)}
+                  onChange={setNovoObjDataAlvo}
                   className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
                 />
               </div>
@@ -349,14 +346,14 @@ export function NovoInvestimentoCdbModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+            className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={carregando}
-            className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep disabled:opacity-60"
+            className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep disabled:opacity-60"
           >
             {carregando ? "Salvando..." : "Salvar"}
           </button>

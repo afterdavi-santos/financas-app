@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { PageHeader } from "../components/PageHeader";
-import { StatCard } from "../components/StatCard";
+import { StatCard, TAMANHO_BASE_REM, TAMANHO_MINIMO_REM } from "../components/StatCard";
 import { NovaDespesaModal } from "../components/NovaDespesaModal";
 import { LeitorFaturaModal } from "../components/LeitorFaturaModal";
 import { DetalheDespesasModal } from "../components/DetalheDespesasModal";
+import { GraficoCategoriasModal } from "../components/GraficoCategoriasModal";
 import { BarraSelecao } from "../components/BarraSelecao";
 import { SelecionarTodos } from "../components/SelecionarTodos";
-import { IconeEditar, IconeExcluir } from "../components/IconesInvestimento";
+import { ConfirmacaoModal } from "../components/ConfirmacaoModal";
+import { IconeEditar, IconeExcluir, IconeGrafico } from "../components/IconesInvestimento";
+import { Tooltip } from "../components/Tooltip";
 import { GraficoDespesasMensal, type PontoDespesa } from "../components/GraficoDespesasMensal";
+import { SeletorMes } from "../components/SeletorMes";
 import { useSelecao } from "../hooks/useSelecao";
+import { useAjustarFonteSincronizada } from "../hooks/useAjustarFonteSincronizada";
 import { listarDespesas, excluirDespesa } from "../api/despesas";
 import { listarCategorias } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
@@ -31,6 +36,7 @@ import {
   baixasOrdenadas,
   mesEfetivoDespesa,
 } from "../utils/despesasResumo";
+import { aoTeclarAtivar } from "../utils/teclado";
 import type { VariacaoCategoria } from "../utils/despesasResumo";
 import type { Categoria, Despesa, TipoCategoria } from "../types/financas";
 
@@ -85,6 +91,13 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
   // categorias além da destacada. Cada seção tem seu próprio estado.
   const [mostrarMaisAlta, setMostrarMaisAlta] = useState(false);
   const [mostrarMaisBaixa, setMostrarMaisBaixa] = useState(false);
+  // Popup de confirmação de exclusão (substitui o confirm() nativo). null =
+  // fechado; guarda a despesa em questão para individual, ou "LOTE" para a
+  // exclusão dos selecionados.
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState<Despesa | "LOTE" | null>(null);
+  // Popup do gráfico de barras com todas as categorias de "Despesas por
+  // categoria" (aberto pelo ícone ao lado do filtro "Todas").
+  const [modalGraficoCategorias, setModalGraficoCategorias] = useState(false);
   const {
     selecionados,
     alternar,
@@ -185,36 +198,40 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
     };
   }, [despesas, despesasAnterior, filtroCategoria, mes]);
 
+  // Faz "Despesas fixas" e "Despesas variáveis" usarem sempre o mesmo
+  // tamanho de fonte no valor (o menor dos dois que couber), em vez de cada
+  // card encolher sozinho conforme o próprio número.
+  const refValorStatCard = useAjustarFonteSincronizada(
+    [resumo.totalFixas, resumo.totalExtra],
+    TAMANHO_BASE_REM,
+    TAMANHO_MINIMO_REM,
+  );
+
   // Ponto de atenção/motivação só aparecem a partir do dia 15 do mês
   // CORRENTE (dados ainda são poucos antes disso, comparação fica ruidosa);
   // num mês passado (já fechado) a comparação já é válida a qualquer dia.
   const mostrarInsights = mes !== mesAtualYYYYMM() || Number(hojeISO().slice(8, 10)) >= 15;
 
-  async function excluir(despesa: Despesa) {
-    const mensagem = despesa.recorrente
-      ? `A despesa "${despesa.descricao}" é fixa e recorrente. Excluí-la remove só o mês atual e para as próximas repetições — os meses anteriores continuam registrados. Continuar?`
-      : `Excluir a despesa "${despesa.descricao}"?`;
-    if (!confirm(mensagem)) return;
-    try {
-      await excluirDespesa(despesa.id);
-      desselecionarTodos([despesa.id]);
+  async function confirmarExclusao() {
+    if (confirmandoExclusao === "LOTE") {
+      const ids = Array.from(selecionados);
+      const resultados = await Promise.allSettled(ids.map((id) => excluirDespesa(id)));
+      const falhas = resultados.filter((r) => r.status === "rejected").length;
+      if (falhas > 0) {
+        setErro(`${falhas} de ${ids.length} despesa(s) não puderam ser excluídas.`);
+      }
+      limpar();
       carregar();
-    } catch (e) {
-      setErro(mensagemDeErro(e));
+    } else if (confirmandoExclusao) {
+      try {
+        await excluirDespesa(confirmandoExclusao.id);
+        desselecionarTodos([confirmandoExclusao.id]);
+        carregar();
+      } catch (e) {
+        setErro(mensagemDeErro(e));
+      }
     }
-  }
-
-  async function excluirSelecionadas() {
-    const ids = Array.from(selecionados);
-    const plural = ids.length > 1;
-    if (!confirm(`Excluir ${ids.length} despesa${plural ? "s" : ""} selecionada${plural ? "s" : ""}?`)) return;
-    const resultados = await Promise.allSettled(ids.map((id) => excluirDespesa(id)));
-    const falhas = resultados.filter((r) => r.status === "rejected").length;
-    if (falhas > 0) {
-      setErro(`${falhas} de ${ids.length} despesa(s) não puderam ser excluídas.`);
-    }
-    limpar();
-    carregar();
+    setConfirmandoExclusao(null);
   }
 
   // Mais recentes primeiro (por data), já filtradas pelo tipo escolhido.
@@ -239,8 +256,8 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
   // Troca o mês em foco — usada tanto pelo seletor de mês quanto ao clicar
   // numa coluna do gráfico "Despesas dos últimos meses" (mesmo efeito).
   function selecionarMes(novoMes: string) {
-    // O "Limpar" do seletor nativo manda "" — mês em foco não pode ficar
-    // vazio (quebraria os cálculos do mês), então ignora.
+    // Guarda defensiva — mês em foco não pode ficar vazio (quebraria os
+    // cálculos do mês).
     if (!novoMes) return;
     limpar(); // seleção era da lista do mês anterior
     setMes(novoMes);
@@ -248,16 +265,7 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
 
   const controlesCabecalho = (
     <>
-      <input
-        type="month"
-        value={mes}
-        onChange={(e) => selecionarMes(e.target.value)}
-        // O navegador só abre o seletor nativo ao clicar no ícone do
-        // calendário; showPicker() faz o clique em qualquer parte do "botão"
-        // abrir o mesmo seletor.
-        onClick={(e) => e.currentTarget.showPicker?.()}
-        className="w-full cursor-pointer rounded-md border-2 border-grouper-mid bg-white px-3 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-ink shadow-sm transition-colors hover:bg-grouper-mist focus:outline-none focus:ring-2 focus:ring-grouper-mid lg:w-36"
-      />
+      <SeletorMes value={mes} onChange={selecionarMes} />
       <button
         onClick={() => setModalLeitorFatura(true)}
         className="w-full rounded-md bg-grouper-deep px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-ink lg:w-auto"
@@ -311,11 +319,13 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
               titulo="Despesas fixas"
               valor={resumo.totalFixas}
               destaque="negativo"
+              valorRef={refValorStatCard(0)}
             />
             <StatCard
               titulo="Despesas variáveis"
               valor={resumo.totalExtra}
               destaque="negativo"
+              valorRef={refValorStatCard(1)}
             />
           </div>
 
@@ -336,6 +346,15 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
                   Despesas por categoria
                 </h2>
                 <div className="flex items-center gap-1">
+                  <Tooltip texto="Ver gráfico de todas as categorias">
+                    <button
+                      onClick={() => setModalGraficoCategorias(true)}
+                      aria-label="Ver gráfico de todas as categorias"
+                      className="rounded-md p-1.5 text-grouper-navy/60 hover:bg-grouper-sky/25 hover:text-grouper-ink"
+                    >
+                      <IconeGrafico className="h-4 w-4" />
+                    </button>
+                  </Tooltip>
                   {FILTROS.map((f) => (
                     <button
                       key={f.chave}
@@ -399,15 +418,16 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
                     Ponto de atenção
                   </h2>
                   {mostrarInsights && resumo.maisAltas.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setMostrarMaisAlta((atual) => !atual)}
-                      aria-label={mostrarMaisAlta ? "Mostrar menos categorias" : "Mostrar mais categorias"}
-                      title={mostrarMaisAlta ? "Mostrar menos categorias" : "Mostrar mais categorias"}
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-amber-400 text-amber-700 hover:bg-amber-50"
-                    >
-                      {mostrarMaisAlta ? "−" : "+"}
-                    </button>
+                    <Tooltip texto={mostrarMaisAlta ? "Mostrar menos categorias" : "Mostrar mais categorias"} posicao="direita">
+                      <button
+                        type="button"
+                        onClick={() => setMostrarMaisAlta((atual) => !atual)}
+                        aria-label={mostrarMaisAlta ? "Mostrar menos categorias" : "Mostrar mais categorias"}
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-amber-400 text-amber-700 hover:bg-amber-50"
+                      >
+                        {mostrarMaisAlta ? "−" : "+"}
+                      </button>
+                    </Tooltip>
                   )}
                 </div>
                 {!mostrarInsights ? (
@@ -417,11 +437,12 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
                 ) : resumo.alta ? (
                   <p className="mt-2 text-sm text-amber-900"> As despesas com a categoria
                   <strong> {resumo.alta.nome}</strong> subiram {" "}
-                    <strong>{formatarBRL(resumo.alta.deltaRs)}</strong> em relação ao mês anterior.
+                    <strong>{formatarBRL(resumo.alta.deltaRs)}</strong> (
+                    {textoPct(resumo.alta)}) em relação ao mês anterior.
                   </p>
                 ) : (
                   <p className="mt-2 text-sm text-amber-900">
-                    Parabéns, Nenhuma categoria aumentou de valor em relação ao mês anterior.
+                    Parabéns, nenhuma categoria aumentou de valor em relação ao mês anterior.
                   </p>
                 )}
                 {mostrarInsights && mostrarMaisAlta && resumo.maisAltas.length > 0 && (
@@ -442,15 +463,16 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
                     Ponto de motivação
                   </h2>
                   {mostrarInsights && resumo.maisBaixas.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setMostrarMaisBaixa((atual) => !atual)}
-                      aria-label={mostrarMaisBaixa ? "Mostrar menos categorias" : "Mostrar mais categorias"}
-                      title={mostrarMaisBaixa ? "Mostrar menos categorias" : "Mostrar mais categorias"}
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-grouper-green text-grouper-green hover:bg-green-50"
-                    >
-                      {mostrarMaisBaixa ? "−" : "+"}
-                    </button>
+                    <Tooltip texto={mostrarMaisBaixa ? "Mostrar menos categorias" : "Mostrar mais categorias"} posicao="direita">
+                      <button
+                        type="button"
+                        onClick={() => setMostrarMaisBaixa((atual) => !atual)}
+                        aria-label={mostrarMaisBaixa ? "Mostrar menos categorias" : "Mostrar mais categorias"}
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-grouper-green text-grouper-green hover:bg-green-50"
+                      >
+                        {mostrarMaisBaixa ? "−" : "+"}
+                      </button>
+                    </Tooltip>
                   )}
                 </div>
                 {!mostrarInsights ? (
@@ -517,7 +539,7 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
                 <BarraSelecao
                   quantidade={selecionados.size}
                   texto={`${selecionados.size} despesa${selecionados.size > 1 ? "s" : ""} selecionada${selecionados.size > 1 ? "s" : ""}`}
-                  onExcluir={excluirSelecionadas}
+                  onExcluir={() => setConfirmandoExclusao("LOTE")}
                   onCancelar={limpar}
                 />
                 <div className="my-3">
@@ -545,13 +567,20 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
                   ordenadas.length > 3 ? "max-h-49 overflow-y-auto pr-1" : ""
                 }`}
               >
-                {ordenadas.map((d) => {
+                {ordenadas.map((d, indice) => {
                   const selecionado = selecionados.has(d.id);
+                  // No primeiro item não há espaço acima dentro da lista com
+                  // rolagem própria — o tooltip abre pra baixo pra não ficar
+                  // cortado (ver Tooltip.tsx).
+                  const vertical = indice === 0 ? "baixo" : "cima";
                   return (
                     <li key={d.id}>
                       <div
+                        role="button"
+                        tabIndex={0}
                         onClick={() => alternar(d.id)}
-                        className={`flex cursor-pointer items-center justify-between rounded-md px-3 py-3 transition-colors ${
+                        onKeyDown={aoTeclarAtivar(() => alternar(d.id))}
+                        className={`flex cursor-pointer items-center justify-between rounded-md px-3 py-3 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-grouper-mid ${
                           selecionado ? "bg-grouper-sky/30" : "hover:bg-grouper-sky/20"
                         }`}
                       >
@@ -571,22 +600,24 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
                           <span className="font-semibold text-grouper-ink">
                             {formatarBRL(d.valor)}
                           </span>
-                          <button
-                            onClick={() => abrirEdicaoDespesa(d)}
-                            aria-label="Editar"
-                            title="Editar"
-                            className="rounded-md border border-grouper-mid/30 bg-white p-1 text-grouper-mid hover:bg-grouper-mist"
-                          >
-                            <IconeEditar className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => excluir(d)}
-                            aria-label="Excluir"
-                            title="Excluir"
-                            className="rounded-md border border-red-300 bg-white p-1 text-red-600 hover:bg-red-50"
-                          >
-                            <IconeExcluir className="h-3.5 w-3.5" />
-                          </button>
+                          <Tooltip texto="Editar" posicao="direita" vertical={vertical}>
+                            <button
+                              onClick={() => abrirEdicaoDespesa(d)}
+                              aria-label="Editar"
+                              className="rounded-md border border-grouper-mid/30 bg-white p-1 text-grouper-mid hover:bg-grouper-mist"
+                            >
+                              <IconeEditar className="h-3.5 w-3.5" />
+                            </button>
+                          </Tooltip>
+                          <Tooltip texto="Excluir" posicao="direita" vertical={vertical}>
+                            <button
+                              onClick={() => setConfirmandoExclusao(d)}
+                              aria-label="Excluir"
+                              className="rounded-md border border-red-300 bg-white p-1 text-red-600 hover:bg-red-50"
+                            >
+                              <IconeExcluir className="h-3.5 w-3.5" />
+                            </button>
+                          </Tooltip>
                         </div>
                       </div>
                     </li>
@@ -630,6 +661,31 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
         aberto={detalhe !== null}
         onClose={() => setDetalhe(null)}
         despesas={detalhe?.despesas ?? []}
+      />
+
+      <ConfirmacaoModal
+        aberto={confirmandoExclusao !== null}
+        titulo={confirmandoExclusao === "LOTE" ? "Excluir despesas" : "Excluir despesa"}
+        mensagem={
+          confirmandoExclusao === "LOTE"
+            ? `Excluir ${selecionados.size} despesa${selecionados.size > 1 ? "s" : ""} selecionada${selecionados.size > 1 ? "s" : ""}?`
+            : confirmandoExclusao?.recorrente
+              ? `A despesa "${confirmandoExclusao.descricao}" é fixa e recorrente. Excluí-la remove só o mês atual e para as próximas repetições — os meses anteriores continuam registrados. Continuar?`
+              : `Excluir a despesa "${confirmandoExclusao?.descricao}"?`
+        }
+        onConfirmar={confirmarExclusao}
+        onClose={() => setConfirmandoExclusao(null)}
+      />
+
+      <GraficoCategoriasModal
+        aberto={modalGraficoCategorias}
+        onClose={() => setModalGraficoCategorias(false)}
+        titulo={
+          filtroCategoria === "TODAS"
+            ? "Despesas por categoria"
+            : `Despesas por categoria — ${filtroCategoria === "FIXA" ? "fixas" : "variáveis"}`
+        }
+        dados={resumo.porCategoria}
       />
     </div>
   );

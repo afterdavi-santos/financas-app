@@ -73,7 +73,7 @@ export function ExcluirInvestimentoModal({ investimento, onClose, onExcluido }: 
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+                className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
               >
                 Cancelar
               </button>
@@ -81,7 +81,7 @@ export function ExcluirInvestimentoModal({ investimento, onClose, onExcluido }: 
                 type="button"
                 onClick={excluirSoInvestimento}
                 disabled={carregando}
-                className="rounded-md bg-red-600 px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-red-700 disabled:opacity-60"
+                className="rounded-md bg-red-600 px-4 py-2 font-display text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
               >
                 {carregando ? "Excluindo..." : "Excluir"}
               </button>
@@ -103,7 +103,7 @@ export function ExcluirInvestimentoModal({ investimento, onClose, onExcluido }: 
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-md px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-grouper-navy hover:bg-grouper-mist"
+                className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
               >
                 Cancelar
               </button>
@@ -111,7 +111,7 @@ export function ExcluirInvestimentoModal({ investimento, onClose, onExcluido }: 
                 type="button"
                 onClick={excluirSoInvestimento}
                 disabled={carregando}
-                className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-grouper-deep disabled:opacity-60"
+                className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep disabled:opacity-60"
               >
                 {carregando ? "Excluindo..." : "Excluir só o investimento"}
               </button>
@@ -119,7 +119,7 @@ export function ExcluirInvestimentoModal({ investimento, onClose, onExcluido }: 
                 type="button"
                 onClick={excluirInvestimentoEMeta}
                 disabled={carregando}
-                className="rounded-md bg-red-600 px-4 py-2 font-display text-sm font-semibold uppercase tracking-wide text-white hover:bg-red-700 disabled:opacity-60"
+                className="rounded-md bg-red-600 px-4 py-2 font-display text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
               >
                 {carregando ? "Excluindo..." : "Excluir os dois"}
               </button>

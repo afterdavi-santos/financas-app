@@ -90,6 +90,21 @@ class CategoriaControllerTest {
     }
 
     @Test
+    void deveRecusarCriacaoDeCategoriaComMesmoNomeETipoJaExistente() throws Exception {
+        when(categoriaService.criar(eq(1L), any(Categoria.class)))
+                .thenThrow(new com.financas.app.exception.CategoriaJaExisteException());
+
+        mockMvc.perform(post("/api/categorias")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nome":"Alimentação","tipo":"VARIAVEL"}
+                                """))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
     void deveListarCategoriasDoUsuarioAutenticado() throws Exception {
         Categoria categoria = new Categoria();
         categoria.setId(10L);
