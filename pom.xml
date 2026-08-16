@@ -59,6 +59,33 @@
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!--
+            Migracao de schema versionada. Sao TRES dependencias, e faltar
+            qualquer uma falha em silencio:
+
+            - spring-boot-flyway: a autoconfiguracao do Boot. No Boot 4 ela saiu
+              do autoconfigure monolitico e virou modulo proprio (mesma quebra
+              dos slices de teste). Sem ela o Flyway fica no classpath e
+              simplesmente NAO RODA - sem erro, sem log, sem tabela de
+              historico. Foi exatamente o que aconteceu na primeira tentativa.
+            - flyway-core: o motor.
+            - flyway-database-postgresql: desde o Flyway 10 o suporte a cada
+              banco vive em modulo separado; sem ele o core nao reconhece o
+              Postgres.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
