@@ -26,6 +26,23 @@ import java.util.Locale;
 public class LeituraFaturaService {
 
     private static final long TAMANHO_MAXIMO_BYTES = 2 * 1024 * 1024;
+    // Content-types que um .csv de verdade chega, na prática. São vários porque
+    // quem preenche esse campo é o sistema operacional, não o app: o Windows
+    // com Excel instalado manda application/vnd.ms-excel, sem Excel manda
+    // text/csv, e octet-stream é o que sobra quando não há mapeamento nenhum.
+    //
+    // A lista é permissiva de propósito. O content-type vem do cliente e pode
+    // ser forjado — isto NÃO é barreira de segurança, e a barreira de verdade
+    // continua sendo o parser, que só lê texto e rejeita o que não casa com o
+    // formato do Nubank. O que esta checagem entrega é o caso real e chato:
+    // mandar o PDF da fatura em vez do CSV (o próprio modal avisa disso), que
+    // antes só falhava lá adiante, com mensagem pior.
+    private static final List<String> CONTENT_TYPES_ACEITOS = List.of(
+            "text/csv",
+            "application/csv",
+            "text/plain",
+            "application/vnd.ms-excel",
+            "application/octet-stream");
     // Candidatas a duplicata/sugestão de categoria são buscadas com folga
     // antes E depois do intervalo de datas da fatura (simétrica), pra cobrir
     // o nível MEDIA (mesma rede/assinatura em datas bem diferentes) e pra não
@@ -121,6 +138,23 @@ public class LeituraFaturaService {
         if (!extensaoValida) {
             throw new FaturaInvalidaException("Envie um arquivo .csv exportado do Nubank.");
         }
+        // Content-type ausente é aceito: nem todo cliente HTTP manda o campo, e
+        // exigi-lo quebraria upload legítimo sem impedir ataque nenhum — quem
+        // quer forjar manda o valor certo.
+        String contentType = arquivo.getContentType();
+        if (contentType != null && !CONTENT_TYPES_ACEITOS.contains(tipoBase(contentType))) {
+            throw new FaturaInvalidaException(
+                    "Envie o CSV da fatura, não outro formato. No app do Nubank, escolha CSV em vez de PDF.");
+        }
+    }
+
+    // Remove parâmetros como "; charset=UTF-8" e normaliza a caixa: o
+    // content-type chega "text/csv; charset=UTF-8" com frequência, e comparar a
+    // string inteira rejeitaria um arquivo perfeitamente válido.
+    private static String tipoBase(String contentType) {
+        int ponto = contentType.indexOf(';');
+        String tipo = ponto < 0 ? contentType : contentType.substring(0, ponto);
+        return tipo.trim().toLowerCase(Locale.ROOT);
     }
 
 }

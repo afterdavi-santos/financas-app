@@ -190,6 +190,50 @@ class LeituraFaturaServiceTest {
                 .isInstanceOf(FaturaInvalidaException.class);
     }
 
+    // O caso real que motivou a checagem: exportar o PDF da fatura e renomear
+    // para .csv. A extensão passa, o content-type não.
+    @Test
+    void deveFalharComContentTypeDeOutroFormato() {
+        MockMultipartFile arquivo = new MockMultipartFile("arquivo", "fatura.csv", "application/pdf",
+                "%PDF-1.4".getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> leituraFaturaService.processar(1L, arquivo, "2026-08"))
+                .isInstanceOf(FaturaInvalidaException.class);
+    }
+
+    // Quem preenche o content-type é o sistema operacional, não o app: o Windows
+    // com Excel instalado manda application/vnd.ms-excel para um .csv comum.
+    // Rejeitar isso quebraria o upload de quem tem Office.
+    @Test
+    void deveAceitarContentTypeDeExcelParaCsv() {
+        MockMultipartFile arquivo = new MockMultipartFile("arquivo", "fatura.csv",
+                "application/vnd.ms-excel",
+                "date,title,amount\n2026-08-01,Mercado,50.00\n".getBytes(StandardCharsets.UTF_8));
+
+        assertThat(leituraFaturaService.processar(1L, arquivo, "2026-08").itens()).hasSize(1);
+    }
+
+    // "text/csv; charset=UTF-8" é o formato mais comum de todos. Comparar a
+    // string inteira rejeitaria um arquivo perfeitamente válido.
+    @Test
+    void deveIgnorarParametrosDoContentType() {
+        MockMultipartFile arquivo = new MockMultipartFile("arquivo", "fatura.csv",
+                "text/csv; charset=UTF-8",
+                "date,title,amount\n2026-08-01,Mercado,50.00\n".getBytes(StandardCharsets.UTF_8));
+
+        assertThat(leituraFaturaService.processar(1L, arquivo, "2026-08").itens()).hasSize(1);
+    }
+
+    // Nem todo cliente HTTP manda o campo. Exigi-lo quebraria upload legítimo
+    // sem impedir ataque nenhum — quem quer forjar manda o valor certo.
+    @Test
+    void deveAceitarContentTypeAusente() {
+        MockMultipartFile arquivo = new MockMultipartFile("arquivo", "fatura.csv", null,
+                "date,title,amount\n2026-08-01,Mercado,50.00\n".getBytes(StandardCharsets.UTF_8));
+
+        assertThat(leituraFaturaService.processar(1L, arquivo, "2026-08").itens()).hasSize(1);
+    }
+
     @Test
     void deveDevolverListaVaziaSemLinhasValidas() {
         String conteudo = "date,title,amount\n";
