@@ -25,6 +25,8 @@ import java.util.Base64;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -209,6 +211,21 @@ class UsuarioControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"fotoBase64\":\"" + base64 + "\",\"tipo\":\"image/gif\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    // O prefixo "data:image/png;base64," é o caso real: os dois-pontos e a
+    // barra não pertencem ao alfabeto base64, o decoder lança
+    // IllegalArgumentException e antes disso virava 500.
+    @Test
+    void deveRecusarFotoComBase64Invalido() throws Exception {
+        mockMvc.perform(put("/api/perfil/foto")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fotoBase64\":\"data:image/png;base64,AAEC\",\"tipo\":\"image/png\"}"))
+                .andExpect(status().isBadRequest());
+
+        verify(usuarioService, never()).atualizarFoto(any(), any(), any());
     }
 
     @Test

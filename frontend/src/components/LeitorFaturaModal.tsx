@@ -252,7 +252,12 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
     let indiceGrupo = 0;
     for (const [chave, itens] of grupos) {
       if (juntarEquivalentes && itens.length > 1) {
-        const valorTotal = itens.reduce((soma, i) => soma + i.valor, 0);
+        // Arredonda para centavos: somar floats em JS produz resto binário
+        // (0.1 + 0.2 = 0.30000000000000004), e esse valor vai direto no
+        // payload do lote. O backend aceita no máximo 2 casas decimais, então
+        // sem o arredondamento a importação falharia com 400 justamente nos
+        // grupos mesclados.
+        const valorTotal = Math.round(itens.reduce((soma, i) => soma + i.valor, 0) * 100) / 100;
         const dataMaisRecente = itens.reduce((max, i) => (i.data > max ? i.data : max), itens[0].data);
         linhas.push({
           id: BASE_ID_MESCLADO + indiceGrupo,

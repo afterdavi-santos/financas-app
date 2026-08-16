@@ -1,5 +1,7 @@
 package com.financas.app.exception;
 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -8,6 +10,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.List;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -84,6 +87,25 @@ public class GlobalExceptionHandler {
                 .toList();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ErrorResponse(HttpStatus.BAD_REQUEST.value(), "Erro de validação", erros));
+    }
+
+    // Rede de segurança para o que escapar das anotações dos DTOs: uma coluna
+    // com teto que ninguém anotou, uma constraint do banco que só dispara numa
+    // corrida entre duas requisições. Sem este handler, esses casos viram 500 —
+    // e 500 quer dizer "erro do servidor", quando o problema veio do dado que
+    // chegou.
+    //
+    // A mensagem é fixa de propósito. `ex.getMessage()` traz o texto cru do
+    // Postgres, com nome de tabela, de coluna e de constraint. Devolver isso
+    // entrega o desenho do banco a quem estiver sondando a API — e não ajuda
+    // em nada quem está usando o app. O detalhe fica no log do servidor, que é
+    // onde ele serve para alguma coisa.
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> tratarViolacaoIntegridade(DataIntegrityViolationException ex) {
+        log.warn("Violação de integridade ao gravar", ex);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(HttpStatus.BAD_REQUEST.value(),
+                        "Não foi possível salvar: verifique os dados enviados."));
     }
 
 }

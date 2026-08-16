@@ -16,6 +16,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
@@ -28,6 +29,8 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -174,6 +177,77 @@ class DespesaControllerTest {
                                 {"descricao":"Mercado","valor":-10,"data":"2026-07-10","categoriaId":5}
                                 """))
                 .andExpect(status().isBadRequest());
+    }
+
+    // A coluna é numeric(38,2): este valor de 26 dígitos entra no banco sem
+    // erro nenhum e passa a somar no total do mês. @Positive não barra — só
+    // olha o sinal. Quem barra é o @Digits.
+    @Test
+    void deveRecusarValorAcimaDoTetoDeDigitos() throws Exception {
+        mockMvc.perform(post("/api/despesas")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"descricao":"Mercado","valor":99999999999999999999999999,"data":"2026-07-10","categoriaId":5}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        verify(despesaService, never()).criar(any(), any());
+    }
+
+    // Sem o @Size, um texto maior que a coluna varchar(255) só falha no INSERT,
+    // e o erro do banco sobe como 500.
+    @Test
+    void deveRecusarDescricaoAcimaDe255Caracteres() throws Exception {
+        String descricaoLonga = "x".repeat(256);
+
+        mockMvc.perform(post("/api/despesas")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"descricao\":\"" + descricaoLonga
+                                + "\",\"valor\":150.00,\"data\":\"2026-07-10\",\"categoriaId\":5}"))
+                .andExpect(status().isBadRequest());
+
+        verify(despesaService, never()).criar(any(), any());
+    }
+
+    // Exatamente 255 é o limite, não um a menos: o teste do limite superior
+    // impede que alguém "arredonde" o @Size para baixo sem perceber.
+    @Test
+    void deveAceitarDescricaoComExatamente255Caracteres() throws Exception {
+        when(despesaService.criar(eq(1L), any(Despesa.class))).thenReturn(despesa(20L));
+
+        mockMvc.perform(post("/api/despesas")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"descricao\":\"" + "x".repeat(255)
+                                + "\",\"valor\":150.00,\"data\":\"2026-07-10\",\"categoriaId\":5}"))
+                .andExpect(status().isCreated());
+    }
+
+    // Rede de segurança: se uma constraint do banco disparar mesmo assim, a
+    // resposta tem que ser 400 (o dado que chegou é que está errado) e a
+    // mensagem não pode repetir o texto do Postgres — ele carrega nome de
+    // tabela, de coluna e de constraint, que é desenho interno do banco.
+    @Test
+    void deveTraduzirViolacaoDeIntegridadeEm400SemVazarDetalheDoBanco() throws Exception {
+        when(despesaService.criar(eq(1L), any(Despesa.class)))
+                .thenThrow(new DataIntegrityViolationException(
+                        "ERROR: value too long for type character varying(255); "
+                                + "constraint \"uk_despesa_descricao\" on table \"despesa\""));
+
+        mockMvc.perform(post("/api/despesas")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"descricao":"Mercado","valor":150.00,"data":"2026-07-10","categoriaId":5}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem").value("Não foi possível salvar: verifique os dados enviados."));
     }
 
     @Test

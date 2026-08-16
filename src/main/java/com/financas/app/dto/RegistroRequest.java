@@ -6,8 +6,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 public record RegistroRequest(
-        @NotBlank String nome,
-        @NotBlank @Email String email,
+        @NotBlank @Size(max = 255) String nome,
+        @NotBlank @Email @Size(max = 255) String email,
         // Mesma regra do AlterarSenhaRequest: min 8 para não permitir criar
         // conta com senha mais fraca do que a exigida na troca; max 72 porque
         // o BCrypt trunca silenciosamente a partir daí (o resto da senha seria

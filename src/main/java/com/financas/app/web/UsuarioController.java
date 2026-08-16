@@ -4,6 +4,7 @@ import com.financas.app.dto.AlterarSenhaRequest;
 import com.financas.app.dto.AtualizarFotoRequest;
 import com.financas.app.dto.AtualizarPerfilRequest;
 import com.financas.app.dto.PerfilResponse;
+import com.financas.app.exception.FotoInvalidaException;
 import com.financas.app.model.Usuario;
 import com.financas.app.security.UsuarioAutenticado;
 import com.financas.app.service.UsuarioService;
@@ -52,7 +53,17 @@ public class UsuarioController {
     @PutMapping("/foto")
     public PerfilResponse atualizarFoto(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado,
                                          @Valid @RequestBody AtualizarFotoRequest request) {
-        byte[] bytes = Base64.getDecoder().decode(request.fotoBase64());
+        // O decoder lança IllegalArgumentException quando o texto não é base64
+        // válido, e sem o catch isso sobe como 500. Mas o dado veio do cliente:
+        // o certo é 400. Acontece de verdade quando o front esquece de tirar o
+        // prefixo "data:image/png;base64," antes de enviar — os dois-pontos e a
+        // barra não pertencem ao alfabeto base64.
+        byte[] bytes;
+        try {
+            bytes = Base64.getDecoder().decode(request.fotoBase64());
+        } catch (IllegalArgumentException ex) {
+            throw new FotoInvalidaException("Imagem inválida: o conteúdo não está em base64.");
+        }
         Usuario usuario = usuarioService.atualizarFoto(usuarioAutenticado.getId(), bytes, request.tipo());
         return toResponse(usuario);
     }
