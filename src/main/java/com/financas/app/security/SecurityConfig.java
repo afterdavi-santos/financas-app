@@ -10,6 +10,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -40,6 +41,33 @@ public class SecurityConfig {
         return http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
+                // Preserva os defaults do Spring Security (nosniff, X-Frame-Options,
+                // Cache-Control) e acrescenta os três que faltavam.
+                .headers(headers -> headers
+                        // Esta aplicação só devolve JSON — não serve uma única página
+                        // HTML (não existe src/main/resources/static; o SPA é servido
+                        // pelo Vite). Por isso a política é a mais fechada possível em
+                        // vez da política "de SPA": não há script, estilo ou imagem
+                        // legítimos para liberar aqui. Ela vale para o caso de alguém
+                        // navegar direto num endpoint e o navegador tratar a resposta
+                        // como documento.
+                        //
+                        // ATENÇÃO: CSP se aplica ao documento que carregou a página,
+                        // não à resposta de um fetch. A CSP que protege o app contra
+                        // XSS (MED-008: o JWT no localStorage) precisa vir no HTML do
+                        // frontend, e não daqui.
+                        .contentSecurityPolicy(csp -> csp.policyDirectives(
+                                "default-src 'none'; frame-ancestors 'none'; "
+                                        + "base-uri 'none'; form-action 'none'"))
+                        // O writer padrão do Spring só emite HSTS em requisição segura.
+                        // Em http://localhost o header não aparece — de propósito:
+                        // navegador ignora HSTS vindo de HTTP, e forçá-lo aqui só
+                        // serviria para enganar scanner.
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .maxAgeInSeconds(31536000)
+                                .includeSubDomains(true))
+                        .referrerPolicy(referrer -> referrer
+                                .policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
