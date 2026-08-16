@@ -154,6 +154,34 @@
             <artifactId>spring-boot-starter-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!--
+            Postgres de verdade nos testes, em container efemero. Nao e H2 por
+            um motivo concreto: o schema usa a extensao pg_trgm e um indice
+            funcional com date_trunc(), e o modo PostgreSQL do H2 nao suporta
+            nenhum dos dois. Testar contra H2 aqui daria falsa confianca —
+            exatamente o defeito que este bloco existe para eliminar.
+
+            No Testcontainers 2.x os artefatos ganharam prefixo: e
+            testcontainers-postgresql, nao postgresql como na 1.x.
+            spring-boot-testcontainers e o modulo do Boot que traz o
+            @ServiceConnection (mesma modularizacao do Boot 4 que ja apareceu
+            no Flyway e nos slices de teste).
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

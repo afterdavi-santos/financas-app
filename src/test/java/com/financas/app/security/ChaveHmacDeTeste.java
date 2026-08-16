@@ -11,7 +11,10 @@ import java.util.Base64;
 // específica —, então gerar na hora serve igual e não deixa rastro. Fica aqui,
 // e não duplicada em JwtServiceTest e JwtAuthenticationFilterTest, pelo mesmo
 // motivo de JanelaCatchUp: uma regra só, num lugar só.
-final class ChaveHmacDeTeste {
+// public, e não package-private, porque os testes com Postgres real
+// (pacote persistencia) também precisam de uma chave válida para o contexto
+// subir. Duplicar a geração lá contrariaria o motivo desta classe existir.
+public final class ChaveHmacDeTeste {
 
     // 64 bytes = 512 bits, o que HS512 exige (o jjwt recusa chave menor).
     private static final int TAMANHO_BYTES = 64;
@@ -19,7 +22,7 @@ final class ChaveHmacDeTeste {
     private ChaveHmacDeTeste() {
     }
 
-    static String gerar() {
+    public static String gerar() {
         byte[] bytes = new byte[TAMANHO_BYTES];
         new SecureRandom().nextBytes(bytes);
         return Base64.getEncoder().encodeToString(bytes);
