@@ -6,6 +6,10 @@ import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDate;
 
+// "Filtro nao aplicado" e Specification.unrestricted(), nao null: no Spring
+// Data JPA 4 o .and() rejeita null (IllegalArgumentException "Other
+// specification must not be null"), enquanto na 3.x ele era tolerado e virava
+// no-op. unrestricted() e o no-op explicito que substituiu aquele null.
 public class DespesaSpecification {
 
     private DespesaSpecification() {
@@ -17,7 +21,7 @@ public class DespesaSpecification {
 
     public static Specification<Despesa> comCategoria(Long categoriaId) {
         if (categoriaId == null) {
-            return null;
+            return Specification.unrestricted();
         }
         return (root, query, cb) -> cb.equal(root.get("categoria").get("id"), categoriaId);
     }
@@ -25,7 +29,7 @@ public class DespesaSpecification {
     // Tipo agora vive na categoria, não na despesa: filtra pelo relacionamento.
     public static Specification<Despesa> comTipo(TipoCategoria tipo) {
         if (tipo == null) {
-            return null;
+            return Specification.unrestricted();
         }
         return (root, query, cb) -> cb.equal(root.get("categoria").get("tipo"), tipo);
     }
@@ -34,7 +38,7 @@ public class DespesaSpecification {
     // usado por todo filtro de orçamento (listagem, totais, relatórios).
     public static Specification<Despesa> comPeriodo(LocalDate inicio, LocalDate fim) {
         if (inicio == null && fim == null) {
-            return null;
+            return Specification.unrestricted();
         }
         if (inicio != null && fim != null) {
             return (root, query, cb) -> cb.between(
@@ -53,7 +57,7 @@ public class DespesaSpecification {
     // proximidade de data real (não mês de orçamento) é o que importa.
     public static Specification<Despesa> comPeriodoReal(LocalDate inicio, LocalDate fim) {
         if (inicio == null && fim == null) {
-            return null;
+            return Specification.unrestricted();
         }
         if (inicio != null && fim != null) {
             return (root, query, cb) -> cb.between(root.get("data"), inicio, fim);

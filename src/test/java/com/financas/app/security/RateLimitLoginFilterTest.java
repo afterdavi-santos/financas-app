@@ -1,12 +1,12 @@
 package com.financas.app.security;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
@@ -57,12 +57,16 @@ class RateLimitLoginFilterTest {
                 return agora;
             }
         };
-        // Jackson2ObjectMapperBuilder e não `new ObjectMapper()`: é o mesmo
-        // caminho que o Spring Boot usa para montar o bean que o SecurityConfig
-        // injeta, com o módulo de java.time registrado. Um mapper cru não
-        // serializa o LocalDateTime do ErrorResponse e o 429 sairia quebrado —
-        // testar com ele daria uma falsa reprovação.
-        ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().build();
+        // JsonMapper.builder() e não `new ObjectMapper()`: precisamos de um
+        // mapper montado como o do Spring Boot, que serializa o LocalDateTime
+        // do ErrorResponse. Um mapper cru quebraria o 429 e daria uma falsa
+        // reprovação.
+        //
+        // Era Jackson2ObjectMapperBuilder no Boot 3. No 4 aquele builder
+        // continua existindo, mas monta um mapper do Jackson 2 — tipo errado
+        // agora que o resto do app fala tools.jackson. No Jackson 3 o suporte a
+        // java.time é nativo, então não é preciso registrar módulo nenhum.
+        ObjectMapper objectMapper = JsonMapper.builder().build();
         filtro = new RateLimitLoginFilter(relogio, objectMapper);
     }
 

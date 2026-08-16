@@ -1,7 +1,5 @@
 package com.financas.app.security;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.financas.app.exception.ErrorResponse;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -12,6 +10,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.filter.OncePerRequestFilter;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -126,16 +127,21 @@ public class RateLimitLoginFilter extends OncePerRequestFilter {
         try {
             JsonNode raiz = objectMapper.readTree(requisicao.corpo());
             JsonNode email = raiz == null ? null : raiz.get("email");
-            if (email == null || !email.isTextual() || email.asText().isBlank()) {
+            if (email == null || !email.isString() || email.asString().isBlank()) {
                 return Optional.empty();
             }
             // Normaliza para minúsculas: sem isso, alternar a caixa do e-mail
             // ("Davi@" / "davi@") geraria uma chave nova a cada tentativa e o
             // limite por conta não valeria nada.
-            return Optional.of(email.asText().trim().toLowerCase(Locale.ROOT));
-        } catch (IOException e) {
+            return Optional.of(email.asString().trim().toLowerCase(Locale.ROOT));
+        } catch (JacksonException e) {
             // Corpo que não é JSON válido: sem e-mail para contar. O limite por
             // IP continua valendo, e o corpo malformado vira 400 mais adiante.
+            //
+            // No Jackson 2 isto era `catch (IOException)`. No 3 o readTree não
+            // lança mais IOException — a hierarquia agora é a JacksonException,
+            // que é unchecked. Catch mantido de propósito: o corpo vem do
+            // cliente, e um JSON quebrado não pode derrubar o filtro.
             return Optional.empty();
         }
     }

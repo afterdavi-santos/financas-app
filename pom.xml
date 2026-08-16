@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.16</version>
+        <version>4.1.0</version>
         <relativePath/>
     </parent>
 
@@ -21,18 +21,28 @@
         <java.version>17</java.version>
 
         <!--
-            Versoes acima das que o spring-boot-starter-parent 3.5.16 traz, para
-            fechar CVEs conhecidas. Sao os nomes de property que o BOM do Spring
-            Boot ja reconhece, entao basta sobrescrever aqui — nao e preciso
-            declarar dependencia nova. Reavaliar (e provavelmente remover) a cada
-            upgrade do parent, que uma hora alcanca estas versoes sozinho.
+            Versoes acima das que o spring-boot-starter-parent traz, para fechar
+            CVEs conhecidas (ver Bloco 1 da auditoria). Conferido no
+            dependency:tree contra o parent 4.1.0: os dois abaixo continuam
+            necessarios, porque o parent traz versoes MENORES (42.7.11 e
+            2.25.4). Reavaliar a cada upgrade.
         -->
         <!-- CVE-2026-54291 (HIGH): driver por onde passa toda query da app. -->
         <postgresql.version>42.7.12</postgresql.version>
-        <!-- 3 CVEs MEDIUM: desserializa todo corpo JSON que entra na API. -->
-        <jackson-bom.version>2.21.5</jackson-bom.version>
         <!-- CVE-2026-49844 (MEDIUM): so a fachada transitiva; a implementacao em uso e o Logback. -->
         <log4j2.version>2.25.5</log4j2.version>
+        <!--
+            3 CVEs MEDIUM do Bloco 1. A propriedade MUDOU DE NOME no Boot 4:
+            jackson-bom.version agora aponta para o Jackson 3 (tools.jackson,
+            3.1.4), e o Jackson 2 passou a ser jackson-2-bom.version.
+            Manter o nome antigo aqui nao so deixava de corrigir como QUEBRAVA
+            o build, tentando resolver tools.jackson:jackson-bom:2.21.5.
+
+            O Jackson 2 continua no runtime mesmo com o app inteiro migrado
+            para o 3: quem o traz e o jjwt-jackson (assinatura do JWT). Sem
+            este override ele volta silenciosamente para a 2.21.4 vulneravel.
+        -->
+        <jackson-2-bom.version>2.21.5</jackson-2-bom.version>
     </properties>
 
     <dependencies>
@@ -92,6 +102,29 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            Novo no Boot 4: o spring-boot-starter-test deixou de trazer o
+            @WebMvcTest. O suporte a slice de teste foi quebrado em modulos por
+            tecnologia, e o do MVC virou este starter proprio. Sem ele o
+            @WebMvcTest simplesmente nao existe no classpath.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            Idem para a seguranca: traz a SecurityMockMvcAutoConfiguration, que
+            liga o Spring Security ao MockMvc dentro do slice. Sem ela o
+            @AuthenticationPrincipal nao e resolvido e o Spring entrega ao
+            controller um UsuarioAutenticado vazio, em vez do principal do teste
+            (63 NPEs "this.usuario is null" antes de acrescentar isto).
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
