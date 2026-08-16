@@ -29,8 +29,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class JwtAuthenticationFilterTest {
 
-    private static final String SECRET =
-            "***REMOVED***";
+    // Chave nova a cada execução (ver ChaveHmacDeTeste).
+    private static final String SECRET = ChaveHmacDeTeste.gerar();
 
     @Mock
     private UsuarioRepository usuarioRepository;

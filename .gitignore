@@ -29,3 +29,14 @@ Thumbs.db
 
 ### Claude Code ###
 .claude/
+
+### Auditoria de seguranca ###
+.audit/
+
+### Skill de auditoria (copia de repositorio de terceiro, nao faz parte do app) ###
+docs/cybersec-audit-skill-main/
+
+### Credenciais locais ###
+# O .env tem a senha do Postgres. O .env.example, sem segredo nenhum, e versionado.
+.env
+!.env.example

@@ -19,6 +19,20 @@
 
     <properties>
         <java.version>17</java.version>
+
+        <!--
+            Versoes acima das que o spring-boot-starter-parent 3.5.16 traz, para
+            fechar CVEs conhecidas. Sao os nomes de property que o BOM do Spring
+            Boot ja reconhece, entao basta sobrescrever aqui — nao e preciso
+            declarar dependencia nova. Reavaliar (e provavelmente remover) a cada
+            upgrade do parent, que uma hora alcanca estas versoes sozinho.
+        -->
+        <!-- CVE-2026-54291 (HIGH): driver por onde passa toda query da app. -->
+        <postgresql.version>42.7.12</postgresql.version>
+        <!-- 3 CVEs MEDIUM: desserializa todo corpo JSON que entra na API. -->
+        <jackson-bom.version>2.21.5</jackson-bom.version>
+        <!-- CVE-2026-49844 (MEDIUM): so a fachada transitiva; a implementacao em uso e o Logback. -->
+        <log4j2.version>2.25.5</log4j2.version>
     </properties>
 
     <dependencies>

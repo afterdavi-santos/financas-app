@@ -19,8 +19,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 // jjwt, independente do que este teste pretende simular.
 class JwtServiceTest {
 
-    private static final String SECRET =
-            "***REMOVED***";
+    // Chave nova a cada execução (ver ChaveHmacDeTeste) — nenhuma asserção aqui
+    // depende do valor dela, só de assinar e verificar com a mesma chave.
+    private static final String SECRET = ChaveHmacDeTeste.gerar();
     private static final long EXPIRACAO_MS = 24 * 60 * 60 * 1000L; // 24h
     private static final long MAX_SESSAO_MS = 7 * 24 * 60 * 60 * 1000L; // 7 dias
 
