@@ -19,11 +19,13 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 // A unicidade (recorrencia_id, mes_referencia) que impede duas ocorrências da
-// mesma série no mesmo mês é criada por config/IndicesRecorrenciaConfig, não
-// aqui: com @UniqueConstraint o ddl-auto=update dropava a constraint no startup
-// sem recriá-la. Só vale para linhas de série — mes_referencia repetido é
-// normal em rendas avulsas, e no Postgres NULL em recorrencia_id não colide
-// com NULL.
+// mesma série no mesmo mês vive na migração do Flyway (db/migration), não numa
+// @UniqueConstraint aqui: com a anotação, o antigo ddl-auto=update dropava a
+// constraint no startup sem recriá-la. Hoje o ddl-auto é `validate` e não mexe
+// em nada, mas o lugar certo dessa regra continua sendo a migração — é lá que
+// mora tudo que descreve o schema. Só vale para linhas de série —
+// mes_referencia repetido é normal em rendas avulsas, e no Postgres NULL em
+// recorrencia_id não colide com NULL.
 @Entity
 @Table(name = "renda")
 @Getter
