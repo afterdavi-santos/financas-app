@@ -1609,7 +1609,8 @@ do navegador não é estilizável nem reposicionável via CSS** (é como um
   (mês em grade 3×4, navegação de ano). Duas variantes: `cabecalho`
   (botão "cara de botão", usado nos filtros de mês da Home/Movimentações) e
   `formulario` (campo fino, usado dentro de modais, ex.: mês da renda em
-  `NovaRendaModal`).
+  `NovaRendaModal`). *(Atualizado na Parte 19: o rótulo do botão passou a ser
+  o mês abreviado em 3 letras — "ago de 2026".)*
 - **`components/SeletorData.tsx`** (novo) — mesma ideia pra dia completo
   (grade de 7×6, navegação de mês), substituindo **todos** os
   `<input type="date">` do app: `NovaDespesaModal`, `AportarModal`,
@@ -1837,3 +1838,100 @@ reconhece e reaplica a existente; categorizar alguns itens manualmente e
 só depois clicar no atalho → popup de conflito aparece com as 3 opções;
 conferir que o popup de escolha de mês pergunta relativo ao mês da fatura,
 não ao mês real de hoje, e que o `mesReferencia` salvo bate com a escolha).
+
+## Parte 19 — Rendas fixas em meses futuros e mês em foco compartilhado entre as páginas (2026-08-13)
+
+Dois pedidos do usuário, ambos sobre "o mês que estou olhando".
+
+### Rendas fixas passam a acompanhar o mês consultado
+Sintoma: avançar o seletor para um mês futuro mostrava a lista de rendas
+vazia, mesmo com salário fixo cadastrado. Causa: o catch-up de recorrência
+(`RendaService`) só materializava as ocorrências até o mês corrente. Ver
+`service-layer.md` item 4 para o detalhe do backend (parâmetro `ate`, teto de
+12 meses, proteção contra duplicar a série e sincronização da recorrência com
+o `tipo` na edição).
+
+No frontend:
+- `api/rendas.ts` — `listarRendas(ate?)` manda `?ate=YYYY-MM-DD` (1º dia do
+  mês em foco). Não é filtro: diz até que mês o backend deve materializar as
+  fixas.
+- `RendasPage` — o `useEffect` de carga passou a depender de `[mes]`. Antes
+  buscava só na montagem, então o mês recém-selecionado nunca ganhava as
+  ocorrências geradas.
+- `HomePage` — passa `inicio` (1º dia do mês em foco) no `listarRendas` do
+  `Promise.all`.
+
+### `hooks/useMesSelecionado.ts` (novo) — mês em foco compartilhado
+Pedido do usuário: o seletor voltava para o mês atual a cada troca de página,
+porque `HomePage`, `DespesasPage` e `RendasPage` tinham cada uma seu próprio
+`useState(mesAtualYYYYMM())`. Agora as três leem o mesmo store.
+
+- **`sessionStorage`, não `localStorage`** (de propósito): o mês escolhido
+  sobrevive à navegação entre abas do app e ao F5, mas abrir uma aba nova —
+  ou reabrir depois de fechar — começa no mês atual, que é o padrão útil no
+  dia a dia. Foi exatamente o comportamento pedido.
+- **Store em módulo + `useSyncExternalStore`**, em vez de um Context: as abas
+  Despesas/Rendas de `MovimentacoesPage` podem estar montadas ao mesmo tempo,
+  e o store notifica todas as instâncias quando uma muda o mês. Também evita
+  mais um provider envolvendo a árvore.
+- Valor inválido/vazio é ignorado no setter e no que vem do storage
+  (`/^\d{4}-(0[1-9]|1[0-2])$/`) — um mês em foco quebrado estouraria os
+  cálculos de período de todas as telas. Acesso ao `sessionStorage` é
+  protegido com `try/catch` (modo restrito de privacidade): sem ele o mês
+  deixa de persistir no F5, mas continua compartilhado entre as páginas.
+
+### Verificação
+`npm run build` (com `tsc -b`) e `npm run lint` limpos. Backend: suíte inteira
+verde, com 7 testes novos em `RendaServiceTest` (mês futuro, teto de 12 meses,
+consulta a mês passado, idempotência do catch-up, e as duas direções da troca
+de tipo). O fluxo de rendas fixas foi testado ponta a ponta pela API com um
+usuário descartável (fixa criada em ago/26 → `ate=2026-11-01` devolveu ago a
+nov; repetir a chamada não duplicou; pedir 24 meses parou em ago/27).
+**Falta o usuário testar no navegador**: escolher um mês em Início, navegar
+para Movimentações (Despesas e Rendas) e conferir que o mês acompanha; dar F5
+e conferir que continua; abrir o app em aba nova e conferir que volta pro mês
+atual.
+
+### Adendo à Parte 19 — despesas fixas também continuam de um mês para o outro
+
+Mesmo tratamento das rendas fixas, aplicado a `DespesaService` (detalhe em
+`service-layer.md` item 3). **Sem mudança no frontend**: `listar` e os totais
+já recebem `inicio`/`fim`, então o `fim` do mês em foco é o que diz até onde
+materializar a série.
+
+O que mudou no backend, em resumo: catch-up até o mês consultado (mesmo teto
+de 12 meses, agora compartilhado com renda em `util/JanelaCatchUp`), lock
+pessimista + checagem de existência + índice único contra duplicar a série, e
+`atualizar()` sincronizando a recorrência quando a categoria da despesa muda
+(inclusive de uma categoria FIXA para outra, que agora repassa a categoria da
+recorrência).
+
+Junto veio **`config/IndicesRecorrenciaConfig.java`** (novo), que passou a ser
+o dono dos dois índices únicos de recorrência (despesa e renda). O de renda
+tinha nascido como `@UniqueConstraint` na entidade na primeira parte deste
+trabalho e foi movido pra cá: em `despesa` a chave é o MÊS de `data`, uma
+expressão (`date_trunc`) que `@UniqueConstraint` não expressa, e em `renda` o
+`ddl-auto=update` se mostrou capaz de dropar a constraint no startup sem
+recriá-la. Runner idempotente, mesmo padrão de `PgTrgmConfig`.
+
+Verificado ponta a ponta pela API (usuário descartável, já removido): despesa
+fixa criada em 10/ago/26 → consultar nov/26 gerou set, out e nov mantendo o
+dia 10; repetir a consulta não duplicou; consultar ago/2028 parou em ago/2027.
+Suíte de backend inteira verde (`DespesaServiceTest` com 25 testes, 6 novos).
+
+### Adendo à Parte 19 — rótulo do seletor de mês abreviado em 3 letras
+
+Pedido do usuário: no botão do `SeletorMes` (variante `cabecalho` e também a
+`formulario`), o mês passou de por extenso para a abreviação de 3 letras —
+"agosto de 2026" virou "ago de 2026". Reusa o `MESES_ABREV` que a grade do
+popup já usava, então o rótulo do botão e a célula marcada na grade sempre
+usam exatamente o mesmo texto; `MESES_LONGOS` ficou sem uso e foi removido.
+
+O `truncate` do `<span>` continua ali como guarda (o botão tem largura fixa
+`lg:w-44`), mas com o rótulo curto ele deixa de ser acionado na prática.
+
+Vale lembrar que isso atinge os três cabeçalhos (Início, Despesas, Rendas) e
+o campo "mês" do `NovaRendaModal`, que usa o mesmo componente — se um dia o
+modal precisar do nome por extenso, dá pra condicionar pela prop `variant`.
+
+`npm run build` e `npm run lint` limpos. **Falta o usuário conferir na tela.**

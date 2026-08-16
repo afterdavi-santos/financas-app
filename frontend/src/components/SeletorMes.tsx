@@ -8,10 +8,6 @@ const MESES_ABREV = [
   "jan", "fev", "mar", "abr", "mai", "jun",
   "jul", "ago", "set", "out", "nov", "dez",
 ];
-const MESES_LONGOS = [
-  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
-  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
-];
 
 interface Props {
   // Formato "YYYY-MM", igual ao <input type="month"> que este componente substitui.
@@ -99,11 +95,12 @@ export function SeletorMes({ value, onChange, variant = "cabecalho", id }: Props
         aria-expanded={aberto}
         className={ESTILO_BOTAO[variant]}
       >
-        {/* truncate em vez de deixar o texto quebrar linha/estourar o botão
-            — o botão tem largura fixa (lg:w-44) e "setembro de 2026" não
-            cabe inteiro ali com o ícone ao lado. */}
+        {/* Mês abreviado em 3 letras (mesmos rótulos da grade do popup), a
+            pedido do usuário. O truncate fica como guarda: o botão tem
+            largura fixa (lg:w-44) e o texto não pode quebrar linha nem
+            estourar com o ícone ao lado. */}
         <span className="min-w-0 truncate">
-          {MESES_LONGOS[mesNum - 1]} de {ano}
+          {MESES_ABREV[mesNum - 1]} de {ano}
         </span>
         <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 shrink-0">
           <path d="M6 2a1 1 0 0 1 1 1v1h6V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1Zm10 6H4v8h12V8Z" />

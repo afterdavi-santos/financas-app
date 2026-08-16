@@ -86,7 +86,7 @@ class RendaControllerTest {
 
     @Test
     void deveListarRendasDoUsuarioAutenticado() throws Exception {
-        when(rendaService.listarPorUsuario(1L)).thenReturn(List.of(renda(30L)));
+        when(rendaService.listarPorUsuario(1L, null)).thenReturn(List.of(renda(30L)));
 
         mockMvc.perform(get("/api/rendas")
                         .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao)))

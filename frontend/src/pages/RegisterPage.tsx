@@ -90,12 +90,14 @@ export function RegisterPage() {
 
         <div className="space-y-1">
           <label htmlFor="senha" className="text-sm font-medium text-white/80">
-            Senha
+            Senha <span className="text-white/50">(mínimo 8 caracteres)</span>
           </label>
           <input
             id="senha"
             type="password"
             required
+            minLength={8}
+            maxLength={72}
             value={senha}
             onChange={(e) => setSenha(e.target.value)}
             className="w-full rounded-md border border-white/20 bg-white/10 px-3 py-2 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-grouper-mid"

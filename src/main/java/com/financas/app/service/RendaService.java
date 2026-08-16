@@ -8,6 +8,7 @@ import com.financas.app.model.enums.TipoRenda;
 import com.financas.app.repository.RecorrenciaRendaRepository;
 import com.financas.app.repository.RendaRepository;
 import com.financas.app.repository.UsuarioRepository;
+import com.financas.app.util.JanelaCatchUp;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,7 @@ public class RendaService {
         this.recorrenciaRendaRepository = recorrenciaRendaRepository;
     }
 
+    @Transactional
     public Renda criar(Long usuarioId, Renda renda) {
         renda.setUsuario(buscarUsuarioOuFalhar(usuarioId));
         if (renda.getTipo() == TipoRenda.FIXA) {
@@ -48,18 +50,35 @@ public class RendaService {
     }
 
     @Transactional
-    public List<Renda> listarPorUsuario(Long usuarioId) {
-        garantirRecorrenciasAteHoje(usuarioId);
+    public List<Renda> listarPorUsuario(Long usuarioId, LocalDate ate) {
+        garantirRecorrencias(usuarioId, ate);
         return rendaRepository.findByUsuarioId(usuarioId);
     }
 
+    @Transactional
     public Renda atualizar(Long usuarioId, Long rendaId, Renda dadosAtualizados) {
         Renda renda = buscarOuFalhar(rendaId, usuarioId);
         renda.setDescricao(dadosAtualizados.getDescricao());
         renda.setValor(dadosAtualizados.getValor());
         renda.setMesReferencia(dadosAtualizados.getMesReferencia());
         renda.setTipo(dadosAtualizados.getTipo());
+        sincronizarRecorrenciaComTipo(renda);
         return rendaRepository.save(renda);
+    }
+
+    // O tipo pode mudar na edição, e a série precisa acompanhar: virar FIXA sem
+    // isto deixava a renda rotulada como fixa mas sem repetir nos meses
+    // seguintes, e deixar de ser FIXA mantinha a série gerando ocorrências.
+    private void sincronizarRecorrenciaComTipo(Renda renda) {
+        boolean fixa = renda.getTipo() == TipoRenda.FIXA;
+        if (fixa && renda.getRecorrencia() == null) {
+            renda.setRecorrencia(criarRecorrencia(renda));
+        } else if (!fixa && renda.getRecorrencia() != null) {
+            RecorrenciaRenda recorrencia = renda.getRecorrencia();
+            recorrencia.setAtiva(false);
+            recorrenciaRendaRepository.save(recorrencia);
+            renda.setRecorrencia(null);
+        }
     }
 
     // Exclui só esta ocorrência. Se for a mais recente de uma recorrência
@@ -81,23 +100,26 @@ public class RendaService {
 
     @Transactional
     public BigDecimal calcularTotalMes(Long usuarioId, LocalDate mesReferencia) {
-        garantirRecorrenciasAteHoje(usuarioId);
+        garantirRecorrencias(usuarioId, mesReferencia);
         return rendaRepository.findByUsuarioIdAndMesReferencia(usuarioId, mesReferencia).stream()
                 .map(Renda::getValor)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     // Catch-up preguiçoso: mesma lógica de DespesaService, mas avançando
-    // mesReferencia mês a mês (sempre dia 1, sem clamping de dia).
-    private void garantirRecorrenciasAteHoje(Long usuarioId) {
-        LocalDate mesAtual = LocalDate.now().withDayOfMonth(1);
-        for (RecorrenciaRenda recorrencia : recorrenciaRendaRepository.findByUsuarioIdAndAtivaTrue(usuarioId)) {
+    // mesReferencia mês a mês (sempre dia 1, sem clamping de dia). `ate` é o mês
+    // que a tela está consultando — a série é preenchida até ele, o que faz a
+    // renda fixa aparecer também quando se navega para um mês futuro, e não só
+    // até o mês corrente.
+    private void garantirRecorrencias(Long usuarioId, LocalDate ate) {
+        LocalDate limite = JanelaCatchUp.limiteDeGeracao(ate);
+        for (RecorrenciaRenda recorrencia : recorrenciaRendaRepository.travarAtivasDoUsuario(usuarioId)) {
             Renda ultima = rendaRepository.findTopByRecorrenciaIdOrderByMesReferenciaDesc(recorrencia.getId()).orElse(null);
             if (ultima == null) {
                 continue; // defensivo: não deveria acontecer (a criação sempre gera a 1ª ocorrência)
             }
             LocalDate cursor = ultima.getMesReferencia().withDayOfMonth(1).plusMonths(1);
-            while (!cursor.isAfter(mesAtual)) {
+            while (!cursor.isAfter(limite)) {
                 Renda nova = new Renda();
                 nova.setUsuario(ultima.getUsuario());
                 nova.setDescricao(ultima.getDescricao());
@@ -105,10 +127,22 @@ public class RendaService {
                 nova.setMesReferencia(cursor);
                 nova.setTipo(TipoRenda.FIXA);
                 nova.setRecorrencia(recorrencia);
-                ultima = rendaRepository.save(nova);
+                ultima = salvarSeAindaNaoExiste(nova);
                 cursor = cursor.plusMonths(1);
             }
         }
+    }
+
+    // Segunda linha de defesa contra duplicar a série (a primeira é o lock em
+    // travarAtivasDoUsuario): cobre o caso de já existir a ocorrência do mês
+    // vinda de uma execução anterior. Devolve a renda que serve de base para o
+    // mês seguinte — pulando ou gravando, descricao/valor são os mesmos.
+    private Renda salvarSeAindaNaoExiste(Renda nova) {
+        if (rendaRepository.existsByRecorrenciaIdAndMesReferencia(
+                nova.getRecorrencia().getId(), nova.getMesReferencia())) {
+            return nova;
+        }
+        return rendaRepository.save(nova);
     }
 
     private Usuario buscarUsuarioOuFalhar(Long usuarioId) {

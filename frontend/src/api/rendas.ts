@@ -10,9 +10,15 @@ export async function totalRenda(mesReferencia: string): Promise<number> {
   return data.total;
 }
 
-// GET /api/rendas -> todas as rendas do usuário (sem filtro de mês no backend).
-export async function listarRendas(): Promise<Renda[]> {
-  const { data } = await api.get<Renda[]>("/rendas");
+// GET /api/rendas -> todas as rendas do usuário (sem filtro de mês no backend:
+// a resposta traz o histórico inteiro e a tela filtra).
+// `ate` (YYYY-MM-DD, 1º dia do mês em foco) não filtra nada — diz até que mês o
+// backend deve materializar as rendas fixas recorrentes, para que um mês futuro
+// já venha com elas. Sem o parâmetro, o backend vai só até o mês atual.
+export async function listarRendas(ate?: string): Promise<Renda[]> {
+  const { data } = await api.get<Renda[]>("/rendas", {
+    params: ate ? { ate } : undefined,
+  });
   return data;
 }
 

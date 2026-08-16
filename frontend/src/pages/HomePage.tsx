@@ -20,6 +20,7 @@ import { ObjetivosResumoHome } from "../components/ObjetivosResumoHome";
 import { Avatar } from "../components/Avatar";
 import { SeletorMes } from "../components/SeletorMes";
 import { useSelecao } from "../hooks/useSelecao";
+import { useMesSelecionado } from "../hooks/useMesSelecionado";
 import { listarCategorias } from "../api/categorias";
 import { listarDespesas } from "../api/despesas";
 import { totalRenda, listarRendas } from "../api/rendas";
@@ -61,7 +62,8 @@ export function HomePage() {
   // Mês em foco: define qual mês os cards/lista/gráfico mostram. Pode ser
   // trocado pelo seletor de mês do cabeçalho ou clicando numa coluna do
   // gráfico "Economia nos últimos meses" (mesmo efeito).
-  const [mes, setMes] = useState(mesAtualYYYYMM()); // "YYYY-MM"
+  // Mês em foco compartilhado com Despesas/Rendas (ver useMesSelecionado).
+  const [mes, setMes] = useMesSelecionado(); // "YYYY-MM"
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [renda, setRenda] = useState(0);
@@ -133,7 +135,7 @@ export function HomePage() {
         listarCategorias(),
         listarDespesas({ inicio, fim }),
         totalRenda(inicio), // mesReferencia = 1º dia do mês
-        listarRendas(),
+        listarRendas(inicio), // materializa as fixas até o mês em foco
         listarInvestimentosCdb(),
         listarObjetivos(),
         compararMeses(primeiroDiaMesesAtrasDoMes(mes, 5), inicio),

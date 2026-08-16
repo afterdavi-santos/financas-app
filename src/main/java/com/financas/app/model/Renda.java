@@ -18,6 +18,12 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+// A unicidade (recorrencia_id, mes_referencia) que impede duas ocorrências da
+// mesma série no mesmo mês é criada por config/IndicesRecorrenciaConfig, não
+// aqui: com @UniqueConstraint o ddl-auto=update dropava a constraint no startup
+// sem recriá-la. Só vale para linhas de série — mes_referencia repetido é
+// normal em rendas avulsas, e no Postgres NULL em recorrencia_id não colide
+// com NULL.
 @Entity
 @Table(name = "renda")
 @Getter

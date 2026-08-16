@@ -27,6 +27,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -320,7 +321,7 @@ class DespesaServiceTest {
         ultima.setData(mesPassado.withDayOfMonth(Math.min(31, mesPassado.lengthOfMonth())));
         ultima.setRecorrencia(recorrencia);
 
-        when(recorrenciaDespesaRepository.findByUsuarioIdAndAtivaTrue(1L)).thenReturn(List.of(recorrencia));
+        when(recorrenciaDespesaRepository.travarAtivasDoUsuario(1L)).thenReturn(List.of(recorrencia));
         when(despesaRepository.findTopByRecorrenciaIdOrderByDataDesc(10L)).thenReturn(Optional.of(ultima));
         when(despesaRepository.save(any(Despesa.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(despesaRepository.findAll(ArgumentMatchers.<Specification<Despesa>>any())).thenReturn(List.of(ultima));
@@ -334,6 +335,136 @@ class DespesaServiceTest {
         assertThat(gerada.getCategoria()).isEqualTo(categoriaFixa);
         assertThat(gerada.getData().withDayOfMonth(1)).isEqualTo(mesAtual);
         assertThat(gerada.getData().getDayOfMonth()).isEqualTo(Math.min(31, mesAtual.lengthOfMonth()));
+    }
+
+    // Série ativa cuja última ocorrência é o mês atual — base dos testes de
+    // geração para meses futuros.
+    private void serieAtivaAteOMesAtual() {
+        LocalDate mesAtual = LocalDate.now().withDayOfMonth(1);
+        Categoria categoriaFixa = categoriaFixaDoUsuario(5L, 1L);
+
+        RecorrenciaDespesa recorrencia = new RecorrenciaDespesa();
+        recorrencia.setId(10L);
+        recorrencia.setUsuario(usuarioComId(1L));
+        recorrencia.setCategoria(categoriaFixa);
+        recorrencia.setAtiva(true);
+        recorrencia.setDiaDoMes(10);
+
+        Despesa ultima = new Despesa();
+        ultima.setId(1L);
+        ultima.setUsuario(usuarioComId(1L));
+        ultima.setCategoria(categoriaFixa);
+        ultima.setDescricao("Aluguel");
+        ultima.setValor(new BigDecimal("1500"));
+        ultima.setData(mesAtual.withDayOfMonth(10));
+        ultima.setRecorrencia(recorrencia);
+
+        when(recorrenciaDespesaRepository.travarAtivasDoUsuario(1L)).thenReturn(List.of(recorrencia));
+        when(despesaRepository.findTopByRecorrenciaIdOrderByDataDesc(10L)).thenReturn(Optional.of(ultima));
+    }
+
+    @Test
+    void catchUpDeveGerarAteOMesFuturoConsultado() {
+        serieAtivaAteOMesAtual();
+        when(despesaRepository.save(any(Despesa.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        LocalDate daquiATresMeses = LocalDate.now().withDayOfMonth(1).plusMonths(3);
+
+        // `fim` do período consultado é o que define até onde materializar.
+        despesaService.calcularTotalPorPeriodo(1L, daquiATresMeses, daquiATresMeses.withDayOfMonth(daquiATresMeses.lengthOfMonth()));
+
+        ArgumentCaptor<Despesa> captor = ArgumentCaptor.forClass(Despesa.class);
+        verify(despesaRepository, times(3)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(d -> d.getData().withDayOfMonth(1))
+                .containsExactly(daquiATresMeses.minusMonths(2), daquiATresMeses.minusMonths(1), daquiATresMeses);
+    }
+
+    @Test
+    void catchUpNaoDeveGerarAlemDoTetoDeMesesFuturos() {
+        serieAtivaAteOMesAtual();
+        when(despesaRepository.save(any(Despesa.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        LocalDate daquiADoisAnos = LocalDate.now().withDayOfMonth(1).plusMonths(24);
+
+        despesaService.calcularTotalPorPeriodo(1L, daquiADoisAnos, daquiADoisAnos);
+
+        verify(despesaRepository, times(12)).save(any(Despesa.class));
+    }
+
+    @Test
+    void consultaAMesPassadoNaoDeveEncolherASerie() {
+        serieAtivaAteOMesAtual();
+        LocalDate seisMesesAtras = LocalDate.now().withDayOfMonth(1).minusMonths(6);
+
+        despesaService.calcularTotalPorPeriodo(1L, seisMesesAtras, seisMesesAtras);
+
+        verify(despesaRepository, never()).save(any(Despesa.class));
+    }
+
+    @Test
+    void catchUpNaoDeveRegravarMesQueJaExiste() {
+        serieAtivaAteOMesAtual();
+        LocalDate proximoMes = LocalDate.now().withDayOfMonth(1).plusMonths(1);
+        when(despesaRepository.existsByRecorrenciaIdAndDataBetween(eq(10L), eq(proximoMes), any(LocalDate.class)))
+                .thenReturn(true);
+
+        despesaService.calcularTotalPorPeriodo(1L, proximoMes, proximoMes);
+
+        verify(despesaRepository, never()).save(any(Despesa.class));
+    }
+
+    @Test
+    void editarParaCategoriaFixaDeveCriarRecorrencia() {
+        Categoria categoriaFixa = categoriaFixaDoUsuario(5L, 1L);
+        Despesa existente = despesaComId(1L, 1L, 9L, new BigDecimal("100"));
+
+        Despesa dadosAtualizados = new Despesa();
+        dadosAtualizados.setDescricao("Aluguel");
+        dadosAtualizados.setValor(new BigDecimal("100"));
+        dadosAtualizados.setData(existente.getData());
+        dadosAtualizados.setCategoria(categoriaFixa);
+
+        when(despesaRepository.findById(1L)).thenReturn(Optional.of(existente));
+        when(categoriaRepository.findById(5L)).thenReturn(Optional.of(categoriaFixa));
+        when(recorrenciaDespesaRepository.save(any(RecorrenciaDespesa.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(despesaRepository.save(any(Despesa.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Despesa atualizada = despesaService.atualizar(1L, 1L, dadosAtualizados);
+
+        assertThat(atualizada.getRecorrencia()).isNotNull();
+        assertThat(atualizada.getRecorrencia().isAtiva()).isTrue();
+        assertThat(atualizada.getRecorrencia().getCategoria()).isEqualTo(categoriaFixa);
+    }
+
+    @Test
+    void editarParaCategoriaVariavelDeveEncerrarRecorrencia() {
+        Categoria categoriaVariavel = new Categoria();
+        categoriaVariavel.setId(9L);
+        categoriaVariavel.setTipo(TipoCategoria.VARIAVEL);
+        categoriaVariavel.setUsuario(usuarioComId(1L));
+
+        RecorrenciaDespesa recorrencia = new RecorrenciaDespesa();
+        recorrencia.setId(10L);
+        recorrencia.setAtiva(true);
+        recorrencia.setCategoria(categoriaFixaDoUsuario(5L, 1L));
+
+        Despesa existente = despesaComId(1L, 1L, 5L, new BigDecimal("100"));
+        existente.setRecorrencia(recorrencia);
+
+        Despesa dadosAtualizados = new Despesa();
+        dadosAtualizados.setDescricao("Compra avulsa");
+        dadosAtualizados.setValor(new BigDecimal("100"));
+        dadosAtualizados.setData(existente.getData());
+        dadosAtualizados.setCategoria(categoriaVariavel);
+
+        when(despesaRepository.findById(1L)).thenReturn(Optional.of(existente));
+        when(categoriaRepository.findById(9L)).thenReturn(Optional.of(categoriaVariavel));
+        when(despesaRepository.save(any(Despesa.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Despesa atualizada = despesaService.atualizar(1L, 1L, dadosAtualizados);
+
+        assertThat(atualizada.getRecorrencia()).isNull();
+        assertThat(recorrencia.isAtiva()).isFalse();
+        verify(recorrenciaDespesaRepository).save(recorrencia);
     }
 
     @Test

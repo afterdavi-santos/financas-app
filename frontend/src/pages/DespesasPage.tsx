@@ -14,6 +14,7 @@ import { Tooltip } from "../components/Tooltip";
 import { GraficoDespesasMensal, type PontoDespesa } from "../components/GraficoDespesasMensal";
 import { SeletorMes } from "../components/SeletorMes";
 import { useSelecao } from "../hooks/useSelecao";
+import { useMesSelecionado } from "../hooks/useMesSelecionado";
 import { useAjustarFonteSincronizada } from "../hooks/useAjustarFonteSincronizada";
 import { listarDespesas, excluirDespesa } from "../api/despesas";
 import { listarCategorias } from "../api/categorias";
@@ -71,7 +72,8 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   // Últimos 6 meses de despesas, para o gráfico da coluna direita.
   const [historicoDespesas, setHistoricoDespesas] = useState<PontoDespesa[]>([]);
-  const [mes, setMes] = useState(mesAtualYYYYMM()); // "YYYY-MM"
+  // Mês em foco compartilhado com Início/Rendas (ver useMesSelecionado).
+  const [mes, setMes] = useMesSelecionado(); // "YYYY-MM"
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [modalAberto, setModalAberto] = useState(false);

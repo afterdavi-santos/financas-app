@@ -15,4 +15,7 @@ public interface RendaRepository extends JpaRepository<Renda, Long> {
 
     Optional<Renda> findTopByRecorrenciaIdOrderByMesReferenciaDesc(Long recorrenciaId);
 
+    // Usado pelo catch-up para não regravar um mês que já existe na série.
+    boolean existsByRecorrenciaIdAndMesReferencia(Long recorrenciaId, LocalDate mesReferencia);
+
 }

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,6 +19,11 @@ public interface DespesaRepository extends JpaRepository<Despesa, Long>, JpaSpec
     void deleteByCategoriaId(Long categoriaId);
 
     Optional<Despesa> findTopByRecorrenciaIdOrderByDataDesc(Long recorrenciaId);
+
+    // Usado pelo catch-up para não regravar um mês que já existe na série. A
+    // janela é o mês inteiro porque a chave da ocorrência é o mês de `data`,
+    // não o dia (que o usuário pode ter editado).
+    boolean existsByRecorrenciaIdAndDataBetween(Long recorrenciaId, LocalDate inicio, LocalDate fim);
 
     @Query("""
             SELECT d.categoria.id AS categoriaId, COUNT(d) AS total

@@ -11,12 +11,13 @@ import { Tooltip } from "../components/Tooltip";
 import { GraficoRendaMensal, type PontoRenda } from "../components/GraficoRendaMensal";
 import { SeletorMes } from "../components/SeletorMes";
 import { useSelecao } from "../hooks/useSelecao";
+import { useMesSelecionado } from "../hooks/useMesSelecionado";
 import { useAjustarFonteSincronizada } from "../hooks/useAjustarFonteSincronizada";
 import { listarRendas, excluirRenda } from "../api/rendas";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { rotuloTipoRenda, mesBR, mesCurtoBR } from "../utils/rotulos";
-import { mesAtualYYYYMM, mesAnteriorYYYYMM } from "../utils/datas";
+import { mesAnteriorYYYYMM } from "../utils/datas";
 import { aoTeclarAtivar } from "../utils/teclado";
 import type { Renda } from "../types/financas";
 
@@ -41,7 +42,8 @@ interface Props {
 
 export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
   const [rendas, setRendas] = useState<Renda[]>([]);
-  const [mes, setMes] = useState(mesAtualYYYYMM()); // "YYYY-MM"
+  // Mês em foco compartilhado com Início/Despesas (ver useMesSelecionado).
+  const [mes, setMes] = useMesSelecionado(); // "YYYY-MM"
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
@@ -76,7 +78,10 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
     setErro(null);
     setCarregando(true);
     try {
-      setRendas(await listarRendas());
+      // `${mes}-01` faz o backend materializar as rendas fixas recorrentes até
+      // o mês em foco — sem isso, avançar o seletor para um mês futuro mostrava
+      // a lista vazia mesmo com salário fixo cadastrado.
+      setRendas(await listarRendas(`${mes}-01`));
     } catch (e) {
       setErro(mensagemDeErro(e));
     } finally {
@@ -84,9 +89,12 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
     }
   }
 
+  // Recarrega na primeira carga e a cada troca de mês (o mês novo pode ainda
+  // não ter as ocorrências fixas geradas).
   useEffect(() => {
     carregar();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mes]);
 
   // A API não filtra por mês (traz tudo), então o filtro é feito aqui.
   const rendasDoMes = useMemo(

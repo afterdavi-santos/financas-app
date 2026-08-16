@@ -93,7 +93,7 @@ class RendaServiceTest {
     void deveListarRendasDoUsuario() {
         when(rendaRepository.findByUsuarioId(1L)).thenReturn(List.of(rendaComId(1L, 1L, new BigDecimal("3000"))));
 
-        List<Renda> rendas = rendaService.listarPorUsuario(1L);
+        List<Renda> rendas = rendaService.listarPorUsuario(1L, null);
 
         assertThat(rendas).hasSize(1);
     }
@@ -202,12 +202,12 @@ class RendaServiceTest {
         ultima.setTipo(TipoRenda.FIXA);
         ultima.setRecorrencia(recorrencia);
 
-        when(recorrenciaRendaRepository.findByUsuarioIdAndAtivaTrue(1L)).thenReturn(List.of(recorrencia));
+        when(recorrenciaRendaRepository.travarAtivasDoUsuario(1L)).thenReturn(List.of(recorrencia));
         when(rendaRepository.findTopByRecorrenciaIdOrderByMesReferenciaDesc(10L)).thenReturn(Optional.of(ultima));
         when(rendaRepository.save(any(Renda.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(rendaRepository.findByUsuarioId(1L)).thenReturn(List.of(ultima));
 
-        rendaService.listarPorUsuario(1L);
+        rendaService.listarPorUsuario(1L, null);
 
         ArgumentCaptor<Renda> captor = ArgumentCaptor.forClass(Renda.class);
         verify(rendaRepository, times(1)).save(captor.capture());
@@ -216,6 +216,129 @@ class RendaServiceTest {
         assertThat(gerada.getTipo()).isEqualTo(TipoRenda.FIXA);
         assertThat(gerada.getMesReferencia()).isEqualTo(mesAtual);
         assertThat(gerada.getRecorrencia()).isEqualTo(recorrencia);
+    }
+
+    // Monta uma série ativa cuja última ocorrência é o mês atual e devolve a
+    // recorrência já stubbada — base dos testes de geração para o futuro.
+    private RecorrenciaRenda serieAtivaAteOMesAtual() {
+        LocalDate mesAtual = LocalDate.now().withDayOfMonth(1);
+
+        RecorrenciaRenda recorrencia = new RecorrenciaRenda();
+        recorrencia.setId(10L);
+        recorrencia.setUsuario(usuarioComId(1L));
+        recorrencia.setAtiva(true);
+        recorrencia.setDataInicio(mesAtual);
+
+        Renda ultima = rendaComId(1L, 1L, new BigDecimal("3000"));
+        ultima.setMesReferencia(mesAtual);
+        ultima.setTipo(TipoRenda.FIXA);
+        ultima.setRecorrencia(recorrencia);
+
+        when(recorrenciaRendaRepository.travarAtivasDoUsuario(1L)).thenReturn(List.of(recorrencia));
+        when(rendaRepository.findTopByRecorrenciaIdOrderByMesReferenciaDesc(10L)).thenReturn(Optional.of(ultima));
+        return recorrencia;
+    }
+
+    // Só nos testes em que o catch-up realmente grava (stub não usado quebraria
+    // o modo strict do MockitoExtension).
+    private void devolverAPropriaRendaAoSalvar() {
+        when(rendaRepository.save(any(Renda.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @Test
+    void catchUpDeveGerarAteOMesFuturoConsultado() {
+        serieAtivaAteOMesAtual();
+        devolverAPropriaRendaAoSalvar();
+        LocalDate daquiATresMeses = LocalDate.now().withDayOfMonth(1).plusMonths(3);
+
+        rendaService.calcularTotalMes(1L, daquiATresMeses);
+
+        // Os 3 meses entre o atual (exclusive) e o consultado (inclusive).
+        ArgumentCaptor<Renda> captor = ArgumentCaptor.forClass(Renda.class);
+        verify(rendaRepository, times(3)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(Renda::getMesReferencia)
+                .containsExactly(daquiATresMeses.minusMonths(2), daquiATresMeses.minusMonths(1), daquiATresMeses);
+    }
+
+    @Test
+    void catchUpNaoDeveGerarAlemDoTetoDeMesesFuturos() {
+        serieAtivaAteOMesAtual();
+        devolverAPropriaRendaAoSalvar();
+        LocalDate daquiADoisAnos = LocalDate.now().withDayOfMonth(1).plusMonths(24);
+
+        rendaService.calcularTotalMes(1L, daquiADoisAnos);
+
+        // Teto de 12 meses à frente, mesmo com a consulta pedindo 24.
+        verify(rendaRepository, times(12)).save(any(Renda.class));
+    }
+
+    @Test
+    void consultaAMesPassadoNaoDeveEncolherASerie() {
+        serieAtivaAteOMesAtual();
+
+        rendaService.calcularTotalMes(1L, LocalDate.now().withDayOfMonth(1).minusMonths(6));
+
+        // A série já está no mês atual: nada a gerar, e nada a remover.
+        verify(rendaRepository, never()).save(any(Renda.class));
+    }
+
+    @Test
+    void catchUpNaoDeveRegravarMesQueJaExiste() {
+        serieAtivaAteOMesAtual();
+        LocalDate proximoMes = LocalDate.now().withDayOfMonth(1).plusMonths(1);
+        when(rendaRepository.existsByRecorrenciaIdAndMesReferencia(10L, proximoMes)).thenReturn(true);
+
+        rendaService.calcularTotalMes(1L, proximoMes);
+
+        verify(rendaRepository, never()).save(any(Renda.class));
+    }
+
+    @Test
+    void editarParaFixaDeveCriarRecorrencia() {
+        Renda existente = rendaComId(1L, 1L, new BigDecimal("500"));
+        existente.setTipo(TipoRenda.FREELA);
+        Renda dadosAtualizados = new Renda();
+        dadosAtualizados.setDescricao("Salário");
+        dadosAtualizados.setValor(new BigDecimal("500"));
+        dadosAtualizados.setMesReferencia(JULHO);
+        dadosAtualizados.setTipo(TipoRenda.FIXA);
+
+        when(rendaRepository.findById(1L)).thenReturn(Optional.of(existente));
+        when(recorrenciaRendaRepository.save(any(RecorrenciaRenda.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(rendaRepository.save(any(Renda.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Renda atualizada = rendaService.atualizar(1L, 1L, dadosAtualizados);
+
+        assertThat(atualizada.getRecorrencia()).isNotNull();
+        assertThat(atualizada.getRecorrencia().isAtiva()).isTrue();
+        assertThat(atualizada.getRecorrencia().getDataInicio()).isEqualTo(JULHO);
+    }
+
+    @Test
+    void editarDeFixaParaVariavelDeveEncerrarRecorrencia() {
+        RecorrenciaRenda recorrencia = new RecorrenciaRenda();
+        recorrencia.setId(10L);
+        recorrencia.setAtiva(true);
+
+        Renda existente = rendaComId(1L, 1L, new BigDecimal("3000"));
+        existente.setTipo(TipoRenda.FIXA);
+        existente.setRecorrencia(recorrencia);
+
+        Renda dadosAtualizados = new Renda();
+        dadosAtualizados.setDescricao("Freela avulso");
+        dadosAtualizados.setValor(new BigDecimal("3000"));
+        dadosAtualizados.setMesReferencia(JULHO);
+        dadosAtualizados.setTipo(TipoRenda.FREELA);
+
+        when(rendaRepository.findById(1L)).thenReturn(Optional.of(existente));
+        when(rendaRepository.save(any(Renda.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Renda atualizada = rendaService.atualizar(1L, 1L, dadosAtualizados);
+
+        assertThat(atualizada.getRecorrencia()).isNull();
+        assertThat(recorrencia.isAtiva()).isFalse();
+        verify(recorrenciaRendaRepository).save(recorrencia);
     }
 
     @Test

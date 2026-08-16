@@ -41,9 +41,14 @@ public class RendaController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(renda));
     }
 
+    // `ate` é o mês em foco na tela (1º dia). As rendas fixas são preenchidas
+    // até ele, então navegar para um mês futuro no seletor já mostra a fixa
+    // lá. Omitir o parâmetro mantém o comportamento antigo (até o mês atual).
     @GetMapping
-    public List<RendaResponse> listar(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado) {
-        return rendaService.listarPorUsuario(usuarioAutenticado.getId()).stream()
+    public List<RendaResponse> listar(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado,
+                                       @RequestParam(required = false)
+                                       @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate ate) {
+        return rendaService.listarPorUsuario(usuarioAutenticado.getId(), ate).stream()
                 .map(RendaController::toResponse)
                 .toList();
     }
