@@ -11,7 +11,7 @@ import { listarCategorias } from "../api/categorias";
 import { listarLimites, statusLimite, excluirLimite } from "../api/limites";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
-import { primeiroDiaDoMesISO } from "../utils/datas";
+import { mesAtualYYYYMM, primeiroDiaDoMes } from "../utils/datas";
 import { aoTeclarAtivar } from "../utils/teclado";
 import type { Categoria, LimiteCategoria, StatusLimite } from "../types/financas";
 
@@ -37,9 +37,13 @@ interface Props {
   // outros dois blocos na linha do título (ver PlanejamentoPage). Sem ele
   // (uso fora de Planejamento), o botão cai no cabeçalho local do bloco.
   headerSlot?: HTMLDivElement | null;
+  // Mês em foco ("YYYY-MM"), vindo do seletor da página — é o mês contra o
+  // qual o gasto de cada categoria é comparado com o teto. O teto em si é
+  // fixo (não tem mês), só o consumo muda.
+  mes?: string;
 }
 
-export function PlanejamentoLimites({ headerSlot }: Props = {}) {
+export function PlanejamentoLimites({ headerSlot, mes = mesAtualYYYYMM() }: Props = {}) {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -73,7 +77,7 @@ export function PlanejamentoLimites({ headerSlot }: Props = {}) {
     setErro(null);
     setCarregando(true);
     try {
-      const mesReferencia = primeiroDiaDoMesISO();
+      const mesReferencia = primeiroDiaDoMes(mes);
       const [cats, limites] = await Promise.all([
         listarCategorias(),
         listarLimites(),
@@ -93,9 +97,12 @@ export function PlanejamentoLimites({ headerSlot }: Props = {}) {
     }
   }
 
+  // Recarrega ao trocar o mês no seletor da página — o status de cada limite
+  // é sempre relativo a um mês.
   useEffect(() => {
     carregar();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mes]);
 
   // Categorias podem ter sido criadas/editadas no bloco "Categorias" (ao
   // lado) depois da carga inicial — sem isso, o select de "+ Novo limite"

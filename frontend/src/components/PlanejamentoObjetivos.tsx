@@ -16,7 +16,7 @@ import { listarInvestimentosCdb } from "../api/investimentosCdb";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { dataBR } from "../utils/rotulos";
-import { primeiroDiaDoMesISO } from "../utils/datas";
+import { mesAtualYYYYMM, primeiroDiaDoMes } from "../utils/datas";
 import { planoObjetivo } from "../utils/objetivos";
 import { corEscalaProgresso } from "../utils/cores";
 import { aoTeclarAtivar } from "../utils/teclado";
@@ -31,9 +31,15 @@ interface Props {
   // outros dois blocos na linha do título (ver PlanejamentoPage). Sem ele
   // (uso fora de Planejamento), o botão cai no cabeçalho local do bloco.
   headerSlot?: HTMLDivElement | null;
+  // Mês em foco ("YYYY-MM"), vindo do seletor da página. Só afeta a renda
+  // fixa usada para calcular quanto o aporte mensal representa do que se
+  // ganha — a contagem de meses até a data-alvo continua ancorada em HOJE
+  // (ver `mesesAte` em utils/objetivos), porque o prazo do objetivo é uma
+  // data real, não muda porque você olhou outro mês.
+  mes?: string;
 }
 
-export function PlanejamentoObjetivos({ headerSlot }: Props = {}) {
+export function PlanejamentoObjetivos({ headerSlot, mes = mesAtualYYYYMM() }: Props = {}) {
   const [objetivos, setObjetivos] = useState<Objetivo[]>([]);
   const [rendas, setRendas] = useState<Renda[]>([]);
   const [investimentos, setInvestimentos] = useState<InvestimentoCdb[]>([]);
@@ -73,9 +79,9 @@ export function PlanejamentoObjetivos({ headerSlot }: Props = {}) {
     try {
       const [objs, rends, invs] = await Promise.all([
         listarObjetivos(),
-        // Só usa a renda FIXA do mês atual (ver `rendaFixaMensal`), então não há
-        // motivo para pedir o histórico.
-        listarRendas({ inicio: primeiroDiaDoMesISO(), fim: primeiroDiaDoMesISO() }),
+        // Só usa a renda FIXA do mês em foco (ver `rendaFixaMensal`), então
+        // não há motivo para pedir o histórico.
+        listarRendas({ inicio: primeiroDiaDoMes(mes), fim: primeiroDiaDoMes(mes) }),
         listarInvestimentosCdb(),
       ]);
       setObjetivos(objs);
@@ -88,16 +94,19 @@ export function PlanejamentoObjetivos({ headerSlot }: Props = {}) {
     }
   }
 
+  // Recarrega ao trocar o mês no seletor da página — a renda pedida à API é
+  // a daquele mês.
   useEffect(() => {
     carregar();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mes]);
 
   const rendaFixaMensal = useMemo(() => {
-    const mesAtual = primeiroDiaDoMesISO();
+    const mesReferencia = primeiroDiaDoMes(mes);
     return rendas
-      .filter((r) => r.tipo === "FIXA" && r.mesReferencia === mesAtual)
+      .filter((r) => r.tipo === "FIXA" && r.mesReferencia === mesReferencia)
       .reduce((acc, r) => acc + r.valor, 0);
-  }, [rendas]);
+  }, [rendas, mes]);
 
   async function confirmarExclusao() {
     if (confirmandoExclusao === "LOTE") {
