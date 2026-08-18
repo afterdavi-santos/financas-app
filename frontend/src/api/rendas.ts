@@ -10,15 +10,21 @@ export async function totalRenda(mesReferencia: string): Promise<number> {
   return data.total;
 }
 
-// GET /api/rendas -> todas as rendas do usuário (sem filtro de mês no backend:
-// a resposta traz o histórico inteiro e a tela filtra).
-// `ate` (YYYY-MM-DD, 1º dia do mês em foco) não filtra nada — diz até que mês o
-// backend deve materializar as rendas fixas recorrentes, para que um mês futuro
-// já venha com elas. Sem o parâmetro, o backend vai só até o mês atual.
-export async function listarRendas(ate?: string): Promise<Renda[]> {
-  const { data } = await api.get<Renda[]>("/rendas", {
-    params: ate ? { ate } : undefined,
-  });
+// GET /api/rendas?inicio=...&fim=... -> rendas cujo mesReferencia cai no
+// intervalo (extremos inclusive, ambos o 1º dia do mês).
+//
+// Antes não havia filtro nenhum: o backend devolvia o histórico inteiro e cada
+// tela filtrava no cliente. Era o MED-007 — a resposta crescia para sempre. Hoje
+// o backend recusa com 400 acima de 2000 lançamentos, então toda chamada passa
+// a janela que a tela realmente usa.
+//
+// `fim` também diz até que mês o backend deve materializar as rendas fixas
+// recorrentes, para que um mês futuro no seletor já venha com elas.
+export async function listarRendas(intervalo?: {
+  inicio?: string;
+  fim?: string;
+}): Promise<Renda[]> {
+  const { data } = await api.get<Renda[]>("/rendas", { params: intervalo });
   return data;
 }
 

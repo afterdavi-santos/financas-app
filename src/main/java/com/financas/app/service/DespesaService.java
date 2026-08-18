@@ -71,7 +71,9 @@ public class DespesaService {
     @Transactional
     public List<Despesa> listar(Long usuarioId, Long categoriaId, TipoCategoria tipo, LocalDate inicio, LocalDate fim) {
         garantirRecorrencias(usuarioId, fim);
-        return despesaRepository.findAll(filtros(usuarioId, categoriaId, tipo, inicio, fim));
+        Specification<Despesa> spec = filtros(usuarioId, categoriaId, tipo, inicio, fim);
+        TetoDeListagem.conferir(despesaRepository.count(spec));
+        return despesaRepository.findAll(spec);
     }
 
     // Mesmo espírito de listar(), mas filtra pela data REAL da compra (não
@@ -85,6 +87,7 @@ public class DespesaService {
         garantirRecorrencias(usuarioId, null);
         Specification<Despesa> spec = DespesaSpecification.comUsuario(usuarioId)
                 .and(DespesaSpecification.comPeriodoReal(inicio, fim));
+        TetoDeListagem.conferir(despesaRepository.count(spec));
         return despesaRepository.findAll(spec);
     }
 

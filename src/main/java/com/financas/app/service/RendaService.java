@@ -19,6 +19,12 @@ import java.util.List;
 @Service
 public class RendaService {
 
+    // Extremos usados quando o cliente omite o filtro. Não são "sem limite":
+    // o teto de TetoDeListagem continua valendo, então um histórico grande
+    // demais recebe 400 pedindo um intervalo menor, em vez de carregar tudo.
+    private static final LocalDate ABERTO_INICIO = LocalDate.of(1, 1, 1);
+    private static final LocalDate ABERTO_FIM = LocalDate.of(9999, 12, 31);
+
     private final RendaRepository rendaRepository;
     private final UsuarioRepository usuarioRepository;
     private final RecorrenciaRendaRepository recorrenciaRendaRepository;
@@ -49,10 +55,20 @@ public class RendaService {
         return recorrenciaRendaRepository.save(recorrencia);
     }
 
+    // `inicio`/`fim` são o 1º dia do mês de cada extremo, ambos opcionais.
+    //
+    // `fim` acumula dois papéis de propósito: além de filtrar, é até onde as
+    // rendas FIXAS são materializadas. Antes isso era um parâmetro `ate`
+    // separado, mas as três telas que chamam este endpoint sempre passavam o
+    // mesmo valor nos dois — o mês em foco no seletor. Dois parâmetros que
+    // nunca divergem são um convite a divergirem por engano.
     @Transactional
-    public List<Renda> listarPorUsuario(Long usuarioId, LocalDate ate) {
-        garantirRecorrencias(usuarioId, ate);
-        return rendaRepository.findByUsuarioId(usuarioId);
+    public List<Renda> listarPorUsuario(Long usuarioId, LocalDate inicio, LocalDate fim) {
+        garantirRecorrencias(usuarioId, fim);
+        LocalDate de = inicio != null ? inicio : ABERTO_INICIO;
+        LocalDate ate = fim != null ? fim : ABERTO_FIM;
+        TetoDeListagem.conferir(rendaRepository.countByUsuarioIdAndMesReferenciaBetween(usuarioId, de, ate));
+        return rendaRepository.findByUsuarioIdAndMesReferenciaBetween(usuarioId, de, ate);
     }
 
     @Transactional

@@ -286,4 +286,57 @@ class DespesaControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+    // MED-007: sem o @Size do DespesaLoteRequest, uma unica requisicao grava um
+    // numero arbitrario de despesas — que e como alguem inflaria a propria base
+    // ate tornar toda listagem cara. O `never()` e o que importa aqui: o lote
+    // tem que ser recusado na validacao, antes de o service abrir transacao.
+    @Test
+    void deveRecusarLoteAcimaDoTeto() throws Exception {
+        String item = "{\"descricao\":\"Uber\",\"valor\":20.00,\"data\":\"2026-07-10\",\"categoriaId\":5}";
+        String corpo = "{\"despesas\":[" + String.join(",", java.util.Collections.nCopies(501, item)) + "]}";
+
+        mockMvc.perform(post("/api/despesas/lote")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpo))
+                .andExpect(status().isBadRequest());
+
+        verify(despesaService, never()).criarEmLote(any(), any());
+    }
+
+    @Test
+    void deveAceitarLoteNoTeto() throws Exception {
+        String item = "{\"descricao\":\"Uber\",\"valor\":20.00,\"data\":\"2026-07-10\",\"categoriaId\":5}";
+        String corpo = "{\"despesas\":[" + String.join(",", java.util.Collections.nCopies(500, item)) + "]}";
+        when(despesaService.criarEmLote(eq(1L), any())).thenReturn(List.of(despesa(20L)));
+
+        mockMvc.perform(post("/api/despesas/lote")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpo))
+                .andExpect(status().isCreated());
+    }
+
+    // O 400 do teto de listagem tem que chegar ao cliente com a mensagem que
+    // diz o que fazer (reduzir o intervalo). Sem o handler do
+    // GlobalExceptionHandler isso vira 500, que culpa o servidor por um pedido
+    // grande demais.
+    @Test
+    void deveResponder400QuandoAListagemEstouraOTeto() throws Exception {
+        when(despesaService.listar(eq(1L), any(), any(), any(), any()))
+                .thenThrow(new com.financas.app.exception.ResultadoExcessivoException(
+                        "O período pedido tem 5000 lançamentos, acima do máximo de 2000 por consulta. "
+                                + "Escolha um intervalo menor."));
+
+        mockMvc.perform(get("/api/despesas")
+                        .param("inicio", "0001-01-01")
+                        .param("fim", "9999-12-31")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem").value(
+                        org.hamcrest.Matchers.containsString("intervalo menor")));
+    }
+
 }

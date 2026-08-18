@@ -135,7 +135,9 @@ export function HomePage() {
         listarCategorias(),
         listarDespesas({ inicio, fim }),
         totalRenda(inicio), // mesReferencia = 1º dia do mês
-        listarRendas(inicio), // materializa as fixas até o mês em foco
+        // A Home só usa `rendasDoMes`, então pede só o mês em foco. `fim` também
+        // é até onde o backend materializa as fixas.
+        listarRendas({ inicio, fim: inicio }),
         listarInvestimentosCdb(),
         listarObjetivos(),
         compararMeses(primeiroDiaMesesAtrasDoMes(mes, 5), inicio),

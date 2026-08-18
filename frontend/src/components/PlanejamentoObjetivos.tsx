@@ -73,7 +73,9 @@ export function PlanejamentoObjetivos({ headerSlot }: Props = {}) {
     try {
       const [objs, rends, invs] = await Promise.all([
         listarObjetivos(),
-        listarRendas(),
+        // Só usa a renda FIXA do mês atual (ver `rendaFixaMensal`), então não há
+        // motivo para pedir o histórico.
+        listarRendas({ inicio: primeiroDiaDoMesISO(), fim: primeiroDiaDoMesISO() }),
         listarInvestimentosCdb(),
       ]);
       setObjetivos(objs);

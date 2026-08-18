@@ -80,6 +80,15 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(HttpStatus.BAD_REQUEST.value(), ex.getMessage()));
     }
 
+    // 400 e não 413: o corpo da requisição está bem formado e é pequeno; quem
+    // seria grande demais é a RESPOSTA que ele pediu. 413 fala do corpo que
+    // chegou, então mentiria sobre a causa.
+    @ExceptionHandler(ResultadoExcessivoException.class)
+    public ResponseEntity<ErrorResponse> tratarResultadoExcessivo(ResultadoExcessivoException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(HttpStatus.BAD_REQUEST.value(), ex.getMessage()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> tratarValidacao(MethodArgumentNotValidException ex) {
         List<String> erros = ex.getBindingResult().getFieldErrors().stream()

@@ -17,7 +17,7 @@ import { listarRendas, excluirRenda } from "../api/rendas";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { rotuloTipoRenda, mesBR, mesCurtoBR } from "../utils/rotulos";
-import { mesAnteriorYYYYMM } from "../utils/datas";
+import { mesAnteriorYYYYMM, primeiroDiaMesesAtrasDoMes } from "../utils/datas";
 import { aoTeclarAtivar } from "../utils/teclado";
 import type { Renda } from "../types/financas";
 
@@ -78,10 +78,20 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
     setErro(null);
     setCarregando(true);
     try {
-      // `${mes}-01` faz o backend materializar as rendas fixas recorrentes até
+      // Janela dos 6 meses que terminam no mês em foco (ele incluso): é
+      // exatamente o que a tela usa — o mês da lista e os mesmos 6 pontos do
+      // gráfico "Variação de renda". Antes esta chamada trazia o histórico
+      // inteiro e a tela filtrava no cliente.
+      //
+      // `fim` também faz o backend materializar as rendas fixas recorrentes até
       // o mês em foco — sem isso, avançar o seletor para um mês futuro mostrava
       // a lista vazia mesmo com salário fixo cadastrado.
-      setRendas(await listarRendas(`${mes}-01`));
+      setRendas(
+        await listarRendas({
+          inicio: primeiroDiaMesesAtrasDoMes(mes, 5),
+          fim: `${mes}-01`,
+        }),
+      );
     } catch (e) {
       setErro(mensagemDeErro(e));
     } finally {

@@ -41,14 +41,20 @@ public class RendaController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(renda));
     }
 
-    // `ate` é o mês em foco na tela (1º dia). As rendas fixas são preenchidas
-    // até ele, então navegar para um mês futuro no seletor já mostra a fixa
-    // lá. Omitir o parâmetro mantém o comportamento antigo (até o mês atual).
+    // `inicio`/`fim` são o 1º dia do mês de cada extremo, ambos opcionais.
+    // `fim` também define até onde as rendas FIXAS são materializadas, então
+    // navegar para um mês futuro no seletor já mostra a fixa lá.
+    //
+    // Omitir os dois não devolve mais o histórico inteiro sem limite (era o
+    // MED-007): sem filtro o teto de TetoDeListagem passa a ser o que decide,
+    // e um histórico acima dele recebe 400 pedindo um intervalo menor.
     @GetMapping
     public List<RendaResponse> listar(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado,
                                        @RequestParam(required = false)
-                                       @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate ate) {
-        return rendaService.listarPorUsuario(usuarioAutenticado.getId(), ate).stream()
+                                       @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
+                                       @RequestParam(required = false)
+                                       @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fim) {
+        return rendaService.listarPorUsuario(usuarioAutenticado.getId(), inicio, fim).stream()
                 .map(RendaController::toResponse)
                 .toList();
     }

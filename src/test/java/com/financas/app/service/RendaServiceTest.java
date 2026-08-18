@@ -23,6 +23,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -91,9 +92,9 @@ class RendaServiceTest {
 
     @Test
     void deveListarRendasDoUsuario() {
-        when(rendaRepository.findByUsuarioId(1L)).thenReturn(List.of(rendaComId(1L, 1L, new BigDecimal("3000"))));
+        when(rendaRepository.findByUsuarioIdAndMesReferenciaBetween(eq(1L), any(), any())).thenReturn(List.of(rendaComId(1L, 1L, new BigDecimal("3000"))));
 
-        List<Renda> rendas = rendaService.listarPorUsuario(1L, null);
+        List<Renda> rendas = rendaService.listarPorUsuario(1L, null, null);
 
         assertThat(rendas).hasSize(1);
     }
@@ -205,9 +206,9 @@ class RendaServiceTest {
         when(recorrenciaRendaRepository.travarAtivasDoUsuario(1L)).thenReturn(List.of(recorrencia));
         when(rendaRepository.findTopByRecorrenciaIdOrderByMesReferenciaDesc(10L)).thenReturn(Optional.of(ultima));
         when(rendaRepository.save(any(Renda.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(rendaRepository.findByUsuarioId(1L)).thenReturn(List.of(ultima));
+        when(rendaRepository.findByUsuarioIdAndMesReferenciaBetween(eq(1L), any(), any())).thenReturn(List.of(ultima));
 
-        rendaService.listarPorUsuario(1L, null);
+        rendaService.listarPorUsuario(1L, null, null);
 
         ArgumentCaptor<Renda> captor = ArgumentCaptor.forClass(Renda.class);
         verify(rendaRepository, times(1)).save(captor.capture());
