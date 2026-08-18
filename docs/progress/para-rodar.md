@@ -5,8 +5,8 @@ Guia rápido para subir o projeto localmente do zero. São 3 peças: **Postgres*
 
 ## Pré-requisitos
 
-- **Java 21** (JDK) — nesta máquina o `JAVA_HOME` não está setado globalmente, então
-  é preciso apontá-lo em cada terminal (ver abaixo).
+- **Java 21** (JDK) com `JAVA_HOME` apontando para a raiz do JDK. Nesta máquina já está
+  definido de forma permanente (ver passo 0).
 - **Node.js** (18+ recomendado) e **npm**.
 - **Docker Desktop** (para o Postgres).
 
@@ -31,6 +31,15 @@ Para definir as variáveis (uma vez, permanente):
 ```powershell
 [Environment]::SetEnvironmentVariable('JWT_SECRET','<a chave gerada>','User')
 [Environment]::SetEnvironmentVariable('POSTGRES_PASSWORD','<a mesma senha do .env>','User')
+```
+
+O `JAVA_HOME` entra na mesma leva. Ele não é segredo, mas é a mesma armadilha: sem ele o
+`mvnw.cmd` aborta antes de compilar, com `JAVA_HOME not found in your environment`. O `java`
+solto no PATH funciona (o instalador põe um atalho lá), mas o Maven precisa da **raiz** do JDK,
+e o erro não deixa isso óbvio.
+
+```powershell
+[Environment]::SetEnvironmentVariable('JAVA_HOME','C:\Program Files\Java\jdk-21','User')
 ```
 
 > **Depois de criar as variáveis, feche e reabra o terminal (e a IDE).** Um processo só
@@ -67,20 +76,26 @@ para apagar o volume também.
 Na raiz do projeto, no **PowerShell**:
 
 ```powershell
-$env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
 .\mvnw.cmd spring-boot:run
 ```
 
 - Sobe em `http://localhost:8080`, com as rotas sob `/api`.
-- O schema é criado/atualizado automaticamente (`spring.jpa.hibernate.ddl-auto=update`).
+- O schema é aplicado pelo **Flyway** (`src/main/resources/db/migration`) antes de o contexto
+  subir. O Hibernate está em `ddl-auto=validate`: ele **confere** o schema e não altera nada.
+  Mudou entidade? A migração correspondente é obrigatória — sem ela o app não sobe.
 - CORS já liberado para o frontend em `http://localhost:5173`.
 
-Para rodar os testes (não precisa do Postgres de pé):
+Para rodar os testes:
 
 ```powershell
-$env:JAVA_HOME = "C:\Program Files\Java\jdk-21"
 .\mvnw.cmd -q test
 ```
+
+**O Docker Desktop precisa estar rodando**, mas o `docker-compose up` **não**: os testes de
+persistência sobem o próprio Postgres 16 descartável via Testcontainers
+(`persistencia/TesteComPostgresReal`), com o schema vindo das mesmas migrações do Flyway que
+rodam em produção. O container é `static` — sobe uma vez por suíte (~20s), não por classe.
+Com o Docker parado, esses testes falham no start do contexto.
 
 ## 3. Frontend (Vite + React)
 
