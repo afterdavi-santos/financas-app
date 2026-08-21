@@ -163,3 +163,97 @@ Para inspecionar o banco direto:
 ```powershell
 docker exec financas-postgres psql -U postgres -d financas_db -c "select count(*) from despesa;"
 ```
+
+---
+
+# Deploy (Netlify + Render + Supabase)
+
+Três serviços, **um repositório**. Não é preciso separar front e back em
+repositórios diferentes: o Netlify entra na pasta `frontend/` (campo *base
+directory*, já no `netlify.toml`) e o Render usa o `Dockerfile` da raiz.
+
+| Peça | Onde | Arquivo que descreve |
+|---|---|---|
+| Front (estático) | Netlify | `netlify.toml` |
+| API (Spring Boot) | Render | `Dockerfile` + `render.yaml` |
+| Banco (Postgres) | Supabase | — (provisionado pelo painel) |
+
+**O Netlify não roda o backend.** Ele serve arquivos estáticos e serverless
+functions, não uma JVM de longa duração — por isso a API vai para o Render.
+
+## Ordem (importa)
+
+Banco → API → front. Cada um precisa do endereço do anterior.
+
+### 1. Supabase
+
+Crie o projeto e pegue a string de conexão. Dois cuidados:
+
+- **Use o formato JDBC** (`jdbc:postgresql://host:porta/postgres`), não a URI
+  `postgresql://usuario:senha@host/base` que o painel mostra primeiro — aquela é
+  a forma que o `libpq` entende, e o driver JDBC recusa.
+- **SSL é obrigatório**: acrescente `?sslmode=require` no fim.
+
+Se a conexão direta não funcionar a partir do Render, use a string do **pooler**
+(Supavisor) em *session mode*. O *transaction mode* quebra os prepared statements
+do JDBC — se for o único caminho, acrescente também `&prepareThreshold=0`.
+
+O Flyway aplica `V1`, `V2` e `V3` sozinho no primeiro start da API. Não rode
+migração na mão.
+
+### 2. Render
+
+*New > Blueprint*, apontando para o repositório: o `render.yaml` cria o serviço.
+Ele pedirá as variáveis marcadas com `sync: false`, que nunca ficam no git:
+
+| Variável | Valor |
+|---|---|
+| `DATABASE_URL` | a string JDBC do Supabase |
+| `DATABASE_USER` | o usuário do Supabase (normalmente `postgres`) |
+| `POSTGRES_PASSWORD` | a senha do Supabase |
+| `JWT_SECRET` | **uma chave nova**, não a da sua máquina |
+| `CORS_ORIGINS` | a URL do Netlify (preencha depois do passo 3) |
+
+Gere a chave nova com o mesmo comando do passo 0 deste guia. Reaproveitar o
+segredo local em produção significa que um vazamento em qualquer um dos dois
+compromete os dois.
+
+O plano gratuito **hiberna** após ~15 min sem tráfego: a primeira visita depois
+disso leva ~30s. Não é bug.
+
+### 3. Netlify
+
+*Add new site > Import from Git*. O `netlify.toml` já traz build, pasta de
+publicação e o redirect de SPA. Defina no painel:
+
+| Variável | Valor |
+|---|---|
+| `VITE_API_URL` | `https://<sua-api>.onrender.com/api` — **com o `/api` no fim** |
+
+### 4. Feche o círculo
+
+Volte ao Render e preencha `CORS_ORIGINS` com a URL do Netlify: **origem exata**,
+com `https` e **sem barra no fim**. O navegador compara string, não "site
+parecido". Depois, redeploy da API.
+
+## Três armadilhas desta stack
+
+**Variável do Vite é lida em tempo de BUILD.** O valor é gravado dentro do
+bundle. Mudar `VITE_API_URL` no painel não tem efeito nenhum até um novo deploy
+(*Clear cache and deploy site*) — diferente do backend, onde reiniciar basta.
+
+**A CSP acompanha a `VITE_API_URL` automaticamente** (`vite.config.ts` deriva a
+origem dela). Se as chamadas falharem só em produção, abra o console: uma linha
+`Refused to connect` significa que a política e o endereço real discordam — quase
+sempre porque o build foi feito antes de a variável existir.
+
+**O health check precisa continuar público.** O Render chama `/api/health` sem
+credencial e lê 401 como "fora do ar", o que põe o serviço em ciclo de
+reinicialização. `HealthControllerTest` existe para essa linha do `SecurityConfig`
+não cair sem ninguém perceber.
+
+## O que muda em relação ao local
+
+O Postgres local só escuta em `127.0.0.1` — no Supabase essa proteção deixa de
+existir por natureza, e a senha passa a ser a única barreira. Use uma senha forte
+e específica, nunca a mesma da sua máquina.

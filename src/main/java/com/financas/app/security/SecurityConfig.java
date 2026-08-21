@@ -71,6 +71,10 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        // Health check da hospedagem (render.yaml). Publico porque a
+                        // plataforma chama sem credencial nenhuma e le 401 como
+                        // "servico fora do ar" — ver HealthController.
+                        .requestMatchers("/api/health").permitAll()
                         // Libera o forward interno do Spring Boot para exceções não tratadas
                         // (sem isso, o forward pro /error é barrado pelo authenticationEntryPoint
                         // abaixo e mascara o status real como 401).

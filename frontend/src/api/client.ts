@@ -5,10 +5,18 @@ import axios from "axios";
 export const TOKEN_KEY = "financas.token";
 
 // Instância única do axios para todo o app.
-// baseURL = onde o backend Spring Boot responde (dev local, porta 8080).
-// Assim, nas chamadas usamos só o caminho relativo: api.post("/auth/login", ...).
+// baseURL = onde o backend Spring Boot responde. Assim, nas chamadas usamos
+// só o caminho relativo: api.post("/auth/login", ...).
+//
+// Vem de VITE_API_URL, com o endereço local como padrão: sem a variável
+// definida (o seu dia a dia), nada muda; no deploy, o painel da hospedagem
+// define a variável e o mesmo código aponta para a API publicada.
+//
+// É lida em tempo de BUILD, não em runtime: o Vite substitui a expressão
+// pelo literal ao gerar o bundle. Mudar a variável exige rebuildar o front —
+// não adianta trocá-la e reiniciar, como se faria no backend.
 export const api = axios.create({
-  baseURL: "http://localhost:8080/api",
+  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:8080/api",
   headers: { "Content-Type": "application/json" },
 });
 

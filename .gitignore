@@ -39,4 +39,8 @@ docs/cybersec-audit-skill-main/
 ### Credenciais locais ###
 # O .env tem a senha do Postgres. O .env.example, sem segredo nenhum, e versionado.
 .env
+# O Vite le .env.local / .env.<modo>.local, e e la que vai a URL de uma API que
+# nao seja a local. Sem estas linhas, um desses arquivos entraria no commit.
+.env.local
+.env.*.local
 !.env.example

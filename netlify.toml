@@ -1,0 +1,39 @@
+# Publicação do FRONTEND no Netlify. Este arquivo fica na raiz do repositório
+# de propósito: é onde o Netlify procura por ele. O `base` abaixo é o que faz o
+# monorepo funcionar — não é preciso separar front e back em repositórios
+# diferentes, o Netlify simplesmente entra na pasta e ignora o resto.
+#
+# O backend Java NÃO sobe aqui: o Netlify serve arquivos estáticos e serverless
+# functions, não uma JVM de longa duração. A API vai para o Render (ver
+# render.yaml) e o banco para o Supabase.
+
+[build]
+  # Pasta onde o Netlify roda o build. Todos os caminhos abaixo são relativos a ela.
+  base = "frontend"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # A versão do Node que o Netlify usa por padrão muda com o tempo; fixar evita
+  # que um build que passa hoje quebre semanas depois, sem nada ter mudado no
+  # código.
+  NODE_VERSION = "20"
+  # VITE_API_URL NÃO fica aqui — ela aponta para a API publicada e é definida no
+  # painel (Site settings > Environment variables). Deixá-la no arquivo faria o
+  # endereço da API virar conteúdo versionado, e trocá-lo exigiria um commit.
+  #
+  # Lembre: variável do Vite é lida em tempo de BUILD. Mudá-la no painel só tem
+  # efeito depois de um novo deploy ("Clear cache and deploy site").
+
+# O app é uma SPA com react-router: as rotas ("/planejamento", "/movimentacoes")
+# só existem dentro do JavaScript, não como arquivos no disco. Sem esta regra,
+# abrir uma dessas URLs direto — ou dar F5 estando nela — devolve 404, porque o
+# Netlify procura um arquivo que nunca existiu. O redirect entrega o index.html
+# e deixa o roteador do React resolver o caminho.
+#
+# status = 200 (rewrite), não 301: a URL na barra de endereços precisa continuar
+# sendo a que a pessoa pediu, senão o roteador não sabe para onde ir.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

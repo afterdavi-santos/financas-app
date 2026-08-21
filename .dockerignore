@@ -1,0 +1,36 @@
+# O que NÃO vai para o contexto do build da imagem da API.
+#
+# Não é só economia de tempo: tudo que entra no contexto pode acabar dentro de
+# uma camada da imagem. O .env desta lista é o motivo principal — ele tem a
+# senha do Postgres local e não pode viajar para lugar nenhum.
+.env
+.env.local
+.env.*.local
+
+# A auditoria de segurança é trabalho local, fora do git e fora da imagem.
+.audit/
+
+# Nada do frontend é usado pela API: ele é publicado no Netlify.
+frontend/
+
+# Artefatos e metadados que o build refaz sozinho.
+target/
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+
+# Documentação não roda.
+docs/
+*.md
+
+# O wrapper do Maven é desnecessário: a imagem de build já traz o Maven.
+.mvn/
+mvnw
+mvnw.cmd
+mvnwDebug
+mvnwDebug.cmd
+
+# O compose descreve o Postgres de desenvolvimento, não a API.
+docker-compose.yml

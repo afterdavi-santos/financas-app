@@ -1,0 +1,44 @@
+# Blueprint do Render: descreve a API em arquivo, em vez de cliques no painel.
+# Com ele, "New > Blueprint" apontando para este repositório já cria o serviço
+# configurado — e qualquer mudança fica registrada no git, não na memória de
+# quem configurou.
+#
+# O banco NÃO está aqui: fica no Supabase. Por isso DATABASE_URL entra como
+# variável, e não como um `databases:` gerenciado pelo Render.
+
+services:
+  - type: web
+    name: financas-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+
+    # O Render considera o serviço "no ar" quando este caminho responde 200.
+    # A rota é pública (ver HealthController + SecurityConfig): health check
+    # nunca pode exigir autenticação, senão o 401 é lido como serviço fora do ar
+    # e o deploy entra em ciclo de reinicialização.
+    healthCheckPath: /api/health
+
+    envVars:
+      # --- Segredos: NUNCA com valor aqui. ---
+      # `sync: false` faz o Render pedir o valor na criação e guardá-lo no
+      # painel, fora do repositório. Escrever o valor neste arquivo seria
+      # repetir exatamente o vazamento que a auditoria corrigiu.
+      - key: JWT_SECRET
+        sync: false
+      # A senha do Supabase vai embutida na DATABASE_URL, então ela é segredo.
+      # Formato JDBC (jdbc:postgresql://...), não a URI postgresql:// que o
+      # painel mostra por padrão — o driver JDBC recusa aquela.
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_USER
+        sync: false
+      - key: POSTGRES_PASSWORD
+        sync: false
+
+      # --- Não-segredos ---
+      # Origem exata do front no Netlify: https, sem barra no fim. O navegador
+      # compara string, não "site parecido".
+      - key: CORS_ORIGINS
+        sync: false
