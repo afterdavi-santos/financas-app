@@ -278,8 +278,17 @@ export function ObjetivosResumoHome({
                       />
                     </div>
                     <div className="mt-1 flex items-center justify-between gap-2 text-xs font-medium text-grouper-deep">
-                      <span className="shrink-0">
+                      {/* Mesmo rótulo da tela de Planejamento
+                          (PlanejamentoObjetivos.tsx): some quando a meta já
+                          foi atingida (não há mais o que guardar) e quando
+                          não há renda fixa cadastrada. `min-w-0 truncate`
+                          porque agora os dois lados desta linha disputam a
+                          largura do card, que é estreito. */}
+                      <span className="min-w-0 truncate">
                         {formatarBRL(obj.valorAtual)} de {formatarBRL(obj.valorAlvo)}
+                        {!plano.concluido && plano.percentualRenda !== null && (
+                          <> · guarde {formatarBRL(plano.aporteMensal)}/mês</>
+                        )}
                       </span>
                       <div
                         className="flex min-w-0 items-center gap-1.5"

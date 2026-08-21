@@ -12,7 +12,12 @@ import { mesAtualYYYYMM, mesSeguinteYYYYMM, primeiroDiaDoMes } from "../utils/da
 import { dataBR, mesCurtoBR } from "../utils/rotulos";
 import { corNivelDuplicata } from "../utils/cores";
 import { encontrarCategoriaCartaoCredito, mesPrincipalDaFatura } from "../utils/leitorFatura";
-import type { Categoria, DespesaRequest, TipoCategoria } from "../types/financas";
+import type {
+  Categoria,
+  DespesaRequest,
+  FormaPagamento,
+  TipoCategoria,
+} from "../types/financas";
 import type { ItemFaturaExtraido, ItemIgnorado, NivelDuplicata } from "../types/leituraFatura";
 
 const TAMANHO_MAXIMO_BYTES = 2 * 1024 * 1024;
@@ -113,6 +118,14 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
   // Fallback só de segurança de tipos — na prática o popup de escolha de mês
   // só abre depois da fatura processada, quando mesPrincipal já está setado.
   const mesPrincipalPopup = mesPrincipal ?? mesAtualYYYYMM();
+
+  // Seleção GERAL do lote (não item a item): jogar a fatura no mês seguinte é
+  // dizer que ela ainda vai ser paga, ou seja, é crédito. Escolher o próprio
+  // mês da fatura é tratá-la como já quitada naquele mês — entra como débito
+  // (à vista). Uma fatura inteira é uma decisão só; não existe metade dela
+  // paga adiantado.
+  const formaPagamentoDoLote: FormaPagamento =
+    mesEscolhido === mesPrincipalPopup ? "DEBITO" : "CREDITO";
 
   // O componente monta uma vez só (junto com a HomePage) e fica sempre na
   // árvore (é o Modal por dentro que entra/sai do DOM via `aberto`), então
@@ -476,6 +489,10 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
         data: item.data,
         categoriaId,
         mesReferencia: primeiroDiaDoMes(mesEscolhido),
+        formaPagamento: formaPagamentoDoLote,
+        // Sem parcelas: a fatura já traz cada parcela como uma linha própria
+        // ("Uber 2/3"), então parcelar de novo aqui duplicaria os meses.
+        parcelas: 1,
       }));
       await criarDespesasEmLote(despesas);
       reiniciar();
@@ -639,7 +656,7 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
                                 abre pra cima por padrão, mas sem espaço acima
                                 dentro do `overflow-y-auto` do <ul>, ele ficava
                                 cortado (mesmo padrão de Objetivos, ver
-                                a11y-e-responsividade.md). */}
+                                docs/FRONTEND.md). */}
                             <button
                               type="button"
                               className="rounded-full px-2 py-0.5 text-xs font-medium"
@@ -814,14 +831,14 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
                           className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
                         />
                       </div>
-                      <div className="space-y-1">
+                      <div className="min-w-0 space-y-1">
                         <label className="text-sm font-medium text-grouper-navy">
                           Tipo da categoria
                         </label>
                         <select
                           value={novaCategoriaTipo}
                           onChange={(e) => setNovaCategoriaTipo(e.target.value as TipoCategoria)}
-                          className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
+                          className="w-full min-w-0 rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
                         >
                           <option value="VARIAVEL">Variável</option>
                           <option value="FIXA">Fixa</option>
@@ -1101,7 +1118,12 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
                     : "border-grouper-sky"
                 }`}
               />
-              Mês da fatura ({mesCurtoBR(primeiroDiaDoMes(mesPrincipalPopup))})
+              <span>
+                Mês da fatura ({mesCurtoBR(primeiroDiaDoMes(mesPrincipalPopup))})
+                <span className="block text-xs font-normal text-grouper-navy">
+                  Entram como débito
+                </span>
+              </span>
             </button>
             <button
               type="button"
@@ -1119,7 +1141,12 @@ export function LeitorFaturaModal({ aberto, onClose, categorias, onImportado, me
                     : "border-grouper-sky"
                 }`}
               />
-              Mês seguinte ({mesCurtoBR(primeiroDiaDoMes(mesSeguinteYYYYMM(mesPrincipalPopup)))})
+              <span>
+                Mês seguinte ({mesCurtoBR(primeiroDiaDoMes(mesSeguinteYYYYMM(mesPrincipalPopup)))})
+                <span className="block text-xs font-normal text-grouper-navy">
+                  Entram como crédito
+                </span>
+              </span>
             </button>
           </div>
           <div className="mt-5 flex justify-end gap-2">

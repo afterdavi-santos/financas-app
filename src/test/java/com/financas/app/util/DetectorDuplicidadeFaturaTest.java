@@ -173,10 +173,12 @@ class DetectorDuplicidadeFaturaTest {
 
     @Test
     void deveDetectarAltissimaAoReimportarDespesaJaSalvaComPrefixoCredito() {
-        // Toda despesa vinda do leitor de fatura é salva com "(Crédito) " na
-        // frente (ver LeituraFaturaService) — sem ignorar esse prefixo na
-        // comparação, a linha crua reimportada (sem o prefixo) nunca bateria
-        // como duplicata EXATA contra a despesa já salva.
+        // LEGADO: o leitor não prefixa mais nada (a forma de pagamento virou
+        // coluna), mas toda despesa importada ANTES dessa mudança está gravada
+        // com "(Crédito) " na frente. Sem ignorar esse prefixo na comparação,
+        // a linha crua reimportada nunca bateria como duplicata EXATA contra a
+        // despesa antiga já salva — e o usuário importaria a mesma compra duas
+        // vezes sem aviso.
         ItemBrutoFatura item = new ItemBrutoFatura(
                 LocalDate.of(2026, 7, 27), "Isla Costa Nunes", new BigDecimal("15.00"));
         Despesa existente = despesa("(Crédito) Isla Costa Nunes", new BigDecimal("15.00"),

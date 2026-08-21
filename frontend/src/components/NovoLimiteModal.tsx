@@ -4,21 +4,27 @@ import { Modal } from "./Modal";
 import { criarLimite, atualizarLimite } from "../api/limites";
 import { criarCategoria } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
+import { primeiroDiaDoMes } from "../utils/datas";
 import { SeletorCategoria, OPCAO_NOVA_CATEGORIA } from "./SeletorCategoria";
 import { AvisoCategoriaSemelhante } from "./AvisoCategoriaSemelhante";
 import { useCategoriasSemelhantes } from "../hooks/useCategoriasSemelhantes";
 import type { Categoria, LimiteCategoria, TipoCategoria } from "../types/financas";
 
-// Modal de limite de gasto por categoria (teto FIXO, sem mês).
-// - Criação: recebe as categorias sem limite ainda (select).
+// Modal de limite de gasto por categoria.
+// - Criação: recebe as categorias sem limite ainda (select). O limite passa
+//   a valer do mês em foco (`mes`) em diante, nunca nos anteriores.
 // - Edição (`limite` presente): prefill do valor; a CATEGORIA fica travada,
-//   pois o backend só atualiza o valor (não troca a categoria do limite).
+//   pois o backend só atualiza o valor (não troca a categoria do limite). O
+//   valor novo vale do mês em foco em diante; os meses já passados mantêm o
+//   teto que valia neles (ver LimiteCategoriaService.atualizar).
 interface Props {
   aberto: boolean;
   onClose: () => void;
   onCriado: () => void;
   categorias: Categoria[];
   limite?: LimiteCategoria | null;
+  // Mês em foco no Planejamento ("YYYY-MM"). Define a vigência.
+  mes?: string;
 }
 
 export function NovoLimiteModal({
@@ -27,6 +33,7 @@ export function NovoLimiteModal({
   onCriado,
   categorias,
   limite,
+  mes,
 }: Props) {
   const editando = !!limite;
   const [categoriaId, setCategoriaId] = useState("");
@@ -75,6 +82,7 @@ export function NovoLimiteModal({
       const req = {
         valorLimite: Number(valor),
         categoriaId: idCategoria,
+        ...(mes ? { mesReferencia: primeiroDiaDoMes(mes) } : {}),
       };
       if (editando) {
         await atualizarLimite(limite.id, req);
@@ -130,7 +138,7 @@ export function NovoLimiteModal({
 
         {criandoNovaCategoria && (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <label
                   htmlFor="limite-nova-categoria"
@@ -150,7 +158,7 @@ export function NovoLimiteModal({
                 />
               </div>
 
-              <div className="space-y-1">
+              <div className="min-w-0 space-y-1">
                 <label
                   htmlFor="limite-nova-categoria-tipo"
                   className="text-sm font-medium text-grouper-navy"
@@ -161,7 +169,7 @@ export function NovoLimiteModal({
                   id="limite-nova-categoria-tipo"
                   value={novaCategoriaTipo}
                   onChange={(e) => setNovaCategoriaTipo(e.target.value as TipoCategoria)}
-                  className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
+                  className="w-full min-w-0 rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
                 >
                   <option value="VARIAVEL">Variável</option>
                   <option value="FIXA">Fixa</option>

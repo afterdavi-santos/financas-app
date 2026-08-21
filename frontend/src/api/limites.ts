@@ -6,9 +6,12 @@ import type {
   StatusLimite,
 } from "../types/financas";
 
-// GET /api/limites-categoria -> todos os limites (fixos) do usuário.
-export async function listarLimites(): Promise<LimiteCategoria[]> {
-  const { data } = await api.get<LimiteCategoria[]>("/limites-categoria");
+// GET /api/limites-categoria?mes= -> os limites VIGENTES no mês informado
+// (um limite criado depois, ou já encerrado antes, não aparece nele).
+export async function listarLimites(mes?: string): Promise<LimiteCategoria[]> {
+  const { data } = await api.get<LimiteCategoria[]>("/limites-categoria", {
+    params: mes ? { mes } : undefined,
+  });
   return data;
 }
 
@@ -59,7 +62,11 @@ export async function atualizarLimite(
   return data;
 }
 
-// DELETE /api/limites-categoria/{id} -> 204 (sem corpo).
-export async function excluirLimite(id: number): Promise<void> {
-  await api.delete(`/limites-categoria/${id}`);
+// DELETE /api/limites-categoria/{id}?mes= -> 204 (sem corpo).
+// Não apaga o histórico: o limite deixa de valer do mês informado em
+// diante, e os meses anteriores continuam com ele.
+export async function excluirLimite(id: number, mes?: string): Promise<void> {
+  await api.delete(`/limites-categoria/${id}`, {
+    params: mes ? { mes } : undefined,
+  });
 }

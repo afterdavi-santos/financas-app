@@ -4,6 +4,7 @@ import com.financas.app.model.CdiDiario;
 import com.financas.app.repository.CdiDiarioRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 
 import java.math.BigDecimal;
@@ -76,6 +77,59 @@ class EsquemaRealTest extends TesteComPostgresReal {
                 .isInstanceOf(DuplicateKeyException.class);
     }
 
+    /**
+     * Os CHECK da V2: parcelamento só existe no crédito, e no máximo 12x.
+     * A API já valida os dois (@Max(12) no DespesaRequest,
+     * DespesaService.validarParcelamento), mas a regra vale para qualquer
+     * escrita — inclusive um UPDATE feito direto no banco.
+     */
+    @Test
+    void deveRecusarParcelamentoNoDebito() {
+        long usuario = criarUsuario("parcela-debito@teste.local");
+        long categoria = criarCategoria(usuario);
+
+        assertThatThrownBy(() -> inserirDespesaParcelada(usuario, categoria, "DEBITO", 1, 3))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deveRecusarMaisDeDozeParcelas() {
+        long usuario = criarUsuario("parcela-treze@teste.local");
+        long categoria = criarCategoria(usuario);
+
+        assertThatThrownBy(() -> inserirDespesaParcelada(usuario, categoria, "CREDITO", 1, 13))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    /** Parcela fora do intervalo da própria compra (4/3) também não passa. */
+    @Test
+    void deveRecusarParcelaMaiorQueOTotal() {
+        long usuario = criarUsuario("parcela-fora@teste.local");
+        long categoria = criarCategoria(usuario);
+
+        assertThatThrownBy(() -> inserirDespesaParcelada(usuario, categoria, "CREDITO", 4, 3))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deveAceitarParcelamentoValidoNoCredito() {
+        long usuario = criarUsuario("parcela-ok@teste.local");
+        long categoria = criarCategoria(usuario);
+
+        inserirDespesaParcelada(usuario, categoria, "CREDITO", 2, 3);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from despesa where usuario_id = ?", Long.class, usuario)).isEqualTo(1L);
+    }
+
+    private void inserirDespesaParcelada(long usuario, long categoria, String forma, int numero, int total) {
+        jdbcTemplate.update(
+                "insert into despesa (data, descricao, valor, categoria_id, usuario_id, "
+                        + "forma_pagamento, parcela_numero, parcelas_total) "
+                        + "values (?, 'Teste', 10.00, ?, ?, ?, ?, ?)",
+                LocalDate.of(2026, 3, 5), categoria, usuario, forma, numero, total);
+    }
+
     /** Mesma proteção em renda, onde a chave são colunas simples. */
     @Test
     void deveRecusarDuasRendasDaMesmaSerieNoMesmoMes() {
@@ -139,8 +193,12 @@ class EsquemaRealTest extends TesteComPostgresReal {
 
     private void inserirDespesa(long usuario, long categoria, Long recorrencia, LocalDate data) {
         jdbcTemplate.update(
-                "insert into despesa (data, descricao, valor, categoria_id, usuario_id, recorrencia_id) "
-                        + "values (?, 'Teste', 10.00, ?, ?, ?)",
+                // forma_pagamento/parcela sao NOT NULL desde a V2 e nao tem default
+                // no banco de proposito: quem grava despesa passa a forma de
+                // pagamento explicitamente. Aqui, a despesa avulsa a vista.
+                "insert into despesa (data, descricao, valor, categoria_id, usuario_id, recorrencia_id, "
+                        + "forma_pagamento, parcela_numero, parcelas_total) "
+                        + "values (?, 'Teste', 10.00, ?, ?, ?, 'DEBITO', 1, 1)",
                 data, categoria, usuario, recorrencia);
     }
 

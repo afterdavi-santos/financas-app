@@ -104,7 +104,7 @@ export function NovaRendaModal({ aberto, onClose, onCriada, renda, mesPadrao }: 
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <label
               htmlFor="renda-valor"
@@ -136,7 +136,7 @@ export function NovaRendaModal({ aberto, onClose, onCriada, renda, mesPadrao }: 
           </div>
         </div>
 
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <label
             htmlFor="renda-tipo"
             className="text-sm font-medium text-grouper-navy"
@@ -147,7 +147,7 @@ export function NovaRendaModal({ aberto, onClose, onCriada, renda, mesPadrao }: 
             id="renda-tipo"
             value={tipo}
             onChange={(e) => setTipo(e.target.value as TipoRenda)}
-            className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
+            className="w-full min-w-0 rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
           >
             <option value="FIXA">Fixa</option>
             <option value="FREELA">Renda variável</option>

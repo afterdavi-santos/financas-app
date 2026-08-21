@@ -61,7 +61,7 @@ class LeituraFaturaControllerTest {
         MockMultipartFile arquivo = new MockMultipartFile("arquivo", "fatura.csv", "text/csv",
                 "date,title,amount\n2026-08-01,Dl*99 Ride,\"7,56\"\n".getBytes());
         ItemFaturaExtraidoResponse item = new ItemFaturaExtraidoResponse(
-                1L, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 1), "(Crédito) Dl*99 Ride",
+                1L, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 1), "Dl*99 Ride",
                 new BigDecimal("7.56"), null, null, null);
         ItemIgnoradoResponse ignorado = new ItemIgnoradoResponse(
                 LocalDate.of(2026, 7, 3), "Pagamento recebido", new BigDecimal("-2095.68"), "Estorno, reembolso ou pagamento da fatura");
@@ -74,7 +74,7 @@ class LeituraFaturaControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
                         .with(SecurityMockMvcRequestPostProcessors.csrf()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.itens[0].descricao").value("(Crédito) Dl*99 Ride"))
+                .andExpect(jsonPath("$.itens[0].descricao").value("Dl*99 Ride"))
                 .andExpect(jsonPath("$.ignorados[0].descricao").value("Pagamento recebido"));
     }
 

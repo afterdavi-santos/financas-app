@@ -14,7 +14,7 @@ import type { ReactNode } from "react";
 // `posicao`: sem medir a tela via JS (o componente é só CSS), o balão
 // centralizado por padrão ("centro") vaza pra fora quando o gatilho está
 // perto da borda direita de um container com scroll (`overflow-y-auto`
-// também clipa o eixo X, ver a11y-e-responsividade.md) — ex.: os ícones de
+// também clipa o eixo X, ver docs/FRONTEND.md) — ex.: os ícones de
 // Editar/Excluir, sempre os últimos elementos de uma linha. Nesses casos use
 // "direita": o balão cresce só pra ESQUERDA, com a borda direita alinhada ao
 // gatilho, nunca ultrapassando o lado direito dele.

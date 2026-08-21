@@ -25,6 +25,11 @@ public interface DespesaRepository extends JpaRepository<Despesa, Long>, JpaSpec
     // não o dia (que o usuário pode ter editado).
     boolean existsByRecorrenciaIdAndDataBetween(Long recorrenciaId, LocalDate inicio, LocalDate fim);
 
+    // Todas as parcelas da mesma compra, em ordem (1/3, 2/3, 3/3). Usado pela
+    // edicao e pela exclusao, que agem na compra inteira e nao na linha
+    // isolada - ver DespesaService.
+    List<Despesa> findByParcelamentoIdOrderByParcelaNumeroAsc(Long parcelamentoId);
+
     @Query("""
             SELECT d.categoria.id AS categoriaId, COUNT(d) AS total
             FROM Despesa d

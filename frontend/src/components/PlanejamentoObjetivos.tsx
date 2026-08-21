@@ -256,7 +256,7 @@ export function PlanejamentoObjetivos({ headerSlot, mes = mesAtualYYYYMM() }: Pr
                           abaixo de valor/meta (`flex-col` + `contents` em
                           lg+ pra achatar de volta na mesma linha única de
                           sempre — mesma técnica usada na Home pra reordenar
-                          sem duplicar JSX, ver docs/design/a11y-e-responsividade.md
+                          sem duplicar JSX, ver docs/FRONTEND.md seção 7
                           seção 2.2). Sem isso os 5 botões em `flex-nowrap`
                           empurravam a linha pra fora da tela, gerando
                           rolagem horizontal numa viewport estreita. */}

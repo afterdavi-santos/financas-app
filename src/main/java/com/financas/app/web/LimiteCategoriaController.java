@@ -39,13 +39,17 @@ public class LimiteCategoriaController {
     @PostMapping
     public ResponseEntity<LimiteCategoriaResponse> criar(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado,
                                                            @Valid @RequestBody LimiteCategoriaRequest request) {
-        LimiteCategoria limiteCategoria = limiteCategoriaService.criar(usuarioAutenticado.getId(), toEntity(request));
+        LimiteCategoria limiteCategoria = limiteCategoriaService.criar(usuarioAutenticado.getId(),
+                toEntity(request), request.mesReferencia());
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(limiteCategoria));
     }
 
     @GetMapping
-    public List<LimiteCategoriaResponse> listar(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado) {
-        return limiteCategoriaService.listar(usuarioAutenticado.getId()).stream()
+    // `mes` = mes em foco na tela. So os limites vigentes nele voltam; um
+    // limite criado depois, ou ja encerrado antes, nao aparece naquele mes.
+    public List<LimiteCategoriaResponse> listar(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado,
+                                                 @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate mes) {
+        return limiteCategoriaService.listar(usuarioAutenticado.getId(), mes).stream()
                 .map(LimiteCategoriaController::toResponse)
                 .toList();
     }
@@ -62,14 +66,18 @@ public class LimiteCategoriaController {
     public LimiteCategoriaResponse atualizar(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado,
                                               @PathVariable Long id,
                                               @Valid @RequestBody LimiteCategoriaRequest request) {
-        LimiteCategoria limiteCategoria = limiteCategoriaService.atualizar(usuarioAutenticado.getId(), id, toEntity(request));
+        LimiteCategoria limiteCategoria = limiteCategoriaService.atualizar(usuarioAutenticado.getId(), id,
+                toEntity(request), request.mesReferencia());
         return toResponse(limiteCategoria);
     }
 
     @DeleteMapping("/{id}")
+    // `mes` = mes em foco: o limite deixa de valer DESSE mes em diante, e os
+    // anteriores continuam com ele (ver LimiteCategoriaService.excluir).
     public ResponseEntity<Void> excluir(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado,
-                                         @PathVariable Long id) {
-        limiteCategoriaService.excluir(usuarioAutenticado.getId(), id);
+                                         @PathVariable Long id,
+                                         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate mes) {
+        limiteCategoriaService.excluir(usuarioAutenticado.getId(), id, mes);
         return ResponseEntity.noContent().build();
     }
 
@@ -87,7 +95,7 @@ public class LimiteCategoriaController {
         var categoriaResponse = new CategoriaResponse(categoria.getId(), categoria.getNome(), categoria.getTipo(), 0L,
                 categoria.getDataCriacao());
         return new LimiteCategoriaResponse(limiteCategoria.getId(), limiteCategoria.getValorLimite(),
-                categoriaResponse);
+                categoriaResponse, limiteCategoria.getMesInicio(), limiteCategoria.getMesFim());
     }
 
 }

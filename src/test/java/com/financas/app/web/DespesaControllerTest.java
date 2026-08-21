@@ -106,7 +106,7 @@ class DespesaControllerTest {
                         .with(SecurityMockMvcRequestPostProcessors.csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"descricao":"(Crédito) Mercado","valor":150.00,"data":"2026-07-10","categoriaId":5,"mesReferencia":"2026-08-01"}
+                                {"descricao":"Mercado","valor":150.00,"data":"2026-07-10","categoriaId":5,"mesReferencia":"2026-08-01"}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.mesReferencia").value("2026-08-01"));

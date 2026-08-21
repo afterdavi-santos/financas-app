@@ -27,7 +27,11 @@ export function MovimentacoesPage() {
     // no desktop — os dois wrappers abaixo (`contents lg:flex`/`lg:grid`)
     // "evaporam" no mobile exatamente pra permitir isso). No desktop volta
     // a ser um empilhamento simples de 2 blocos (linha do título, grid).
-    <div className="flex w-full flex-wrap gap-3 lg:block lg:space-y-2">
+    // `justify-between` é o que joga o avatar (order-2) pro canto direito
+    // no mobile, longe do título (order-1) — sem ele os dois ficam colados
+    // à esquerda. Mesmo cabeçalho da Home e do Planejamento. No desktop
+    // isto vira `block` e as regras de flex não valem mais.
+    <div className="flex w-full flex-wrap items-center justify-between gap-3 lg:block lg:space-y-2">
       {/* Título + botões (portados por DespesasPage/RendasPage) + avatar —
           no desktop formam uma linha só; no mobile "evapora" (contents) e
           cada filho vira um item solto do flex-wrap acima, reordenável. */}

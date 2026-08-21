@@ -1,6 +1,6 @@
 import { Modal } from "./Modal";
 import { formatarBRL } from "../utils/moeda";
-import { dataBR } from "../utils/rotulos";
+import { dataBR, rotuloPagamento } from "../utils/rotulos";
 import { totalPorCategoria } from "../utils/despesasResumo";
 import type { Despesa } from "../types/financas";
 
@@ -59,7 +59,7 @@ export function DetalheDespesasModal({
                         <span className="text-grouper-navy">
                           {d.descricao}{" "}
                           <span className="text-xs text-grouper-navy/50">
-                            · {dataBR(d.data)}
+                            · {rotuloPagamento(d)} · {dataBR(d.data)}
                           </span>
                         </span>
                         <span className="text-grouper-ink">

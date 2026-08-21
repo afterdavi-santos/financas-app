@@ -32,6 +32,9 @@ export interface CategoriaRequest {
 // `recorrente`: true quando esta despesa nasceu (ou foi gerada
 // automaticamente) numa categoria FIXA — excluí-la também encerra a
 // recorrência a partir de agora (meses passados ficam intactos).
+// Como a despesa foi paga. Só o CREDITO aceita parcelamento.
+export type FormaPagamento = "DEBITO" | "CREDITO";
+
 export interface Despesa {
   id: number;
   descricao: string;
@@ -44,6 +47,13 @@ export interface Despesa {
   tipo: TipoCategoria;
   categoria: Categoria;
   recorrente: boolean;
+  formaPagamento: FormaPagamento;
+  // Parcelamento. Numa despesa não parcelada: 1, 1 e null. Numa compra em 3x,
+  // cada mês tem a SUA despesa (1/3, 2/3, 3/3) e `valor` acima é o valor
+  // daquela parcela, não o total da compra.
+  parcelaNumero: number;
+  parcelasTotal: number;
+  parcelamentoId: number | null; // agrupa as parcelas da mesma compra
 }
 
 // -> DespesaRequest: aqui SIM mandamos só o categoriaId (tipo vem da categoria).
@@ -53,6 +63,10 @@ export interface DespesaRequest {
   data: string; // "YYYY-MM-DD"
   categoriaId: number;
   mesReferencia?: string | null; // só o Leitor de fatura preenche
+  formaPagamento?: FormaPagamento; // ausente = DEBITO
+  // 1 a 12, e só com formaPagamento CREDITO. Aqui `valor` é o TOTAL da
+  // compra: o backend divide e cria uma despesa por mês.
+  parcelas?: number;
 }
 
 // -> TotalResponse ({ total }) — usado por /rendas/total.
@@ -175,12 +189,20 @@ export interface LimiteCategoria {
   id: number;
   valorLimite: number;
   categoria: Categoria; // ANINHADA (como em Despesa)
+  // Vigência: o limite vale nos meses [mesInicio, mesFim). Criado no mês em
+  // que foi adicionado (não vale para os anteriores) e encerrado no mês em
+  // que foi excluído (os anteriores continuam com ele).
+  mesInicio: string; // "YYYY-MM-DD" (1º dia do mês)
+  mesFim: string | null; // null = ainda vigente
 }
 
 // -> LimiteCategoriaRequest: aqui mandamos só o categoriaId.
 export interface LimiteCategoriaRequest {
   valorLimite: number;
   categoriaId: number;
+  // Mês em foco na tela: define de quando o limite passa a valer (criação)
+  // ou de quando o novo valor entra em vigor (edição). Ausente = mês atual.
+  mesReferencia?: string; // "YYYY-MM-DD" (1º dia do mês)
 }
 
 // -> StatusLimiteResponse ({ valorLimite, valorGasto, estourado }).

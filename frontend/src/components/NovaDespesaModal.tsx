@@ -7,11 +7,30 @@ import { criarCategoria } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { hojeISO } from "../utils/datas";
+import { dataBR } from "../utils/rotulos";
 import { SeletorCategoria, OPCAO_NOVA_CATEGORIA } from "./SeletorCategoria";
 import { SeletorData } from "./SeletorData";
 import { AvisoCategoriaSemelhante } from "./AvisoCategoriaSemelhante";
 import { useCategoriasSemelhantes } from "../hooks/useCategoriasSemelhantes";
-import type { Categoria, Despesa, StatusLimite, TipoCategoria } from "../types/financas";
+import type {
+  Categoria,
+  Despesa,
+  FormaPagamento,
+  StatusLimite,
+  TipoCategoria,
+} from "../types/financas";
+
+const MAXIMO_PARCELAS = 12;
+
+// Espelha DespesaService.dividir no backend: parcelas de 2 casas, e o resto
+// da divisão inteiro na PRIMEIRA parcela (R$ 100 em 3x = 33,34 + 33,33 +
+// 33,33). Só pra prévia — quem divide de verdade é o backend.
+function dividirParcelas(total: number, parcelas: number): number[] {
+  const centavosTotais = Math.round(total * 100);
+  const cada = Math.floor(centavosTotais / parcelas);
+  const resto = centavosTotais - cada * parcelas;
+  return Array.from({ length: parcelas }, (_, i) => ((i === 0 ? cada + resto : cada) / 100));
+}
 
 // Modal do form de nova despesa. Recebe a lista de categorias (para o select)
 // já carregada pela home, evitando uma segunda requisição aqui.
@@ -41,6 +60,8 @@ export function NovaDespesaModal({
   const [valor, setValor] = useState(""); // string no input; convertida ao enviar
   const [data, setData] = useState(dataInicial);
   const [categoriaId, setCategoriaId] = useState("");
+  const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>("DEBITO");
+  const [parcelas, setParcelas] = useState(1);
 
   // Ao (re)abrir o modal, sincroniza os campos: com despesa -> prefill (edição);
   // sem -> limpa, usando a data do mês em foco atual.
@@ -50,6 +71,10 @@ export function NovaDespesaModal({
     setValor(despesa ? String(despesa.valor) : "");
     setData(despesa?.data ?? dataInicial);
     setCategoriaId(despesa ? String(despesa.categoria.id) : "");
+    setFormaPagamento(despesa?.formaPagamento ?? "DEBITO");
+    // Na edição o número de parcelas não é editável (ver `parcelado` abaixo):
+    // o campo volta a 1 só pro estado não carregar lixo do lançamento anterior.
+    setParcelas(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberto, despesa, dataInicial]);
   const [novaCategoriaNome, setNovaCategoriaNome] = useState("");
@@ -90,8 +115,32 @@ export function NovaDespesaModal({
     };
   }, [aberto, categoriaId, data, criandoNovaCategoria]);
 
+  // Esta despesa já existe e faz parte de uma compra parcelada: o número de
+  // parcelas de uma compra feita não muda editando uma linha (pra isso, exclui
+  // — o que apaga a compra inteira — e lança de novo). Ver DespesaService.
+  const parcelado = editando && despesa!.parcelasTotal > 1;
+
+  // Categoria fixa não aceita parcelamento: ela já repete todo mês, e o
+  // parcelamento também ocupa os meses seguintes — a mesma compra cairia duas
+  // vezes por mês. O backend recusa (DespesaService.validarParcelamento); aqui
+  // o seletor some antes disso, pra regra aparecer na hora da escolha e não
+  // como erro depois de salvar.
+  const categoriaSelecionada = categorias.find((c) => String(c.id) === categoriaId);
+  const categoriaFixa = criandoNovaCategoria
+    ? novaCategoriaTipo === "FIXA"
+    : categoriaSelecionada?.tipo === "FIXA";
+
+  const podeParcelar = !editando && formaPagamento === "CREDITO" && !categoriaFixa;
+  const parcelasEfetivas = podeParcelar ? parcelas : 1;
+
   // Previsão do estouro: gasto atual + valor digitado vs. o teto.
-  const valorNum = Number(valor);
+  //
+  // Parcelado, o que cai NESTE mês é só a primeira parcela — comparar o total
+  // da compra com o teto do mês acusaria um estouro que não vai acontecer.
+  const valorTotal = Number(valor);
+  const valoresParcelas =
+    valorTotal > 0 && parcelasEfetivas > 1 ? dividirParcelas(valorTotal, parcelasEfetivas) : null;
+  const valorNum = valoresParcelas ? valoresParcelas[0] : valorTotal;
   const previsao =
     statusLimite && valorNum > 0
       ? {
@@ -123,6 +172,11 @@ export function NovaDespesaModal({
         valor: Number(valor), // <input> devolve string; backend espera número
         data,
         categoriaId: idCategoria,
+        formaPagamento,
+        // `valor` acima é o TOTAL da compra; o backend divide e cria uma
+        // despesa por mês. Na edição não vai parcelas: o PUT altera a parcela
+        // (e propaga descrição/categoria/forma às irmãs), nunca reparcela.
+        ...(editando ? {} : { parcelas: parcelasEfetivas }),
       };
       if (editando) {
         await atualizarDespesa(despesa.id, req);
@@ -133,6 +187,8 @@ export function NovaDespesaModal({
         setValor("");
         setData(dataInicial);
         setCategoriaId("");
+        setFormaPagamento("DEBITO");
+        setParcelas(1);
         setNovaCategoriaNome("");
         setNovaCategoriaTipo("VARIAVEL");
       }
@@ -172,7 +228,7 @@ export function NovaDespesaModal({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <label
                 htmlFor="valor"
@@ -209,6 +265,83 @@ export function NovaDespesaModal({
             </div>
           </div>
 
+          {/* Forma de pagamento. Débito = à vista, sai da conta no mês da
+              própria despesa. Crédito habilita o parcelamento. */}
+          <div className="space-y-1">
+            <span className="text-sm font-medium text-grouper-navy">Forma de pagamento</span>
+            <div className="grid grid-cols-2 gap-2">
+              {(["DEBITO", "CREDITO"] as const).map((forma) => (
+                <button
+                  key={forma}
+                  type="button"
+                  onClick={() => {
+                    setFormaPagamento(forma);
+                    if (forma === "DEBITO") setParcelas(1);
+                  }}
+                  aria-pressed={formaPagamento === forma}
+                  className={`rounded-md border px-3 py-2 text-sm font-medium ${
+                    formaPagamento === forma
+                      ? "border-grouper-mid bg-grouper-sky/40 text-grouper-ink"
+                      : "border-grouper-sky/40 text-grouper-navy hover:bg-grouper-mist"
+                  }`}
+                >
+                  {forma === "DEBITO" ? "Débito (à vista)" : "Crédito"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {podeParcelar && (
+            <div className="min-w-0 space-y-1">
+              <label htmlFor="parcelas" className="text-sm font-medium text-grouper-navy">
+                Parcelas
+              </label>
+              <select
+                id="parcelas"
+                value={parcelas}
+                onChange={(e) => setParcelas(Number(e.target.value))}
+                className="w-full min-w-0 rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
+              >
+                {Array.from({ length: MAXIMO_PARCELAS }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>
+                    {n}x
+                  </option>
+                ))}
+              </select>
+              {/* O valor digitado é o TOTAL da compra: aqui o usuário confere
+                  quanto vai cair por mês antes de salvar. */}
+              {valoresParcelas && (
+                <p className="rounded-md border-l-4 border-grouper-mid bg-grouper-mist px-3 py-2 text-sm text-grouper-ink">
+                  {parcelasEfetivas}x de {formatarBRL(valoresParcelas[1] ?? valoresParcelas[0])}
+                  {valoresParcelas[0] !== valoresParcelas[1] && (
+                    <> (a primeira, de {formatarBRL(valoresParcelas[0])}, leva os centavos da divisão)</>
+                  )}
+                  {" "}— total {formatarBRL(valorTotal)}. Uma despesa por mês, a
+                  partir de {dataBR(data)}.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Crédito numa categoria fixa é válido — só não pode parcelar. */}
+          {!editando && formaPagamento === "CREDITO" && categoriaFixa && (
+            <p className="rounded-md border-l-4 border-grouper-mid bg-grouper-mist px-3 py-2 text-sm text-grouper-ink">
+              Categoria fixa não aceita parcelamento: ela já repete todo mês.
+              Esta despesa entra como <strong>1x</strong>. Para parcelar, escolha
+              uma categoria variável.
+            </p>
+          )}
+
+          {/* Edição de uma compra já parcelada: informativo, porque o PUT
+              altera esta parcela e não reparcela a compra. */}
+          {parcelado && (
+            <p className="rounded-md border-l-4 border-grouper-mid bg-grouper-mist px-3 py-2 text-sm text-grouper-ink">
+              Parcela <strong>{despesa!.parcelaNumero}/{despesa!.parcelasTotal}</strong> de uma
+              compra no crédito. Descrição e categoria valem para todas as parcelas; valor e data,
+              só para esta. Para trocar o número de parcelas, exclua a compra e lance de novo.
+            </p>
+          )}
+
           <div className="space-y-1">
             <label
               htmlFor="categoria"
@@ -226,7 +359,7 @@ export function NovaDespesaModal({
 
           {criandoNovaCategoria && (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
                   <label
                     htmlFor="despesa-nova-categoria"
@@ -246,7 +379,7 @@ export function NovaDespesaModal({
                   />
                 </div>
 
-                <div className="space-y-1">
+                <div className="min-w-0 space-y-1">
                   <label
                     htmlFor="despesa-nova-categoria-tipo"
                     className="text-sm font-medium text-grouper-navy"
@@ -257,7 +390,7 @@ export function NovaDespesaModal({
                     id="despesa-nova-categoria-tipo"
                     value={novaCategoriaTipo}
                     onChange={(e) => setNovaCategoriaTipo(e.target.value as TipoCategoria)}
-                    className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
+                    className="w-full min-w-0 rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
                   >
                     <option value="VARIAVEL">Variável</option>
                     <option value="FIXA">Fixa</option>

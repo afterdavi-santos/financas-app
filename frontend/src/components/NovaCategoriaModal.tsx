@@ -32,7 +32,11 @@ export function NovaCategoriaModal({ aberto, onClose, onCriada, categoria, categ
     () => categorias.filter((c) => c.id !== categoria?.id),
     [categorias, categoria?.id],
   );
-  const { sugestoes: categoriasSemelhantes } = useCategoriasSemelhantes(nome, outrasCategorias);
+  const { sugestoes: categoriasSemelhantes } = useCategoriasSemelhantes(
+    nome,
+    outrasCategorias,
+    categoria?.id,
+  );
 
   // Ao abrir, sincroniza os campos: com categoria -> prefill; sem -> limpa.
   useEffect(() => {
@@ -91,7 +95,7 @@ export function NovaCategoriaModal({ aberto, onClose, onCriada, categoria, categ
           />
         </div>
 
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <label htmlFor="categoria-tipo" className="text-sm font-medium text-grouper-navy">
             Tipo
           </label>
@@ -99,7 +103,7 @@ export function NovaCategoriaModal({ aberto, onClose, onCriada, categoria, categ
             id="categoria-tipo"
             value={tipo}
             onChange={(e) => setTipo(e.target.value as TipoCategoria)}
-            className="w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
+            className="w-full min-w-0 rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50"
           >
             <option value="VARIAVEL">Variável</option>
             <option value="FIXA">Fixa</option>

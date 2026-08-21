@@ -98,7 +98,7 @@ class LeituraFaturaServiceTest {
         ProcessarFaturaResponse resposta = leituraFaturaService.processar(1L, arquivoCsv(conteudo), "2026-07");
 
         assertThat(resposta.itens()).hasSize(1);
-        assertThat(resposta.itens().get(0).descricao()).isEqualTo("(Crédito) Mercado");
+        assertThat(resposta.itens().get(0).descricao()).isEqualTo("Mercado");
         assertThat(resposta.ignorados()).hasSize(2);
         assertThat(resposta.ignorados()).extracting("descricao")
                 .containsExactlyInAnyOrder("Pagamento recebido", "Estorno de \"Dl*99 Ride\" (99)");
@@ -141,7 +141,7 @@ class LeituraFaturaServiceTest {
         assertThat(resposta.itens()).extracting("data")
                 .containsExactlyInAnyOrder(LocalDate.of(2026, 7, 28), LocalDate.of(2026, 8, 5));
         assertThat(resposta.itens()).extracting("descricao")
-                .containsExactlyInAnyOrder("(Crédito) Uber", "(Crédito) Mercado");
+                .containsExactlyInAnyOrder("Uber", "Mercado");
     }
 
     @Test

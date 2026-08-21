@@ -65,12 +65,14 @@ class LimiteCategoriaControllerTest {
         limite.setId(id);
         limite.setValorLimite(new BigDecimal("500.00"));
         limite.setCategoria(categoria);
+        limite.setMesInicio(LocalDate.of(2026, 7, 1));
         return limite;
     }
 
     @Test
     void deveCriarLimiteCategoria() throws Exception {
-        when(limiteCategoriaService.criar(eq(1L), any(LimiteCategoria.class))).thenReturn(limiteCategoria(50L));
+        when(limiteCategoriaService.criar(eq(1L), any(LimiteCategoria.class), any()))
+                .thenReturn(limiteCategoria(50L));
 
         mockMvc.perform(post("/api/limites-categoria")
                         .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao))
@@ -81,15 +83,22 @@ class LimiteCategoriaControllerTest {
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(50))
-                .andExpect(jsonPath("$.categoria.id").value(5));
+                .andExpect(jsonPath("$.categoria.id").value(5))
+                // A vigencia vai na resposta: o front usa pra saber em que
+                // meses o limite vale.
+                .andExpect(jsonPath("$.mesInicio").value("2026-07-01"))
+                .andExpect(jsonPath("$.mesFim").doesNotExist());
     }
 
     @Test
     void deveListarLimites() throws Exception {
-        when(limiteCategoriaService.listar(1L))
+        // O mes vai como query param: a listagem devolve so os limites
+        // vigentes nele.
+        when(limiteCategoriaService.listar(1L, LocalDate.of(2026, 7, 1)))
                 .thenReturn(List.of(limiteCategoria(50L)));
 
         mockMvc.perform(get("/api/limites-categoria")
+                        .param("mes", "2026-07-01")
                         .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(50));

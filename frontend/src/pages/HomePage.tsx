@@ -676,7 +676,7 @@ export function HomePage() {
         <div className="space-y-3">
           {plano ? (
             <>
-              <p className="text-sm font-semibold text-grouper-ink">
+              <p className="text-justify text-sm text-grouper-ink">
                 {rendaVariavelMes > 0
                   ? `Sua renda fixa (${formatarBRL(rendaFixaMes)}) não seria suficiente para cobrir as despesas deste mês (${formatarBRL(totalDespesas)}) sem a ajuda de ${formatarBRL(rendaVariavelMes)} em renda variável. `
                   : `As despesas deste mês (${formatarBRL(totalDespesas)}) já superam sua renda fixa (${formatarBRL(rendaFixaMes)}). `}

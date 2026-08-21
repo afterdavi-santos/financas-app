@@ -9,7 +9,7 @@ const TIPOS_FOTO_PERMITIDOS = ["image/png", "image/jpeg"];
 const TAMANHO_MAXIMO_FOTO_BYTES = 2 * 1024 * 1024;
 
 // Mesmo padrão de card usado em Objetivos/Últimas despesas/Investimento CDB
-// da Home (`home-layout-atual.md` seção 5): fundo branco, borda sutil, sombra leve.
+// da Home (ver docs/FRONTEND.md): fundo branco, borda sutil, sombra leve.
 const classeCard = "space-y-4 rounded-lg border border-grouper-sky/20 bg-white p-5 shadow-sm";
 const classeInput =
   "w-full rounded-md border border-grouper-sky/40 px-3 py-2 text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50";

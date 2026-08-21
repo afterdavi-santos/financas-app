@@ -55,7 +55,11 @@ export function ConfirmacaoModal({
   return (
     <Modal titulo={titulo} aberto={aberto} onClose={onClose}>
       <div className="space-y-4">
-        <div className="text-sm text-grouper-navy">{mensagem}</div>
+        {/* whitespace-pre-line: deixa uma mensagem em texto puro usar "
+"
+            pra separar parágrafos (ex.: o aviso de renda fixa) sem virar
+            JSX. Não muda nada nas mensagens de uma linha só. */}
+        <div className="whitespace-pre-line text-sm text-grouper-navy">{mensagem}</div>
         <div className="flex flex-wrap justify-end gap-2 pt-2">
           <button
             type="button"

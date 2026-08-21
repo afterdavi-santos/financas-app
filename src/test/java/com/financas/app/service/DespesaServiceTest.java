@@ -1,10 +1,12 @@
 package com.financas.app.service;
 
+import com.financas.app.exception.OperacaoInvalidaException;
 import com.financas.app.exception.RecursoNaoEncontradoException;
 import com.financas.app.model.Categoria;
 import com.financas.app.model.Despesa;
 import com.financas.app.model.RecorrenciaDespesa;
 import com.financas.app.model.Usuario;
+import com.financas.app.model.enums.FormaPagamento;
 import com.financas.app.model.enums.TipoCategoria;
 import com.financas.app.repository.CategoriaRepository;
 import com.financas.app.repository.DespesaRepository;
@@ -543,6 +545,245 @@ class DespesaServiceTest {
         assertThat(recorrencia.isAtiva()).isTrue();
         verify(recorrenciaDespesaRepository, never()).save(any());
         verify(despesaRepository).delete(historica);
+    }
+
+    // ---- forma de pagamento e parcelamento ----
+
+    // O save mockado nao gera id, e gerarParcelas depende do id da PRIMEIRA
+    // parcela pra carimbar o grupo (parcelamentoId). Este stub imita a
+    // sequence do banco: cada save sem id ganha o proximo.
+    private long proximoIdSimulado = 100L;
+
+    private void simularGeracaoDeId() {
+        when(despesaRepository.save(any(Despesa.class))).thenAnswer(invocation -> {
+            Despesa d = invocation.getArgument(0);
+            if (d.getId() == null) {
+                d.setId(proximoIdSimulado++);
+            }
+            return d;
+        });
+    }
+
+    private Despesa compraNoCredito(BigDecimal total, int parcelas) {
+        Despesa nova = new Despesa();
+        nova.setDescricao("Geladeira");
+        nova.setValor(total);
+        nova.setData(LocalDate.of(2026, 8, 15));
+        nova.setFormaPagamento(FormaPagamento.CREDITO);
+        nova.setParcelasTotal(parcelas);
+        nova.setCategoria(categoriaDoUsuario(5L, 1L));
+        return nova;
+    }
+
+    private List<Despesa> capturarSaves(int quantidade) {
+        ArgumentCaptor<Despesa> captor = ArgumentCaptor.forClass(Despesa.class);
+        verify(despesaRepository, times(quantidade)).save(captor.capture());
+        return captor.getAllValues();
+    }
+
+    @Test
+    void deveGerarUmaDespesaPorParcelaAvancandoUmMesPorVez() {
+        // O ponto da feature: 3x nao e um rotulo numa despesa so - sao tres
+        // despesas, uma em cada mes, pra que o orcamento de setembro e outubro
+        // ja contem a parcela.
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioComId(1L)));
+        when(categoriaRepository.findById(5L)).thenReturn(Optional.of(categoriaDoUsuario(5L, 1L)));
+        simularGeracaoDeId();
+
+        despesaService.criar(1L, compraNoCredito(new BigDecimal("300.00"), 3));
+
+        // 4 saves: a 1a parcela e gravada duas vezes (a segunda so pra carimbar
+        // o parcelamentoId com o proprio id dela).
+        List<Despesa> parcelas = capturarSaves(4).subList(1, 4);
+        assertThat(parcelas).extracting(Despesa::getData).containsExactly(
+                LocalDate.of(2026, 8, 15), LocalDate.of(2026, 9, 15), LocalDate.of(2026, 10, 15));
+        assertThat(parcelas).extracting(Despesa::getParcelaNumero).containsExactly(1, 2, 3);
+        assertThat(parcelas).extracting(Despesa::getParcelasTotal).containsOnly(3);
+        assertThat(parcelas).extracting(Despesa::getValor).containsOnly(new BigDecimal("100.00"));
+    }
+
+    @Test
+    void deveJogarOsCentavosDaDivisaoNaPrimeiraParcela() {
+        // R$ 100 em 3x nao divide redondo. As parcelas tem que somar exatamente
+        // o total - senao o orcamento fica devendo (ou sobrando) um centavo.
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioComId(1L)));
+        when(categoriaRepository.findById(5L)).thenReturn(Optional.of(categoriaDoUsuario(5L, 1L)));
+        simularGeracaoDeId();
+
+        despesaService.criar(1L, compraNoCredito(new BigDecimal("100.00"), 3));
+
+        List<Despesa> parcelas = capturarSaves(4).subList(1, 4);
+        assertThat(parcelas).extracting(Despesa::getValor).containsExactly(
+                new BigDecimal("33.34"), new BigDecimal("33.33"), new BigDecimal("33.33"));
+        assertThat(parcelas.stream().map(Despesa::getValor).reduce(BigDecimal.ZERO, BigDecimal::add))
+                .isEqualByComparingTo(new BigDecimal("100.00"));
+    }
+
+    @Test
+    void deveAmarrarAsParcelasPeloIdDaPrimeira() {
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioComId(1L)));
+        when(categoriaRepository.findById(5L)).thenReturn(Optional.of(categoriaDoUsuario(5L, 1L)));
+        simularGeracaoDeId();
+
+        Despesa primeira = despesaService.criar(1L, compraNoCredito(new BigDecimal("300.00"), 3));
+
+        assertThat(primeira.getParcelamentoId()).isEqualTo(primeira.getId());
+        assertThat(capturarSaves(4).subList(1, 4)).extracting(Despesa::getParcelamentoId)
+                .containsOnly(primeira.getId());
+    }
+
+    @Test
+    void deveAvancarOMesDeReferenciaDasParcelasQuandoEleExiste() {
+        // Despesa vinda do Leitor de fatura: quem manda no mes do orcamento e o
+        // mesReferencia, entao a parcela 2 tem que cair no mes seguinte por ele
+        // tambem, nao so pela data real da compra.
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioComId(1L)));
+        when(categoriaRepository.findById(5L)).thenReturn(Optional.of(categoriaDoUsuario(5L, 1L)));
+        simularGeracaoDeId();
+
+        Despesa nova = compraNoCredito(new BigDecimal("200.00"), 2);
+        nova.setMesReferencia(LocalDate.of(2026, 9, 1));
+        despesaService.criar(1L, nova);
+
+        assertThat(capturarSaves(3).subList(1, 3)).extracting(Despesa::getMesReferencia)
+                .containsExactly(LocalDate.of(2026, 9, 1), LocalDate.of(2026, 10, 1));
+    }
+
+    @Test
+    void deveRecusarParcelamentoNoDebito() {
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioComId(1L)));
+        when(categoriaRepository.findById(5L)).thenReturn(Optional.of(categoriaDoUsuario(5L, 1L)));
+
+        Despesa nova = compraNoCredito(new BigDecimal("300.00"), 3);
+        nova.setFormaPagamento(FormaPagamento.DEBITO);
+
+        assertThatThrownBy(() -> despesaService.criar(1L, nova))
+                .isInstanceOf(OperacaoInvalidaException.class);
+        verify(despesaRepository, never()).save(any());
+    }
+
+    @Test
+    void deveRecusarMaisDeDozeParcelas() {
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioComId(1L)));
+        when(categoriaRepository.findById(5L)).thenReturn(Optional.of(categoriaDoUsuario(5L, 1L)));
+
+        assertThatThrownBy(() -> despesaService.criar(1L, compraNoCredito(new BigDecimal("300.00"), 13)))
+                .isInstanceOf(OperacaoInvalidaException.class);
+        verify(despesaRepository, never()).save(any());
+    }
+
+    @Test
+    void deveRecusarCompraParceladaEmCategoriaFixa() {
+        // Categoria fixa ja repete todo mes; parcelamento tambem ocupa os meses
+        // seguintes, mas com fim. Juntas, a mesma compra cairia duas vezes por
+        // mes (a parcela + a ocorrencia do catch-up). Numa categoria fixa so
+        // entra despesa de 1x - e a recusa e explicita, nao um ajuste calado.
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioComId(1L)));
+        when(categoriaRepository.findById(5L)).thenReturn(Optional.of(categoriaFixaDoUsuario(5L, 1L)));
+
+        assertThatThrownBy(() -> despesaService.criar(1L, compraNoCredito(new BigDecimal("300.00"), 3)))
+                .isInstanceOf(OperacaoInvalidaException.class)
+                .hasMessageContaining("fixa");
+
+        verify(despesaRepository, never()).save(any());
+        verify(recorrenciaDespesaRepository, never()).save(any());
+    }
+
+    @Test
+    void deveAceitarDespesaNoCreditoEmCategoriaFixaQuandoForDeUmaParcela() {
+        // O outro lado da regra: credito em categoria fixa e perfeitamente
+        // valido (uma assinatura no cartao, por exemplo) - desde que 1x. E como
+        // e 1x, a serie fixa nasce normalmente.
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioComId(1L)));
+        when(categoriaRepository.findById(5L)).thenReturn(Optional.of(categoriaFixaDoUsuario(5L, 1L)));
+        when(recorrenciaDespesaRepository.save(any(RecorrenciaDespesa.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        simularGeracaoDeId();
+
+        Despesa salva = despesaService.criar(1L, compraNoCredito(new BigDecimal("39.90"), 1));
+
+        assertThat(salva.getFormaPagamento()).isEqualTo(FormaPagamento.CREDITO);
+        assertThat(salva.getRecorrencia()).isNotNull();
+        assertThat(salva.getParcelasTotal()).isEqualTo(1);
+    }
+
+    @Test
+    void deveRecusarMoverCompraParceladaParaCategoriaFixaNaEdicao() {
+        // Mesma regra na edicao: sem isto, dava pra criar a combinacao proibida
+        // pela porta dos fundos, so trocando a categoria depois.
+        Despesa parcela = despesaComId(10L, 1L, 5L, new BigDecimal("100.00"));
+        parcela.setParcelamentoId(10L);
+        parcela.setParcelaNumero(1);
+        parcela.setParcelasTotal(3);
+        parcela.setFormaPagamento(FormaPagamento.CREDITO);
+
+        Despesa dados = despesaComId(null, 1L, 7L, new BigDecimal("100.00"));
+        dados.setFormaPagamento(FormaPagamento.CREDITO);
+
+        when(despesaRepository.findById(10L)).thenReturn(Optional.of(parcela));
+        when(categoriaRepository.findById(7L)).thenReturn(Optional.of(categoriaFixaDoUsuario(7L, 1L)));
+
+        assertThatThrownBy(() -> despesaService.atualizar(1L, 10L, dados))
+                .isInstanceOf(OperacaoInvalidaException.class);
+
+        verify(despesaRepository, never()).save(any());
+    }
+
+    @Test
+    void deveExcluirTodasAsParcelasAoExcluirUmaDelas() {
+        // Uma parcela sozinha nao e uma despesa que exista no mundo real:
+        // apagar a 2/3 e deixar 1/3 e 3/3 nao descreve compra nenhuma.
+        Despesa parcela2 = despesaComId(20L, 1L, 5L, new BigDecimal("100.00"));
+        parcela2.setParcelamentoId(10L);
+        parcela2.setParcelaNumero(2);
+        parcela2.setParcelasTotal(3);
+        List<Despesa> grupo = List.of(
+                despesaComId(10L, 1L, 5L, new BigDecimal("100.00")),
+                parcela2,
+                despesaComId(30L, 1L, 5L, new BigDecimal("100.00")));
+
+        when(despesaRepository.findById(20L)).thenReturn(Optional.of(parcela2));
+        when(despesaRepository.findByParcelamentoIdOrderByParcelaNumeroAsc(10L)).thenReturn(grupo);
+
+        despesaService.excluir(1L, 20L);
+
+        verify(despesaRepository).deleteAll(grupo);
+        verify(despesaRepository, never()).delete(any(Despesa.class));
+    }
+
+    @Test
+    void devePropagarDescricaoECategoriaParaAsOutrasParcelasAoEditar() {
+        // Renomear "Geladeira 1/6" tem que renomear as seis: descricao,
+        // categoria e forma de pagamento sao da compra, nao da parcela.
+        Despesa parcela1 = despesaComId(10L, 1L, 5L, new BigDecimal("100.00"));
+        parcela1.setParcelamentoId(10L);
+        parcela1.setParcelaNumero(1);
+        parcela1.setParcelasTotal(3);
+        parcela1.setFormaPagamento(FormaPagamento.CREDITO);
+        Despesa parcela2 = despesaComId(20L, 1L, 5L, new BigDecimal("100.00"));
+        parcela2.setParcelamentoId(10L);
+        parcela2.setParcelaNumero(2);
+        parcela2.setParcelasTotal(3);
+        parcela2.setFormaPagamento(FormaPagamento.CREDITO);
+
+        Despesa dados = despesaComId(null, 1L, 7L, new BigDecimal("120.00"));
+        dados.setDescricao("Geladeira Brastemp");
+        dados.setFormaPagamento(FormaPagamento.CREDITO);
+
+        when(despesaRepository.findById(10L)).thenReturn(Optional.of(parcela1));
+        when(categoriaRepository.findById(7L)).thenReturn(Optional.of(categoriaDoUsuario(7L, 1L)));
+        when(despesaRepository.findByParcelamentoIdOrderByParcelaNumeroAsc(10L))
+                .thenReturn(List.of(parcela1, parcela2));
+        when(despesaRepository.save(any(Despesa.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        despesaService.atualizar(1L, 10L, dados);
+
+        assertThat(parcela2.getDescricao()).isEqualTo("Geladeira Brastemp");
+        assertThat(parcela2.getCategoria().getId()).isEqualTo(7L);
+        // Valor e data ficam so na parcela editada: ajustar uma parcela e
+        // ajuste pontual, nao reescreve a divisao inteira da compra.
+        assertThat(parcela2.getValor()).isEqualByComparingTo(new BigDecimal("100.00"));
+        assertThat(parcela1.getValor()).isEqualByComparingTo(new BigDecimal("120.00"));
     }
 
 }

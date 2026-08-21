@@ -100,6 +100,11 @@ public class DespesaController {
         despesa.setValor(request.valor());
         despesa.setData(request.data());
         despesa.setMesReferencia(request.mesReferencia());
+        // O parcelamento chega no DTO como "quantas parcelas" e vai pra
+        // entidade como parcelasTotal; quem divide o valor e materializa uma
+        // Despesa por mes e o DespesaService.
+        despesa.setFormaPagamento(request.formaPagamentoOuPadrao());
+        despesa.setParcelasTotal(request.parcelasOuPadrao());
         Categoria categoria = new Categoria();
         categoria.setId(request.categoriaId());
         despesa.setCategoria(categoria);
@@ -113,7 +118,8 @@ public class DespesaController {
                 categoria.getDataCriacao());
         return new DespesaResponse(despesa.getId(), despesa.getDescricao(), despesa.getValor(),
                 despesa.getData(), despesa.getMesReferencia(), categoria.getTipo(), categoriaResponse,
-                despesa.getRecorrencia() != null);
+                despesa.getRecorrencia() != null, despesa.getFormaPagamento(), despesa.getParcelaNumero(),
+                despesa.getParcelasTotal(), despesa.getParcelamentoId());
     }
 
 }

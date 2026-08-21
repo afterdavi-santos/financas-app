@@ -55,7 +55,14 @@ export function ExcluirInvestimentoModal({ investimento, onClose, onExcluido }: 
   }
 
   return (
-    <Modal titulo="Excluir investimento" aberto onClose={onClose}>
+    // max-w-xl só no caso vinculado: e o unico com tres botoes, que no
+    // card padrao (max-w-md) quebravam em duas linhas.
+    <Modal
+      titulo="Excluir investimento"
+      aberto
+      onClose={onClose}
+      largura={vinculado ? "max-w-xl" : undefined}
+    >
       <div className="space-y-4">
         {erro && (
           <p className="rounded-md border-l-4 border-black bg-black/5 px-3 py-2 text-sm text-grouper-ink">
@@ -94,16 +101,14 @@ export function ExcluirInvestimentoModal({ investimento, onClose, onExcluido }: 
               vinculado à meta <strong>"{investimento.objetivoDescricao}"</strong>.
               O que você quer fazer?
             </p>
-            <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              "Excluir só o investimento" mantém a meta, só desvinculada dele
-              (o progresso volta a ser o saldo de aportes manuais). "Excluir os
-              dois" apaga a meta junto — essa ação não pode ser desfeita.
-            </p>
-            <div className="flex flex-wrap justify-end gap-2 pt-2">
+            {/* Mobile: empilhado, cada botão ocupando a largura toda —
+                três botões lado a lado não cabem num celular. De sm pra
+                cima volta à linha única. */}
+            <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:flex-nowrap sm:items-center sm:justify-end">
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist"
+                className="order-last whitespace-nowrap rounded-md px-4 py-2 font-display text-sm font-semibold text-grouper-navy hover:bg-grouper-mist sm:order-none"
               >
                 Cancelar
               </button>
@@ -111,7 +116,7 @@ export function ExcluirInvestimentoModal({ investimento, onClose, onExcluido }: 
                 type="button"
                 onClick={excluirSoInvestimento}
                 disabled={carregando}
-                className="rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep disabled:opacity-60"
+                className="whitespace-nowrap rounded-md bg-grouper-mid px-4 py-2 font-display text-sm font-semibold text-white hover:bg-grouper-deep disabled:opacity-60"
               >
                 {carregando ? "Excluindo..." : "Excluir só o investimento"}
               </button>
@@ -119,7 +124,7 @@ export function ExcluirInvestimentoModal({ investimento, onClose, onExcluido }: 
                 type="button"
                 onClick={excluirInvestimentoEMeta}
                 disabled={carregando}
-                className="rounded-md bg-red-600 px-4 py-2 font-display text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                className="whitespace-nowrap rounded-md bg-red-600 px-4 py-2 font-display text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
               >
                 {carregando ? "Excluindo..." : "Excluir os dois"}
               </button>

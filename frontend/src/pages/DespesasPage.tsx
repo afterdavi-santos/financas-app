@@ -9,18 +9,19 @@ import { GraficoCategoriasModal } from "../components/GraficoCategoriasModal";
 import { BarraSelecao } from "../components/BarraSelecao";
 import { SelecionarTodos } from "../components/SelecionarTodos";
 import { ConfirmacaoModal } from "../components/ConfirmacaoModal";
-import { IconeEditar, IconeExcluir, IconeGrafico } from "../components/IconesInvestimento";
+import { IconeEditar, IconeExcluir, IconeGrafico, IconeLupa } from "../components/IconesInvestimento";
 import { Tooltip } from "../components/Tooltip";
 import { GraficoDespesasMensal, type PontoDespesa } from "../components/GraficoDespesasMensal";
 import { SeletorMes } from "../components/SeletorMes";
 import { useSelecao } from "../hooks/useSelecao";
+import { useTelaEstreita } from "../hooks/useTelaEstreita";
 import { useMesSelecionado } from "../hooks/useMesSelecionado";
 import { useAjustarFonteSincronizada } from "../hooks/useAjustarFonteSincronizada";
 import { listarDespesas, excluirDespesa } from "../api/despesas";
 import { listarCategorias } from "../api/categorias";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
-import { rotuloTipoCategoria, dataBR, mesCurtoBR } from "../utils/rotulos";
+import { rotuloTipoCategoria, rotuloPagamento, dataBR, mesCurtoBR } from "../utils/rotulos";
 import {
   hojeISO,
   mesAtualYYYYMM,
@@ -38,6 +39,7 @@ import {
   mesEfetivoDespesa,
 } from "../utils/despesasResumo";
 import { aoTeclarAtivar } from "../utils/teclado";
+import { normalizarBusca } from "../utils/busca";
 import type { VariacaoCategoria } from "../utils/despesasResumo";
 import type { Categoria, Despesa, TipoCategoria } from "../types/financas";
 
@@ -82,6 +84,13 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
   const [editando, setEditando] = useState<Despesa | null>(null);
   // Filtro da lista completa por tipo (Todas/Fixas/Variáveis).
   const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>("TODAS");
+  // Busca por nome na lista completa. `buscaAberta` controla só a
+  // visibilidade do campo (a lupa alterna): o filtro em si é o `busca`.
+  const [busca, setBusca] = useState("");
+  const [buscaAberta, setBuscaAberta] = useState(false);
+  // Só pro placeholder: "Buscar pelo nome..." não cabe nos 96px que o
+  // campo tem no mobile.
+  const telaEstreita = useTelaEstreita();
   // Filtro (independente) da seção "Despesas por categoria".
   const [filtroCategoria, setFiltroCategoria] = useState<FiltroTipo>("TODAS");
   // Um único estado controla qual detalhamento está aberto (null = fechado).
@@ -236,9 +245,15 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
     setConfirmandoExclusao(null);
   }
 
-  // Mais recentes primeiro (por data), já filtradas pelo tipo escolhido.
+  // Mais recentes primeiro (por data), já filtradas pelo tipo escolhido e
+  // pelo texto buscado (trecho em qualquer posição do nome, como um LIKE
+  // %texto%).
+  const buscaNormalizada = normalizarBusca(busca);
   const ordenadas = despesas
     .filter((d) => filtroTipo === "TODAS" || d.tipo === filtroTipo)
+    .filter(
+      (d) => buscaNormalizada === "" || normalizarBusca(d.descricao).includes(buscaNormalizada),
+    )
     .sort((a, b) => b.data.localeCompare(a.data));
 
   // Nova despesa cai no mês em foco: hoje se for o mês atual; senão, dia 1 dele.
@@ -516,7 +531,43 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
               {/* Filtro Todas/Fixas/Variáveis — mesmo tratamento de hover
                   (azul mais escuro pra indicar que é clicável) das linhas
                   de Investimento CDB na Home. */}
-              <div className="flex items-center gap-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-1">
+                {/* Lupa: alterna o campo de busca. Fechar limpa o texto, senão
+                    a lista continuaria filtrada por um termo invisível. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBuscaAberta((aberta) => {
+                      if (aberta) setBusca("");
+                      return !aberta;
+                    });
+                  }}
+                  aria-label="Pesquisar despesa pelo nome"
+                  aria-pressed={buscaAberta}
+                  className={`rounded-md p-1.5 transition-colors ${
+                    buscaAberta
+                      ? "bg-grouper-sky/40 text-grouper-ink"
+                      : "text-grouper-navy/60 hover:bg-grouper-sky/25 hover:text-grouper-ink"
+                  }`}
+                >
+                  <IconeLupa className="h-4 w-4" />
+                </button>
+                {buscaAberta && (
+                  <input
+                    type="text"
+                    autoFocus
+                    value={busca}
+                    onChange={(e) => setBusca(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        setBusca("");
+                        setBuscaAberta(false);
+                      }
+                    }}
+                    placeholder={telaEstreita ? "Buscar" : "Buscar pelo nome..."}
+                    className="w-24 min-w-0 rounded-md border border-grouper-sky/40 px-2 py-1 text-xs text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50 sm:w-40"
+                  />
+                )}
                 {FILTROS.map((f) => (
                   <button
                     key={f.chave}
@@ -559,9 +610,11 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
 
             {ordenadas.length === 0 ? (
               <p className="text-sm text-grouper-navy/60">
-                {filtroTipo === "TODAS"
-                  ? "Nenhuma despesa lançada neste mês ainda."
-                  : `Nenhuma despesa ${filtroTipo === "FIXA" ? "fixa" : "variável"} neste mês.`}
+                {buscaNormalizada !== ""
+                  ? `Nenhuma despesa deste mês com "${busca.trim()}" no nome.`
+                  : filtroTipo === "TODAS"
+                    ? "Nenhuma despesa lançada neste mês ainda."
+                    : `Nenhuma despesa ${filtroTipo === "FIXA" ? "fixa" : "variável"} neste mês.`}
               </p>
             ) : (
               <ul
@@ -592,7 +645,7 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
                           </p>
                           <p className="text-xs font-medium text-grouper-deep">
                             {d.categoria.nome} · {rotuloTipoCategoria[d.tipo]} ·{" "}
-                            {dataBR(d.data)}
+                            {rotuloPagamento(d)} · {dataBR(d.data)}
                           </p>
                         </div>
                         <div
@@ -671,6 +724,8 @@ export function DespesasPage({ headerSlot, graficoSlot }: Props = {}) {
         mensagem={
           confirmandoExclusao === "LOTE"
             ? `Excluir ${selecionados.size} despesa${selecionados.size > 1 ? "s" : ""} selecionada${selecionados.size > 1 ? "s" : ""}?`
+            : confirmandoExclusao !== null && confirmandoExclusao.parcelasTotal > 1
+              ? `A despesa "${confirmandoExclusao.descricao}" é a parcela ${confirmandoExclusao.parcelaNumero}/${confirmandoExclusao.parcelasTotal} de uma compra no crédito. Excluir remove as ${confirmandoExclusao.parcelasTotal} parcelas, inclusive as dos meses seguintes. Continuar?`
             : confirmandoExclusao?.recorrente
               ? `A despesa "${confirmandoExclusao.descricao}" é fixa e recorrente. Excluí-la remove só o mês atual e para as próximas repetições — os meses anteriores continuam registrados. Continuar?`
               : `Excluir a despesa "${confirmandoExclusao?.descricao}"?`

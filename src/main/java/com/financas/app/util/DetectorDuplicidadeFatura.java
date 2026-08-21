@@ -38,11 +38,14 @@ public final class DetectorDuplicidadeFatura {
     // numa reimportação da mesma fatura (a linha crua vem sem o "(3x)").
     private static final Pattern SUFIXO_QUANTIDADE = Pattern.compile("\\s*\\(\\d+x\\)\\s*$", Pattern.CASE_INSENSITIVE);
 
-    // Prefixo que o leitor de fatura adiciona a toda despesa importada (ver
-    // LeituraFaturaService, "(Crédito) Uber") — ignorado na comparação pelo
-    // mesmo motivo do sufixo acima: a linha crua reimportada do CSV nunca
-    // tem esse prefixo, então uma despesa já importada nunca bateria como
-    // duplicata exata (ALTISSIMA) ou de bloco (BLOCO) numa reimportação.
+    // LEGADO: o leitor de fatura já prefixou "(Crédito) " em toda despesa
+    // importada. Não prefixa mais — a forma de pagamento virou coluna
+    // (Despesa.formaPagamento), e o nome voltou a ser só o do
+    // estabelecimento. Continua sendo removido aqui porque as despesas
+    // gravadas ANTES dessa mudança seguem no banco com o prefixo: sem isto,
+    // reimportar uma fatura antiga não reconheceria nenhuma delas como
+    // duplicata exata (ALTISSIMA) ou de bloco (BLOCO). Só pode sair quando
+    // não houver mais despesa prefixada em banco nenhum.
     private static final Pattern PREFIXO_CREDITO = Pattern.compile("^\\s*\\(cr[ée]dito\\)\\s*", Pattern.CASE_INSENSITIVE);
 
     // Devolve o nível mais forte que bater com QUALQUER despesa candidata, ou

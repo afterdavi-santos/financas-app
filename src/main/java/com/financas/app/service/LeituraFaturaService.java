@@ -49,7 +49,6 @@ public class LeituraFaturaService {
     // deixar de fora um bloco "(Nx)" já salvo com data um pouco além do
     // máximo do lote atual (ex.: reimportar uma fatura mais antiga/parcial).
     private static final long FOLGA_DIAS_CANDIDATAS = 90;
-    private static final String PREFIXO_CREDITO = "(Crédito) ";
 
     private final DespesaService despesaService;
 
@@ -109,7 +108,7 @@ public class LeituraFaturaService {
                     id++,
                     item.data(),
                     mesReferencia,
-                    PREFIXO_CREDITO + item.descricao(),
+                    item.descricao(),
                     item.valor(),
                     categoriaSugerida == null ? null : categoriaSugerida.getId(),
                     categoriaSugerida == null ? null : categoriaSugerida.getNome(),

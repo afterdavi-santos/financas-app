@@ -1,10 +1,12 @@
 package com.financas.app.service;
 
+import com.financas.app.exception.OperacaoInvalidaException;
 import com.financas.app.exception.RecursoNaoEncontradoException;
 import com.financas.app.model.Categoria;
 import com.financas.app.model.Despesa;
 import com.financas.app.model.RecorrenciaDespesa;
 import com.financas.app.model.Usuario;
+import com.financas.app.model.enums.FormaPagamento;
 import com.financas.app.model.enums.TipoCategoria;
 import com.financas.app.repository.CategoriaRepository;
 import com.financas.app.repository.DespesaRepository;
@@ -17,7 +19,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -36,14 +40,116 @@ public class DespesaService {
         this.recorrenciaDespesaRepository = recorrenciaDespesaRepository;
     }
 
+    // Devolve a PRIMEIRA parcela (a compra inteira, quando parcelas = 1). O
+    // valor que chega em `despesa` e sempre o TOTAL da compra; quem divide e
+    // gerarParcelas.
+    @Transactional
     public Despesa criar(Long usuarioId, Despesa despesa) {
         despesa.setUsuario(buscarUsuarioOuFalhar(usuarioId));
         Categoria categoria = buscarCategoriaOuFalhar(despesa.getCategoria().getId(), usuarioId);
         despesa.setCategoria(categoria);
+        int parcelas = validarParcelamento(despesa, categoria);
+        if (parcelas > 1) {
+            return gerarParcelas(despesa, parcelas);
+        }
+        despesa.setParcelaNumero(1);
+        despesa.setParcelasTotal(1);
+        despesa.setParcelamentoId(null);
         if (categoria.getTipo() == TipoCategoria.FIXA) {
             despesa.setRecorrencia(criarRecorrencia(despesa));
         }
         return despesaRepository.save(despesa);
+    }
+
+    // Parcelar so faz sentido no credito, e o teto de 12 e o mesmo do
+    // @Max(12) do DespesaRequest e do CHECK da V2 - repetido aqui porque o
+    // service tambem e chamado pelo lote do Leitor de fatura.
+    private int validarParcelamento(Despesa despesa, Categoria categoria) {
+        int parcelas = despesa.getParcelasTotal() == null ? 1 : despesa.getParcelasTotal();
+        if (parcelas < 1 || parcelas > 12) {
+            throw new OperacaoInvalidaException("A quantidade de parcelas deve estar entre 1 e 12.");
+        }
+        if (parcelas > 1 && despesa.getFormaPagamento() != FormaPagamento.CREDITO) {
+            throw new OperacaoInvalidaException("Só despesas no crédito podem ser parceladas.");
+        }
+        // Categoria FIXA e parcelamento sao duas formas incompativeis de
+        // ocupar os proximos meses: a serie fixa repete sem fim, o
+        // parcelamento acaba na ultima parcela. Juntas, a mesma compra cairia
+        // duas vezes por mes (a parcela + a ocorrencia gerada pelo catch-up).
+        // Numa categoria fixa, entao, so entra despesa de 1x - no credito ou
+        // no debito. Isto e recusa explicita, nao um ajuste em silencio: se o
+        // app escolhesse sozinho entre "vira fixa" e "vira parcelada", o
+        // usuario descobriria a escolha meses depois, olhando o orcamento.
+        if (parcelas > 1 && categoria.getTipo() == TipoCategoria.FIXA) {
+            throw new OperacaoInvalidaException(
+                    "Despesa de categoria fixa não pode ser parcelada: ela já se repete todo mês. "
+                            + "Use 1x, ou escolha uma categoria variável.");
+        }
+        return parcelas;
+    }
+
+    // Uma compra em 3x vira TRES despesas, uma por mes, e nao uma linha com
+    // rotulo "3x" - e isso que faz o orcamento dos proximos meses ja enxergar
+    // a parcela.
+    //
+    // A primeira parcela e gravada sozinha antes das outras porque o id dela
+    // e o que carimba o grupo (parcelamentoId), dispensando sequence propria.
+    //
+    // Nao trata categoria FIXA: validarParcelamento ja recusou essa
+    // combinacao antes de chegar aqui.
+    private Despesa gerarParcelas(Despesa base, int parcelas) {
+        List<BigDecimal> valores = dividir(base.getValor(), parcelas);
+        List<Despesa> salvas = new ArrayList<>();
+        Despesa primeira = null;
+        for (int i = 0; i < parcelas; i++) {
+            Despesa parcela = i == 0 ? base : copiarPara(base, i);
+            parcela.setValor(valores.get(i));
+            parcela.setParcelaNumero(i + 1);
+            parcela.setParcelasTotal(parcelas);
+            parcela.setRecorrencia(null);
+            if (i == 0) {
+                primeira = despesaRepository.save(parcela);
+                primeira.setParcelamentoId(primeira.getId());
+                salvas.add(despesaRepository.save(primeira));
+            } else {
+                parcela.setParcelamentoId(primeira.getId());
+                salvas.add(despesaRepository.save(parcela));
+            }
+        }
+        return salvas.get(0);
+    }
+
+    // Parcela i+1 da compra: mesma descricao/categoria, i meses adiante.
+    // plusMonths ja resolve o dia que nao existe no mes destino (31/jan + 1
+    // mes = 28/fev). mesReferencia acompanha quando existe (despesa vinda do
+    // Leitor de fatura); null continua null, e ai quem manda e a `data`.
+    private Despesa copiarPara(Despesa base, int mesesAdiante) {
+        Despesa parcela = new Despesa();
+        parcela.setUsuario(base.getUsuario());
+        parcela.setCategoria(base.getCategoria());
+        parcela.setDescricao(base.getDescricao());
+        parcela.setFormaPagamento(base.getFormaPagamento());
+        parcela.setData(base.getData().plusMonths(mesesAdiante));
+        if (base.getMesReferencia() != null) {
+            parcela.setMesReferencia(base.getMesReferencia().plusMonths(mesesAdiante));
+        }
+        return parcela;
+    }
+
+    // Divide o total em N parcelas de 2 casas. O resto da divisao vai INTEIRO
+    // na primeira parcela (R$ 100 em 3x = 33,34 + 33,33 + 33,33), pra que a
+    // soma das parcelas seja exatamente o total desde o primeiro mes, sem
+    // centavo sobrando nem faltando.
+    private List<BigDecimal> dividir(BigDecimal total, int parcelas) {
+        BigDecimal quantidade = BigDecimal.valueOf(parcelas);
+        BigDecimal cada = total.divide(quantidade, 2, RoundingMode.DOWN);
+        BigDecimal resto = total.setScale(2, RoundingMode.HALF_UP).subtract(cada.multiply(quantidade));
+        List<BigDecimal> valores = new ArrayList<>();
+        valores.add(cada.add(resto));
+        for (int i = 1; i < parcelas; i++) {
+            valores.add(cada);
+        }
+        return valores;
     }
 
     // Usado pelo leitor de fatura (importação em lote): tudo ou nada — se uma
@@ -101,8 +207,35 @@ public class DespesaService {
         despesa.setValor(dadosAtualizados.getValor());
         despesa.setData(dadosAtualizados.getData());
         despesa.setCategoria(buscarCategoriaOuFalhar(dadosAtualizados.getCategoria().getId(), usuarioId));
+        despesa.setFormaPagamento(dadosAtualizados.getFormaPagamento());
         sincronizarRecorrenciaComCategoria(despesa);
-        return despesaRepository.save(despesa);
+        Despesa salva = despesaRepository.save(despesa);
+        propagarParaIrmas(salva);
+        return salva;
+    }
+
+    // Descricao, categoria e forma de pagamento sao da COMPRA, nao de uma
+    // parcela: renomear "Geladeira 1/6" tem que renomear as seis. Ja valor e
+    // data ficam so na parcela editada de proposito - corrigir o dia em que a
+    // 3a parcela caiu, ou o valor de uma parcela especifica, e ajuste
+    // pontual, e propagar isso reescreveria a divisao inteira da compra.
+    //
+    // Nao mexe em parcelaNumero/parcelasTotal: o numero de parcelas de uma
+    // compra ja feita nao muda pela edicao de uma linha. Pra isso, exclui
+    // (que apaga o grupo) e lanca de novo.
+    private void propagarParaIrmas(Despesa editada) {
+        if (editada.getParcelamentoId() == null) {
+            return;
+        }
+        for (Despesa irma : despesaRepository.findByParcelamentoIdOrderByParcelaNumeroAsc(editada.getParcelamentoId())) {
+            if (irma.getId().equals(editada.getId())) {
+                continue;
+            }
+            irma.setDescricao(editada.getDescricao());
+            irma.setCategoria(editada.getCategoria());
+            irma.setFormaPagamento(editada.getFormaPagamento());
+            despesaRepository.save(irma);
+        }
     }
 
     // A categoria (e com ela o tipo FIXA/VARIAVEL) pode mudar na edição, e a
@@ -111,7 +244,15 @@ public class DespesaService {
     // seguintes, e tirá-la de uma categoria FIXA mantinha a série gerando
     // ocorrências na categoria antiga.
     private void sincronizarRecorrenciaComCategoria(Despesa despesa) {
+        // Mesma regra da criacao, agora na edicao: mover uma parcela para uma
+        // categoria FIXA criaria a combinacao que validarParcelamento recusa.
+        boolean parcelada = despesa.getParcelasTotal() != null && despesa.getParcelasTotal() > 1;
         boolean fixa = despesa.getCategoria().getTipo() == TipoCategoria.FIXA;
+        if (fixa && parcelada) {
+            throw new OperacaoInvalidaException(
+                    "Uma compra parcelada não pode ir para uma categoria fixa. "
+                            + "Escolha uma categoria variável.");
+        }
         RecorrenciaDespesa recorrencia = despesa.getRecorrencia();
         if (fixa && recorrencia == null) {
             despesa.setRecorrencia(criarRecorrencia(despesa));
@@ -130,8 +271,18 @@ public class DespesaService {
     // Exclui só esta ocorrência. Se for a mais recente de uma recorrência
     // ativa, também encerra a série (próximos meses param de ser gerados);
     // ocorrências de meses passados continuam intactas no banco.
+    // Numa compra parcelada, exclui a COMPRA inteira (todas as parcelas) -
+    // uma parcela isolada nao e uma despesa que exista sozinha no mundo real,
+    // e deixar 1/3 e 3/3 sem a 2/3 nao descreve nada. O frontend avisa quantas
+    // linhas vao junto antes de confirmar.
+    @Transactional
     public void excluir(Long usuarioId, Long despesaId) {
         Despesa despesa = buscarOuFalhar(despesaId, usuarioId);
+        if (despesa.getParcelamentoId() != null) {
+            despesaRepository.deleteAll(
+                    despesaRepository.findByParcelamentoIdOrderByParcelaNumeroAsc(despesa.getParcelamentoId()));
+            return;
+        }
         if (despesa.getRecorrencia() != null) {
             RecorrenciaDespesa recorrencia = despesa.getRecorrencia();
             despesaRepository.findTopByRecorrenciaIdOrderByDataDesc(recorrencia.getId())

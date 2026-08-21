@@ -200,7 +200,7 @@ export function SimularDespesaModal({
                 />
               </div>
 
-              <div className="space-y-1">
+              <div className="min-w-0 space-y-1">
                 <label
                   htmlFor="sim-nova-categoria-tipo"
                   className="text-sm font-medium text-slate-700"
@@ -211,7 +211,7 @@ export function SimularDespesaModal({
                   id="sim-nova-categoria-tipo"
                   value={novaCategoriaTipo}
                   onChange={(e) => setNovaCategoriaTipo(e.target.value as TipoCategoria)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full min-w-0 rounded-md border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="VARIAVEL">Variável</option>
                   <option value="FIXA">Fixa</option>

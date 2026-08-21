@@ -9,9 +9,15 @@ const MIN_CARACTERES = 2;
 // digitado (pra evitar duplicata tipo "Mercado" vs "Mercadinho"). Debounced;
 // se o nome bate EXATO (case-insensitive) com uma categoria já carregada,
 // nem chama a API — já sabemos a resposta localmente.
+//
+// `idIgnorado` é a categoria que está sendo EDITADA: sem ele, abrir a edição
+// de "Mercado" acusava "Categoria parecida já existe: Mercado" — a própria,
+// devolvida pela busca do backend. Filtrar a lista local não bastava, porque
+// quem traz a sugestão nesse caso é a API, não a lista.
 export function useCategoriasSemelhantes(
   nome: string,
   categoriasExistentes: Categoria[],
+  idIgnorado?: number,
 ) {
   const [sugestoes, setSugestoes] = useState<Categoria[]>([]);
   const [carregando, setCarregando] = useState(false);
@@ -41,7 +47,7 @@ export function useCategoriasSemelhantes(
       buscarCategoriasSemelhantes(nomeAparado)
         .then((resultado) => {
           if (idRequisicao === requisicaoAtual.current) {
-            setSugestoes(resultado);
+            setSugestoes(resultado.filter((c) => c.id !== idIgnorado));
           }
         })
         .catch(() => {
@@ -57,7 +63,7 @@ export function useCategoriasSemelhantes(
     }, DEBOUNCE_MS);
 
     return () => clearTimeout(timeout);
-  }, [nome, categoriasExistentes]);
+  }, [nome, categoriasExistentes, idIgnorado]);
 
   return { sugestoes, carregando };
 }

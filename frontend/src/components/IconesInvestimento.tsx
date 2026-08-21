@@ -70,3 +70,22 @@ export function IconeExcluir({ className = "h-4 w-4" }: IconeProps) {
     </svg>
   );
 }
+
+// Lupa da busca por nome na lista "Todas as despesas do mês"
+// (DespesasPage). Mesmo traço dos demais: viewBox 20x20, stroke currentColor.
+export function IconeLupa({ className = "h-4 w-4" }: IconeProps) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className={className}>
+      <circle cx="8.75" cy="8.75" r="5.25" stroke="currentColor" strokeWidth="1.5" />
+      <line
+        x1="12.75"
+        y1="12.75"
+        x2="16.5"
+        y2="16.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}

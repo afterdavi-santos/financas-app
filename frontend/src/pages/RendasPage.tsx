@@ -6,11 +6,12 @@ import { NovaRendaModal } from "../components/NovaRendaModal";
 import { BarraSelecao } from "../components/BarraSelecao";
 import { SelecionarTodos } from "../components/SelecionarTodos";
 import { ConfirmacaoModal } from "../components/ConfirmacaoModal";
-import { IconeEditar, IconeExcluir } from "../components/IconesInvestimento";
+import { IconeEditar, IconeExcluir, IconeLupa } from "../components/IconesInvestimento";
 import { Tooltip } from "../components/Tooltip";
 import { GraficoRendaMensal, type PontoRenda } from "../components/GraficoRendaMensal";
 import { SeletorMes } from "../components/SeletorMes";
 import { useSelecao } from "../hooks/useSelecao";
+import { useTelaEstreita } from "../hooks/useTelaEstreita";
 import { useMesSelecionado } from "../hooks/useMesSelecionado";
 import { useAjustarFonteSincronizada } from "../hooks/useAjustarFonteSincronizada";
 import { listarRendas, excluirRenda } from "../api/rendas";
@@ -19,6 +20,7 @@ import { formatarBRL } from "../utils/moeda";
 import { rotuloTipoRenda, mesBR, mesCurtoBR } from "../utils/rotulos";
 import { mesAnteriorYYYYMM, primeiroDiaMesesAtrasDoMes } from "../utils/datas";
 import { aoTeclarAtivar } from "../utils/teclado";
+import { normalizarBusca } from "../utils/busca";
 import type { Renda } from "../types/financas";
 
 // Filtro da lista "Todas as rendas do mês" (canto direito do cabeçalho da
@@ -51,6 +53,12 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
   const [editando, setEditando] = useState<Renda | null>(null);
   // Filtro da lista completa por tipo (Todas/Fixas/Variáveis).
   const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>("TODAS");
+  // Busca por nome na lista completa (mesmo padrão da lista de despesas).
+  // `buscaAberta` controla só a visibilidade do campo; o filtro é o `busca`.
+  const [busca, setBusca] = useState("");
+  const [buscaAberta, setBuscaAberta] = useState(false);
+  // Só pro placeholder: o texto longo não cabe no campo estreito do mobile.
+  const telaEstreita = useTelaEstreita();
   const {
     selecionados,
     alternar,
@@ -156,12 +164,17 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
   }, [rendas, mes]);
 
   // Mais recentes primeiro (por mês de referência), já filtradas pelo tipo
-  // escolhido ("VARIAVEL" = FREELA + RETORNO_INVESTIMENTOS).
+  // escolhido ("VARIAVEL" = FREELA + RETORNO_INVESTIMENTOS) e pelo texto
+  // buscado (trecho em qualquer posição do nome, como um LIKE %texto%).
+  const buscaNormalizada = normalizarBusca(busca);
   const ordenadas = rendasDoMes
     .filter(
       (r) =>
         filtroTipo === "TODAS" ||
         (filtroTipo === "FIXA" ? r.tipo === "FIXA" : r.tipo !== "FIXA"),
+    )
+    .filter(
+      (r) => buscaNormalizada === "" || normalizarBusca(r.descricao).includes(buscaNormalizada),
     )
     .sort((a, b) => b.mesReferencia.localeCompare(a.mesReferencia));
 
@@ -263,7 +276,43 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
             {/* Filtro Todas/Fixas/Variáveis — mesmo tratamento de hover
                 (azul mais escuro pra indicar que é clicável) das linhas
                 de Investimento CDB na Home. */}
-            <div className="flex items-center gap-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-1">
+              {/* Lupa: alterna o campo de busca. Fechar limpa o texto, senão
+                  a lista continuaria filtrada por um termo invisível. */}
+              <button
+                type="button"
+                onClick={() => {
+                  setBuscaAberta((aberta) => {
+                    if (aberta) setBusca("");
+                    return !aberta;
+                  });
+                }}
+                aria-label="Pesquisar renda pelo nome"
+                aria-pressed={buscaAberta}
+                className={`rounded-md p-1.5 transition-colors ${
+                  buscaAberta
+                    ? "bg-grouper-sky/40 text-grouper-ink"
+                    : "text-grouper-navy/60 hover:bg-grouper-sky/25 hover:text-grouper-ink"
+                }`}
+              >
+                <IconeLupa className="h-4 w-4" />
+              </button>
+              {buscaAberta && (
+                <input
+                  type="text"
+                  autoFocus
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      setBusca("");
+                      setBuscaAberta(false);
+                    }
+                  }}
+                  placeholder={telaEstreita ? "Buscar" : "Buscar pelo nome..."}
+                  className="w-24 min-w-0 rounded-md border border-grouper-sky/40 px-2 py-1 text-xs text-grouper-ink focus:border-grouper-mid focus:outline-none focus:ring-2 focus:ring-grouper-mid/50 sm:w-40"
+                />
+              )}
               {FILTROS.map((f) => (
                 <button
                   key={f.chave}
@@ -306,9 +355,11 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
 
           {ordenadas.length === 0 ? (
             <p className="text-sm text-grouper-navy/60">
-              {filtroTipo === "TODAS"
-                ? "Nenhuma renda lançada neste mês ainda."
-                : `Nenhuma renda ${filtroTipo === "FIXA" ? "fixa" : "variável"} neste mês.`}
+              {buscaNormalizada !== ""
+                ? `Nenhuma renda deste mês com "${busca.trim()}" no nome.`
+                : filtroTipo === "TODAS"
+                  ? "Nenhuma renda lançada neste mês ainda."
+                  : `Nenhuma renda ${filtroTipo === "FIXA" ? "fixa" : "variável"} neste mês.`}
             </p>
           ) : (
             <ul
@@ -393,7 +444,9 @@ export function RendasPage({ headerSlot, graficoSlot }: Props = {}) {
           confirmandoExclusao === "LOTE"
             ? `Excluir ${selecionados.size} renda${selecionados.size > 1 ? "s" : ""} selecionada${selecionados.size > 1 ? "s" : ""}?`
             : confirmandoExclusao?.recorrente
-              ? `A renda "${confirmandoExclusao.descricao}" é fixa e recorrente. Excluí-la remove só o mês atual e para as próximas repetições — os meses anteriores continuam registrados. Continuar?`
+              ? `A renda "${confirmandoExclusao.descricao}" é fixa. Excluí-la removerá do mês atual e dos meses seguintes. Obs: não afetará os meses anteriores.
+
+Deseja continuar?`
               : `Excluir a renda "${confirmandoExclusao?.descricao}"?`
         }
         onConfirmar={confirmarExclusao}

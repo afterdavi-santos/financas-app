@@ -12,6 +12,7 @@ import { listarLimites, statusLimite, excluirLimite } from "../api/limites";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { mesAtualYYYYMM, primeiroDiaDoMes } from "../utils/datas";
+import { mesCurtoBR } from "../utils/rotulos";
 import { aoTeclarAtivar } from "../utils/teclado";
 import type { Categoria, LimiteCategoria, StatusLimite } from "../types/financas";
 
@@ -80,7 +81,7 @@ export function PlanejamentoLimites({ headerSlot, mes = mesAtualYYYYMM() }: Prop
       const mesReferencia = primeiroDiaDoMes(mes);
       const [cats, limites] = await Promise.all([
         listarCategorias(),
-        listarLimites(),
+        listarLimites(mesReferencia),
       ]);
       const comStatus = await Promise.all(
         limites.map(async (limite) => ({
@@ -125,7 +126,9 @@ export function PlanejamentoLimites({ headerSlot, mes = mesAtualYYYYMM() }: Prop
   async function confirmarExclusao() {
     if (confirmandoExclusao === "LOTE") {
       const ids = Array.from(selecionados);
-      const resultados = await Promise.allSettled(ids.map((id) => excluirLimite(id)));
+      const resultados = await Promise.allSettled(
+        ids.map((id) => excluirLimite(id, primeiroDiaDoMes(mes))),
+      );
       const falhas = resultados.filter((r) => r.status === "rejected").length;
       if (falhas > 0) {
         setErro(`${falhas} de ${ids.length} limite(s) não puderam ser excluídos.`);
@@ -134,7 +137,7 @@ export function PlanejamentoLimites({ headerSlot, mes = mesAtualYYYYMM() }: Prop
       carregar();
     } else if (confirmandoExclusao) {
       try {
-        await excluirLimite(confirmandoExclusao.limite.id);
+        await excluirLimite(confirmandoExclusao.limite.id, primeiroDiaDoMes(mes));
         desselecionarTodos([confirmandoExclusao.limite.id]);
         carregar();
       } catch (e) {
@@ -286,6 +289,7 @@ export function PlanejamentoLimites({ headerSlot, mes = mesAtualYYYYMM() }: Prop
           carregar();
         }}
         categorias={editando ? categorias : categoriasSemLimite}
+        mes={mes}
       />
 
       <ConfirmacaoModal
@@ -293,8 +297,12 @@ export function PlanejamentoLimites({ headerSlot, mes = mesAtualYYYYMM() }: Prop
         titulo={confirmandoExclusao === "LOTE" ? "Excluir limites" : "Excluir limite"}
         mensagem={
           confirmandoExclusao === "LOTE"
-            ? `Excluir ${selecionados.size} limite${selecionados.size > 1 ? "s" : ""} selecionado${selecionados.size > 1 ? "s" : ""}?`
-            : `Excluir o limite de "${confirmandoExclusao?.limite.categoria.nome}"?`
+            ? `Excluir ${selecionados.size} limite${selecionados.size > 1 ? "s" : ""} selecionado${selecionados.size > 1 ? "s" : ""} a partir de ${mesCurtoBR(primeiroDiaDoMes(mes))}? Obs: não afetará os meses anteriores.
+
+Deseja continuar?`
+            : `O limite de "${confirmandoExclusao?.limite.categoria.nome}" deixará de valer a partir de ${mesCurtoBR(primeiroDiaDoMes(mes))}. Obs: não afetará os meses anteriores.
+
+Deseja continuar?`
         }
         onConfirmar={confirmarExclusao}
         onClose={() => setConfirmandoExclusao(null)}
