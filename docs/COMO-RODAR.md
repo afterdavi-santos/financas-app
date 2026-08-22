@@ -257,3 +257,40 @@ não cair sem ninguém perceber.
 O Postgres local só escuta em `127.0.0.1` — no Supabase essa proteção deixa de
 existir por natureza, e a senha passa a ser a única barreira. Use uma senha forte
 e específica, nunca a mesma da sua máquina.
+
+---
+
+# Alternativa: tudo numa VPS (Oracle Cloud)
+
+Além do deploy em nuvem acima, o repositório carrega a configuração para rodar
+**front, API e banco numa máquina só**, em containers:
+
+| Arquivo | Papel |
+|---|---|
+| `docker-compose.prod.yml` | Os quatro containers: Caddy, front, api, postgres |
+| `Caddyfile` | HTTPS automático (Let's Encrypt) e roteamento `/api` → API |
+| `frontend/Dockerfile` + `frontend/nginx.conf` | Build do front e Nginx com fallback de SPA |
+| `.env.prod.example` | Modelo do `.env` da VPS (copiado e preenchido **lá**) |
+
+```powershell
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+**Por que a topologia importa:** front e API saem do **mesmo domínio**, com o
+Caddy roteando. Isso elimina o CORS por completo — não há origem cruzada para
+autorizar — e deixa a CSP em `connect-src 'self'`. O `VITE_API_URL` vira `/api`
+relativo, injetado como build-arg no Dockerfile do front.
+
+**O banco não publica porta nenhuma**, nem em loopback: ele só é alcançável pela
+rede interna do compose, pelo nome `postgres`. Numa máquina exposta à internet
+isso é a diferença entre um banco privado e um banco que qualquer um pode tentar
+abrir — e nenhum erro de firewall consegue expô-lo, porque a porta nunca sai do
+container.
+
+**O que muda em relação à nuvem:** `git push` deixa de publicar. Depois de subir
+para o GitHub, é preciso entrar na máquina e rodar
+`git pull && docker compose -f docker-compose.prod.yml up -d --build`. Backup
+também passa a ser responsabilidade sua (`pg_dump`, ver o guia).
+
+> **Nunca use `down -v` nessa pilha**: o `-v` apaga os volumes, ou seja, o banco
+> inteiro. Para reiniciar, `restart` ou `up -d` bastam.

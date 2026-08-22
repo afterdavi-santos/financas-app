@@ -1,0 +1,99 @@
+# Pilha completa para a VPS: Caddy (HTTPS + roteamento), front, API e Postgres.
+#
+# Diferença central em relação à nuvem: front e API saem do MESMO domínio, com o
+# Caddy roteando /api para o backend e o resto para os estáticos. Isso elimina o
+# CORS inteiro — não há origem cruzada para autorizar — e deixa a CSP em
+# `connect-src 'self'`.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Os valores vêm do arquivo .env ao lado (ver .env.prod.example). Nenhum segredo
+# neste arquivo, que é versionado.
+
+# Sem `container_name` de proposito: o compose nomeia por projeto, o que evita
+# colidir com o Postgres de desenvolvimento (docker-compose.yml) se os dois
+# estiverem na mesma maquina. Para operar, use o nome do SERVICO:
+#   docker compose -f docker-compose.prod.yml logs -f api
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    # As duas únicas portas abertas para a internet. A 80 não é opcional: é por
+    # ela que o Let's Encrypt valida o domínio antes de emitir o certificado, e
+    # é ela que redireciona todo mundo para o HTTPS.
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO: ${DOMINIO:?defina DOMINIO no .env}
+      EMAIL_TLS: ${EMAIL_TLS:?defina EMAIL_TLS no .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Persistem os certificados. Sem isso, cada `up` pede um certificado novo
+      # ao Let's Encrypt e você bate no limite de emissões deles (5 por semana
+      # para o mesmo domínio) — e aí fica sem HTTPS até a semana virar.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - front
+      - api
+
+  front:
+    build:
+      context: ./frontend
+      args:
+        # Relativo: mesma origem da API. Ver frontend/Dockerfile.
+        VITE_API_URL: /api
+    restart: unless-stopped
+    # Sem `ports`: quem fala com a internet é só o Caddy.
+    expose:
+      - "80"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      PORT: 8080
+      DATABASE_URL: jdbc:postgresql://postgres:5432/financas_db
+      DATABASE_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
+      # Mesma origem: o navegador nem chega a fazer requisição cross-origin.
+      # Fica preenchido mesmo assim para o dia em que alguém apontar outro front
+      # para esta API.
+      CORS_ORIGINS: https://${DOMINIO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: financas_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    # NENHUMA porta publicada, nem em loopback. O banco só é alcançável pela
+    # rede interna do compose, pelo nome `postgres`. Numa VPS isso é a diferença
+    # entre um banco privado e um banco que o mundo inteiro pode tentar abrir:
+    # aqui não existe firewall mal configurado capaz de expô-lo, porque a porta
+    # nunca sai do container.
+    volumes:
+      - financas-postgres-data:/var/lib/postgresql/data
+    # A API só sobe depois que o banco aceita conexão. Sem isso, o Flyway tenta
+    # migrar contra um Postgres que ainda está inicializando e o start falha.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d financas_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  financas-postgres-data:
+  caddy-data:
+  caddy-config:

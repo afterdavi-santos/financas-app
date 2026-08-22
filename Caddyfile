@@ -1,0 +1,54 @@
+# Proxy reverso da VPS. O Caddy resolve HTTPS sozinho: pede o certificado ao
+# Let's Encrypt na primeira subida, renova antes de vencer e redireciona HTTP
+# para HTTPS. Nao ha nada a configurar para isso alem do dominio e do e-mail.
+#
+# Pre-requisito: o dominio precisa APONTAR para o IP da VPS antes do primeiro
+# `up`. O Let's Encrypt confirma o dominio acessando a porta 80 — se o DNS ainda
+# nao propagou, a emissao falha e o Caddy tenta de novo em intervalos crescentes.
+
+{
+	email {$EMAIL_TLS}
+}
+
+{$DOMINIO} {
+	# /api vai para o backend. `handle_path` NAO existe aqui de proposito: as
+	# rotas do Spring ja incluem o /api (/api/despesas), entao o prefixo tem que
+	# ser preservado. Um `handle_path` removeria o /api e todas as chamadas
+	# virariam 404.
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	# Todo o resto e o frontend (Nginx com o fallback de SPA).
+	handle {
+		reverse_proxy front:80
+	}
+
+	# Compressao para o que o Nginx nao comprimiu.
+	encode gzip zstd
+
+	# Cabecalhos de seguranca do DOCUMENTO. Os da API continuam vindo do
+	# SecurityConfig do Spring — este bloco cuida do que o navegador aplica a
+	# pagina em si.
+	header {
+		# HSTS: depois da primeira visita, o navegador passa a recusar HTTP
+		# para este dominio, mesmo que alguem force. So faz sentido porque o
+		# HTTPS aqui e garantido.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Nenhuma pagina do app pode ser embutida em iframe de terceiros
+		# (defesa contra clickjacking).
+		X-Frame-Options "DENY"
+		# Remove a assinatura do servidor: nao ha motivo para anunciar a
+		# ferramenta e a versao para quem estiver sondando.
+		-Server
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}
