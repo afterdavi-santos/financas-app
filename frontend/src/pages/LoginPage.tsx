@@ -43,7 +43,7 @@ export function LoginPage() {
   return (
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-grouper-ink p-4">
       <img
-        src="/brand/Garoupa_fundo_login.png"
+        src="/brand/garoupa-fundo-login.webp"
         alt=""
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-15"

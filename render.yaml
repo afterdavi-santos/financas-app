@@ -12,6 +12,11 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
+    # O servico em producao subiu em oregon, e este arquivo descreve o que esta no
+    # ar. Se um dia for recriado, prefira `ohio`: o banco no Supabase esta em
+    # us-east-2, e cada consulta atravessa a distancia entre as duas costas — uma
+    # tela como a Home dispara varias. A regiao NAO pode ser trocada num servico
+    # existente, so recriando, e por isso nao foi mudada aqui.
     region: oregon
 
     # O Render considera o serviço "no ar" quando este caminho responde 200.

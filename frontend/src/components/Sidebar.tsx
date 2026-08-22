@@ -72,7 +72,7 @@ export function Sidebar({ aberto, onFechar }: SidebarProps) {
 
         <nav aria-label="Menu principal" className="relative flex-1 overflow-hidden p-3">
           <img
-            src="/brand/garoupas_fundo_1.png"
+            src="/brand/garoupas-fundo-sidebar.webp"
             alt=""
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-15"
