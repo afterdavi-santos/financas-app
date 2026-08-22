@@ -34,6 +34,18 @@ export function useAjustarFonteSincronizada(
     }
 
     ajustar();
+
+    // As fontes do Google chegam DEPOIS do primeiro render. Sem reajustar
+    // quando elas terminam de carregar, a medida acima sai feita com a fonte
+    // de fallback do sistema — que é mais estreita que a Inter — e o texto
+    // "cabe" num tamanho que deixa de caber assim que a fonte real entra.
+    // Localmente isso não aparece: a fonte já está em cache no primeiro
+    // render. Em produção, na primeira visita, aparece sempre.
+    let cancelado = false;
+    document.fonts?.ready.then(() => {
+      if (!cancelado) ajustar();
+    });
+
     // Reajusta em resize da janela/rotação do celular — não só na
     // montagem. Escuta "resize" da window (sinal externo), não um
     // ResizeObserver nos próprios elementos: como `ajustar` muta o
@@ -43,7 +55,10 @@ export function useAjustarFonteSincronizada(
     // autodispara a cada ajuste — gera um loop e o resultado final fica
     // preso num valor intermediário errado.
     window.addEventListener("resize", ajustar);
-    return () => window.removeEventListener("resize", ajustar);
+    return () => {
+      cancelado = true;
+      window.removeEventListener("resize", ajustar);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, dependencias);
 

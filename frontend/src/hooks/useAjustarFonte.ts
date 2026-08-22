@@ -28,13 +28,28 @@ export function useAjustarFonte<T extends HTMLElement>(
     }
 
     ajustar();
+
+    // As fontes do Google chegam DEPOIS do primeiro render. Sem reajustar
+    // quando elas terminam de carregar, a medida acima sai feita com a fonte
+    // de fallback do sistema — que é mais estreita que a Inter — e o texto
+    // "cabe" num tamanho que deixa de caber assim que a fonte real entra.
+    // Localmente isso não aparece: a fonte já está em cache no primeiro
+    // render. Em produção, na primeira visita, aparece sempre.
+    let cancelado = false;
+    document.fonts?.ready.then(() => {
+      if (!cancelado) ajustar();
+    });
+
     // Reajusta em resize da janela/rotação do celular — não só na
     // montagem. Escuta "resize" da window (sinal externo), não um
     // ResizeObserver no próprio elemento: como `ajustar` já muta o
     // font-size (logo o próprio tamanho do elemento), um ResizeObserver
     // nele se autodispara a cada ajuste, criando um loop.
     window.addEventListener("resize", ajustar);
-    return () => window.removeEventListener("resize", ajustar);
+    return () => {
+      cancelado = true;
+      window.removeEventListener("resize", ajustar);
+    };
   }, [dependencia, tamanhoBaseRem, tamanhoMinimoRem]);
 
   return ref;
