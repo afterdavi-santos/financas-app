@@ -1,6 +1,6 @@
 import { createContext, useContext, useState } from "react";
 import type { ReactNode } from "react";
-import { TOKEN_KEY } from "../api/client";
+import { TOKEN_KEY, limparCacheDeLeitura } from "../api/client";
 import { tokenExpirado } from "../utils/jwt";
 
 // O que fica disponível globalmente para qualquer componente do app.
@@ -32,12 +32,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return salvo;
   });
 
+  // As duas funções limpam o cache de leitura da API (api/client.ts). Não é
+  // detalhe de performance: o cache é indexado por URL, não por usuário — sem
+  // limpar, entrar numa conta logo depois de sair de outra mostraria por até 30
+  // segundos as despesas da conta anterior.
   function login(novoToken: string) {
+    limparCacheDeLeitura();
     localStorage.setItem(TOKEN_KEY, novoToken); // persiste no navegador
     setToken(novoToken); // atualiza a UI (re-renderiza quem depende disso)
   }
 
   function logout() {
+    limparCacheDeLeitura();
     localStorage.removeItem(TOKEN_KEY);
     setToken(null);
   }

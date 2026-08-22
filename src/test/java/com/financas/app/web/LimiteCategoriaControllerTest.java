@@ -7,6 +7,7 @@ import com.financas.app.model.Usuario;
 import com.financas.app.security.JwtAuthenticationFilter;
 import com.financas.app.security.UsuarioAutenticado;
 import com.financas.app.service.LimiteCategoriaService;
+import com.financas.app.service.LimiteComStatus;
 import com.financas.app.service.StatusLimiteCategoria;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -92,16 +93,20 @@ class LimiteCategoriaControllerTest {
 
     @Test
     void deveListarLimites() throws Exception {
-        // O mes vai como query param: a listagem devolve so os limites
-        // vigentes nele.
-        when(limiteCategoriaService.listar(1L, LocalDate.of(2026, 7, 1)))
-                .thenReturn(List.of(limiteCategoria(50L)));
+        // O mes vai como query param: a listagem devolve so os limites vigentes
+        // nele, e ja com o status do mes embutido — e o que evita uma requisicao
+        // por limite so pra saber quanto foi gasto.
+        when(limiteCategoriaService.listarComStatus(1L, LocalDate.of(2026, 7, 1)))
+                .thenReturn(List.of(LimiteComStatus.de(limiteCategoria(50L), new BigDecimal("620.00"))));
 
         mockMvc.perform(get("/api/limites-categoria")
                         .param("mes", "2026-07-01")
                         .with(SecurityMockMvcRequestPostProcessors.authentication(autenticacao)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(50));
+                .andExpect(jsonPath("$[0].id").value(50))
+                .andExpect(jsonPath("$[0].valorGasto").value(620.00))
+                // 620 gastos contra teto de 500: estourado.
+                .andExpect(jsonPath("$[0].estourado").value(true));
     }
 
     @Test

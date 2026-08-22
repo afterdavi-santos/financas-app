@@ -47,10 +47,13 @@ public class LimiteCategoriaController {
     @GetMapping
     // `mes` = mes em foco na tela. So os limites vigentes nele voltam; um
     // limite criado depois, ou ja encerrado antes, nao aparece naquele mes.
+    //
+    // A resposta ja traz valorGasto/estourado de cada um: antes a tela pedia o
+    // status limite a limite, e cada requisicao pagava a latencia inteira.
     public List<LimiteCategoriaResponse> listar(@AuthenticationPrincipal UsuarioAutenticado usuarioAutenticado,
                                                  @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate mes) {
-        return limiteCategoriaService.listar(usuarioAutenticado.getId(), mes).stream()
-                .map(LimiteCategoriaController::toResponse)
+        return limiteCategoriaService.listarComStatus(usuarioAutenticado.getId(), mes).stream()
+                .map(LimiteCategoriaController::toResponseComStatus)
                 .toList();
     }
 
@@ -90,12 +93,18 @@ public class LimiteCategoriaController {
         return limiteCategoria;
     }
 
+    private static LimiteCategoriaResponse toResponseComStatus(com.financas.app.service.LimiteComStatus item) {
+        var base = toResponse(item.limite());
+        return new LimiteCategoriaResponse(base.id(), base.valorLimite(), base.categoria(),
+                base.mesInicio(), base.mesFim(), item.valorGasto(), item.estourado());
+    }
+
     private static LimiteCategoriaResponse toResponse(LimiteCategoria limiteCategoria) {
         var categoria = limiteCategoria.getCategoria();
         var categoriaResponse = new CategoriaResponse(categoria.getId(), categoria.getNome(), categoria.getTipo(), 0L,
                 categoria.getDataCriacao());
         return new LimiteCategoriaResponse(limiteCategoria.getId(), limiteCategoria.getValorLimite(),
-                categoriaResponse, limiteCategoria.getMesInicio(), limiteCategoria.getMesFim());
+                categoriaResponse, limiteCategoria.getMesInicio(), limiteCategoria.getMesFim(), null, null);
     }
 
 }

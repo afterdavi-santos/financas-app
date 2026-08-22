@@ -197,6 +197,14 @@ semiaberto `[mesInicio, mesFim)` — vale para todo mês `m` com `mesInicio <= m
 O intervalo é semiaberto justamente para o `mesFim` de uma vigência poder ser igual ao
 `mesInicio` da seguinte, sem sobreposição nem buraco de um mês.
 
+**A listagem já vem com o status.** `listarComStatus` devolve cada limite vigente junto do
+quanto foi gasto na categoria naquele mês, calculado por **uma** consulta agregada
+(`DespesaService.somarPorCategoriaNoPeriodo`). Antes, a tela pedia a lista e depois o status
+de cada limite numa requisição própria — com 5 limites eram 7 viagens de rede em duas ondas
+encadeadas, cada uma pagando a latência inteira e disparando o catch-up de recorrências de
+novo. Categoria sem gasto não aparece no resultado agregado, e a ausência é lida como zero.
+Sem nenhum limite vigente, a soma nem é consultada: seria um catch-up à toa.
+
 ---
 
 ## 7. Schema e migrações

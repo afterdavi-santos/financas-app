@@ -8,7 +8,7 @@ import { IconeEditar, IconeExcluir } from "./IconesInvestimento";
 import { Tooltip } from "./Tooltip";
 import { useSelecao } from "../hooks/useSelecao";
 import { listarCategorias } from "../api/categorias";
-import { listarLimites, statusLimite, excluirLimite } from "../api/limites";
+import { listarLimites, excluirLimite } from "../api/limites";
 import { mensagemDeErro } from "../api/erros";
 import { formatarBRL } from "../utils/moeda";
 import { mesAtualYYYYMM, primeiroDiaDoMes } from "../utils/datas";
@@ -79,16 +79,22 @@ export function PlanejamentoLimites({ headerSlot, mes = mesAtualYYYYMM() }: Prop
     setCarregando(true);
     try {
       const mesReferencia = primeiroDiaDoMes(mes);
+      // Duas requisições, não 2 + uma por limite: a listagem já traz o gasto e o
+      // estouro de cada um (ver LimiteCategoriaService.listarComStatus). Antes,
+      // com 5 limites, eram 7 viagens de rede em duas ondas encadeadas — e numa
+      // API hospedada cada viagem paga a latência inteira.
       const [cats, limites] = await Promise.all([
         listarCategorias(),
         listarLimites(mesReferencia),
       ]);
-      const comStatus = await Promise.all(
-        limites.map(async (limite) => ({
-          limite,
-          status: await statusLimite(limite.categoria.id, mesReferencia),
-        })),
-      );
+      const comStatus = limites.map((limite) => ({
+        limite,
+        status: {
+          valorLimite: limite.valorLimite,
+          valorGasto: limite.valorGasto ?? 0,
+          estourado: limite.estourado ?? false,
+        },
+      }));
       setCategorias(cats);
       setLinhas(comStatus);
     } catch (e) {

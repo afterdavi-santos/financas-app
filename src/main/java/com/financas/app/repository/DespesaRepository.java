@@ -38,4 +38,20 @@ public interface DespesaRepository extends JpaRepository<Despesa, Long>, JpaSpec
             """)
     List<ContagemCategoria> contarPorCategoria(@Param("usuarioId") Long usuarioId);
 
+    // Soma gasta em cada categoria no periodo, numa consulta so. O COALESCE
+    // espelha DespesaSpecification.comPeriodo: quem manda no mes que a despesa
+    // conta e o mesReferencia quando existe (despesa vinda do Leitor de fatura),
+    // senao a data. Categoria sem gasto nenhum simplesmente nao aparece no
+    // resultado — quem chama trata a ausencia como zero.
+    @Query("""
+            SELECT d.categoria.id AS categoriaId, SUM(d.valor) AS total
+            FROM Despesa d
+            WHERE d.usuario.id = :usuarioId
+              AND COALESCE(d.mesReferencia, d.data) BETWEEN :inicio AND :fim
+            GROUP BY d.categoria.id
+            """)
+    List<TotalPorCategoria> somarPorCategoriaNoPeriodo(@Param("usuarioId") Long usuarioId,
+                                                       @Param("inicio") LocalDate inicio,
+                                                       @Param("fim") LocalDate fim);
+
 }

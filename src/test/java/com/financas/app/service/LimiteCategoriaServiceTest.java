@@ -20,6 +20,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -306,6 +307,61 @@ class LimiteCategoriaServiceTest {
 
         verify(despesaService, never())
                 .calcularTotalPorCategoriaEPeriodo(any(), any(), eq(JUNHO), any());
+    }
+
+    // ---- listagem com status (mata o N+1 de rede da tela de Limites) ----
+
+    @Test
+    void deveListarComStatusNumaConsultaSoParaTodosOsLimites() {
+        // O ponto do metodo: UMA consulta agregada serve todos os limites. O
+        // `times(1)` abaixo e o que protege isso — voltar a somar categoria por
+        // categoria faria o teste falhar, mesmo com os numeros certos na tela.
+        LimiteCategoria alimentacao = limiteComId(1L, 1L, 5L, new BigDecimal("500"));
+        LimiteCategoria transporte = limiteComId(2L, 1L, 7L, new BigDecimal("300"));
+
+        when(limiteCategoriaRepository.findVigentesNoMes(1L, JULHO))
+                .thenReturn(List.of(alimentacao, transporte));
+        when(despesaService.somarPorCategoriaNoPeriodo(1L, JULHO, JULHO.withDayOfMonth(31)))
+                .thenReturn(Map.of(5L, new BigDecimal("620"), 7L, new BigDecimal("120")));
+
+        List<LimiteComStatus> linhas = limiteCategoriaService.listarComStatus(1L, JULHO);
+
+        assertThat(linhas).hasSize(2);
+        assertThat(linhas.get(0).valorGasto()).isEqualByComparingTo("620");
+        assertThat(linhas.get(0).estourado()).isTrue();   // 620 de teto 500
+        assertThat(linhas.get(1).valorGasto()).isEqualByComparingTo("120");
+        assertThat(linhas.get(1).estourado()).isFalse();  // 120 de teto 300
+
+        verify(despesaService, times(1))
+                .somarPorCategoriaNoPeriodo(any(), any(), any());
+    }
+
+    @Test
+    void deveTratarCategoriaSemGastoComoZero() {
+        // Categoria sem despesa no mes nao aparece no resultado da consulta
+        // agregada. Ausencia ali significa zero, nao "dado faltando" — se virasse
+        // null, a tela quebraria ao formatar o valor.
+        LimiteCategoria limite = limiteComId(1L, 1L, 5L, new BigDecimal("500"));
+
+        when(limiteCategoriaRepository.findVigentesNoMes(1L, JULHO)).thenReturn(List.of(limite));
+        when(despesaService.somarPorCategoriaNoPeriodo(1L, JULHO, JULHO.withDayOfMonth(31)))
+                .thenReturn(Map.of());
+
+        List<LimiteComStatus> linhas = limiteCategoriaService.listarComStatus(1L, JULHO);
+
+        assertThat(linhas.get(0).valorGasto()).isEqualByComparingTo("0");
+        assertThat(linhas.get(0).estourado()).isFalse();
+    }
+
+    @Test
+    void naoDeveConsultarGastosQuandoNaoHaLimiteVigente() {
+        // Sem limite nenhum nao ha o que somar, e a consulta agregada custaria um
+        // catch-up de recorrencias a toa — que e a parte cara.
+        when(limiteCategoriaRepository.findVigentesNoMes(1L, JULHO)).thenReturn(List.of());
+
+        assertThat(limiteCategoriaService.listarComStatus(1L, JULHO)).isEmpty();
+
+        verify(despesaService, never()).somarPorCategoriaNoPeriodo(any(), any(), any());
     }
 
 }

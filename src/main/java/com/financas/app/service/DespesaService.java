@@ -12,6 +12,7 @@ import com.financas.app.repository.CategoriaRepository;
 import com.financas.app.repository.DespesaRepository;
 import com.financas.app.repository.DespesaSpecification;
 import com.financas.app.repository.RecorrenciaDespesaRepository;
+import com.financas.app.repository.TotalPorCategoria;
 import com.financas.app.repository.UsuarioRepository;
 import com.financas.app.util.JanelaCatchUp;
 import org.springframework.data.jpa.domain.Specification;
@@ -23,6 +24,8 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class DespesaService {
@@ -309,6 +312,22 @@ public class DespesaService {
         return despesaRepository.findAll(filtros(usuarioId, categoriaId, null, inicio, fim)).stream()
                 .map(Despesa::getValor)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    // Gasto de TODAS as categorias do usuário no período, numa consulta agregada.
+    //
+    // Existe para a tela de Limites, que antes pedia o status de cada limite numa
+    // requisição própria: com 5 limites eram 5 viagens de rede, cada uma pagando
+    // a latência inteira, e cada uma rodando o catch-up de novo. Aqui o catch-up
+    // roda UMA vez e o banco soma tudo de uma vez.
+    //
+    // Categoria sem despesa no período não vem no mapa — quem lê trata a
+    // ausência como zero, que é o que ela significa.
+    @Transactional
+    public Map<Long, BigDecimal> somarPorCategoriaNoPeriodo(Long usuarioId, LocalDate inicio, LocalDate fim) {
+        garantirRecorrencias(usuarioId, fim);
+        return despesaRepository.somarPorCategoriaNoPeriodo(usuarioId, inicio, fim).stream()
+                .collect(Collectors.toMap(TotalPorCategoria::getCategoriaId, TotalPorCategoria::getTotal));
     }
 
     // Catch-up preguiçoso (mesmo espírito de CdiService.garantirCache): para

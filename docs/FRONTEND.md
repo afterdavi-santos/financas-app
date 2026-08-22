@@ -74,6 +74,17 @@ economia da Home.
 - Estado do mês em foco é compartilhado entre páginas por `hooks/useMesSelecionado.ts`.
 - Seleção múltipla (listas com exclusão em lote) por `hooks/useSelecao.ts`.
 
+**Cache de leitura** (`api/client.ts`): todo `GET` fica em cache por 30s, e qualquer escrita
+bem-sucedida invalida **tudo**. O que se guarda é a *promessa*, não o resultado — isso cobre
+de uma vez a releitura logo depois e duas telas pedindo a mesma coisa ao mesmo tempo (a
+segunda pega a requisição em voo). A invalidação é deliberadamente grosseira: criar uma
+despesa mexe no total do mês, no status do limite, no gráfico e na economia, e mapear essas
+dependências seria a fonte de bugs do tipo "o número não atualizou".
+
+`limparCacheDeLeitura()` é chamado no **login e no logout** (`AuthContext`), e isso não é
+performance: o cache é indexado por URL, não por usuário — sem limpar, entrar numa conta logo
+depois de sair de outra mostraria os dados da anterior por até 30 segundos.
+
 **Token e sessão**: `AuthContext` guarda o token no `localStorage`, então reload não desloga.
 O backend usa **janela deslizante** — cada resposta autenticada pode trazer um token renovado
 no header `X-Renewed-Token`, que o `api/client.ts` intercepta e salva. Esse header precisa

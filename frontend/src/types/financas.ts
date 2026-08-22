@@ -194,6 +194,11 @@ export interface LimiteCategoria {
   // que foi excluído (os anteriores continuam com ele).
   mesInicio: string; // "YYYY-MM-DD" (1º dia do mês)
   mesFim: string | null; // null = ainda vigente
+  // Status do mês, já embutido na LISTAGEM (o backend calcula o gasto de
+  // todas as categorias numa consulta só). Vem null nas respostas de criar e
+  // editar, onde a tela recarrega a lista logo em seguida.
+  valorGasto: number | null;
+  estourado: boolean | null;
 }
 
 // -> LimiteCategoriaRequest: aqui mandamos só o categoriaId.

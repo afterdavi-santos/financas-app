@@ -71,3 +71,69 @@ api.interceptors.response.use(
     return Promise.reject(erro);
   },
 );
+
+// ---------------------------------------------------------------------------
+// CACHE DE LEITURA
+// ---------------------------------------------------------------------------
+//
+// O problema que ele resolve: trocar de aba refazia TODAS as chamadas da tela
+// do zero. Na API hospedada, cada requisição custa a latência inteira, e a Home
+// sozinha dispara sete — então ir e voltar entre Home e Movimentações pagava
+// esse preço de novo a cada vez, mesmo com os dados idênticos.
+//
+// O que fica em cache é a PROMESSA, não o resultado. Isso resolve dois casos de
+// uma vez: a releitura logo depois (a promessa já resolveu) e duas telas que
+// pedem a mesma coisa ao mesmo tempo — a segunda pega a requisição que já está
+// em voo, em vez de abrir outra.
+//
+// Só GET entra aqui. Nada mais é seguro: um POST não é repetível.
+const TTL_MS = 30_000;
+
+const cacheLeitura = new Map<string, { expiraEm: number; resposta: Promise<unknown> }>();
+
+/**
+ * Esvazia o cache. Chamado sozinho depois de qualquer escrita (ver interceptor
+ * abaixo), e OBRIGATORIAMENTE no login e no logout — sem isso, quem entrasse
+ * numa conta logo depois de outra veria por até 30 segundos os dados da conta
+ * anterior. É correção de vazamento entre contas, não otimização.
+ */
+export function limparCacheDeLeitura(): void {
+  cacheLeitura.clear();
+}
+
+const getOriginal = api.get.bind(api);
+
+api.get = ((url: string, config?: Parameters<typeof getOriginal>[1]) => {
+  // Os params entram na chave: /despesas de julho e de agosto são a mesma URL
+  // e respostas diferentes.
+  const chave = `${url}|${JSON.stringify(config?.params ?? null)}`;
+  const agora = Date.now();
+
+  const guardado = cacheLeitura.get(chave);
+  if (guardado && guardado.expiraEm > agora) {
+    return guardado.resposta;
+  }
+
+  const resposta = getOriginal(url, config);
+  cacheLeitura.set(chave, { expiraEm: agora + TTL_MS, resposta });
+  // Falha não fica em cache: manter uma promessa rejeitada aqui repetiria o
+  // mesmo erro por 30s mesmo depois de a rede voltar.
+  resposta.catch(() => cacheLeitura.delete(chave));
+  return resposta;
+}) as typeof api.get;
+
+// Qualquer escrita bem-sucedida invalida TUDO, sem tentar adivinhar o que ela
+// afetou. É deliberadamente grosseiro: criar uma despesa mexe no total do mês,
+// no status do limite da categoria, no gráfico dos últimos meses e na economia
+// — mapear essas dependências seria a fonte de bugs exatamente do tipo "o
+// número não atualizou", que é bem pior que refazer as leituras.
+api.interceptors.response.use(
+  (resposta) => {
+    const metodo = (resposta.config.method ?? "get").toLowerCase();
+    if (metodo !== "get") {
+      limparCacheDeLeitura();
+    }
+    return resposta;
+  },
+  (erro) => Promise.reject(erro),
+);

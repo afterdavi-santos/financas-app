@@ -12,8 +12,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Limites de gasto por categoria, com VIGÊNCIA (ver V3__vigencia_limite_categoria.sql).
@@ -81,6 +83,31 @@ public class LimiteCategoriaService {
     /** Só os limites que valem no mês pedido — é o que a tela do mês mostra. */
     public List<LimiteCategoria> listar(Long usuarioId, LocalDate mes) {
         return limiteCategoriaRepository.findVigentesNoMes(usuarioId, mesOuAtual(mes));
+    }
+
+    /**
+     * A mesma lista, já com quanto foi gasto em cada categoria no mês.
+     *
+     * <p>É o que a tela de Limites consome. A versão anterior pedia a lista e
+     * depois o status de cada limite separadamente — com 5 limites, 6 viagens de
+     * rede em duas ondas encadeadas, cada uma pagando a latência inteira e
+     * disparando o catch-up de recorrências de novo. Aqui é uma requisição, uma
+     * consulta agregada e um catch-up só.
+     */
+    @Transactional
+    public List<LimiteComStatus> listarComStatus(Long usuarioId, LocalDate mes) {
+        LocalDate inicio = mesOuAtual(mes);
+        List<LimiteCategoria> vigentes = limiteCategoriaRepository.findVigentesNoMes(usuarioId, inicio);
+        if (vigentes.isEmpty()) {
+            // Sem limite nenhum não há o que somar, e a consulta agregada custaria
+            // um catch-up de recorrências à toa.
+            return List.of();
+        }
+        LocalDate fim = inicio.withDayOfMonth(inicio.lengthOfMonth());
+        Map<Long, BigDecimal> gastoPorCategoria = despesaService.somarPorCategoriaNoPeriodo(usuarioId, inicio, fim);
+        return vigentes.stream()
+                .map(limite -> LimiteComStatus.de(limite, gastoPorCategoria.get(limite.getCategoria().getId())))
+                .toList();
     }
 
     /**
