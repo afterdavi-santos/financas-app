@@ -1,0 +1,35 @@
+# Tetos de memoria para a Oracle VM.Standard.E2.1.Micro (Always Free): 1 GB de
+# RAM no total. Este arquivo NAO substitui o docker-compose.prod.yml — ele se
+# soma a ele:
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.micro.yml up -d
+#
+# (O deploy.sh ja faz isso. Numa maquina maior — um Ampere A1, por exemplo —
+# basta omitir este arquivo e ninguem fica limitado.)
+#
+# Por que definir os limites em vez de deixar o Docker livre: sem teto, a JVM e o
+# Postgres crescem ate o kernel escolher um processo para matar, e a escolha
+# costuma cair na API. Com teto, cada um sabe o proprio orcamento — e a JVM em
+# particular LE esse limite (o -XX:MaxRAMPercentage=75 do Dockerfile) e
+# dimensiona o heap sozinha, sem -Xmx fixo.
+#
+# Orcamento (1024 MB): sistema ~180 · api 448 · postgres 256 · front 64 · caddy 64
+
+services:
+  api:
+    mem_limit: 448m
+
+  postgres:
+    mem_limit: 256m
+    # shared_buffers padrao do Postgres 16 e 128 MB, quase metade do teto acima.
+    # 64 MB deixa folga para conexoes e trabalho de ordenacao sem estourar.
+    command: >
+      postgres
+      -c shared_buffers=64MB
+      -c max_connections=30
+
+  front:
+    mem_limit: 64m
+
+  caddy:
+    mem_limit: 64m

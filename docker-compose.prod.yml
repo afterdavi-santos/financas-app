@@ -40,6 +40,10 @@ services:
       - api
 
   front:
+    # Imagem publicada pelo GitHub Actions (.github/workflows/deploy.yml). O bloco
+    # `build` abaixo continua valendo para quem quiser compilar localmente com
+    # `--build`; na VPS, `docker compose pull` baixa esta imagem e nada e compilado.
+    image: ghcr.io/afterdavi-santos/financas-front:latest
     build:
       context: ./frontend
       args:
@@ -51,6 +55,7 @@ services:
       - "80"
 
   api:
+    image: ghcr.io/afterdavi-santos/financas-api:latest
     build:
       context: .
       dockerfile: Dockerfile

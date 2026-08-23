@@ -1,0 +1,78 @@
+# Builda as imagens da API e do frontend e publica no GitHub Container Registry.
+#
+# Por que buildar aqui e nao na VPS: a maquina de destino e uma Oracle
+# VM.Standard.E2.1.Micro — 1 GB de RAM e 1/8 de OCPU. Maven compilando o Spring
+# Boot e o Vite compilando o frontend nao cabem ali com folga; o build leva mais
+# de dez minutos e pode morrer por falta de memoria no meio. Aqui roda em um
+# runner de 4 GB, de graca (repositorio publico), e a VPS so precisa baixar o
+# resultado pronto.
+#
+# Depois que este workflow termina, o deploy na VPS e um `./deploy.sh`.
+
+name: Publicar imagens
+
+on:
+  push:
+    branches: [master]
+  # Permite disparar manualmente pela aba Actions, sem precisar de um commit.
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Sem isso o push para o ghcr.io volta 403: o GITHUB_TOKEN nasce somente
+      # com permissao de leitura.
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # O buildx e o que habilita o cache de camadas entre execucoes (o `cache-from`
+      # mais abaixo). Sem ele, todo push recompila o Maven do zero.
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Autenticar no ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # O ghcr.io exige o nome do dono em minusculas. `github.repository_owner`
+      # preserva o case do perfil, entao normalizamos aqui em vez de confiar.
+      - name: Definir prefixo das imagens
+        id: nomes
+        run: echo "prefixo=${REGISTRY}/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Build e push da API
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ steps.nomes.outputs.prefixo }}/financas-api:latest
+            ${{ steps.nomes.outputs.prefixo }}/financas-api:${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build e push do frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          # VITE_API_URL vai gravado DENTRO do bundle na compilacao (ver
+          # frontend/Dockerfile). Como o Caddy poe front e API no mesmo dominio,
+          # o valor certo e o caminho relativo — a mesma origem, sem CORS.
+          build-args: |
+            VITE_API_URL=/api
+          tags: |
+            ${{ steps.nomes.outputs.prefixo }}/financas-front:latest
+            ${{ steps.nomes.outputs.prefixo }}/financas-front:${{ github.sha }}
+          cache-from: type=gha,scope=front
+          cache-to: type=gha,mode=max,scope=front
