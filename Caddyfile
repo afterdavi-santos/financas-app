@@ -10,7 +10,11 @@
 	email {$EMAIL_TLS}
 }
 
-{$DOMINIO} {
+# DOMINIO_ALT e opcional: permite servir um segundo dominio em paralelo (por
+# exemplo um No-IP, para testar reputacao) sem derrubar o primeiro. O Caddy
+# emite um certificado separado para cada nome. Se a variavel nao existir, o
+# placeholder vira string vazia e sobra apenas {$DOMINIO}.
+{$DOMINIO} {$DOMINIO_ALT:} {
 	# /api vai para o backend. `handle_path` NAO existe aqui de proposito: as
 	# rotas do Spring ja incluem o /api (/api/despesas), entao o prefixo tem que
 	# ser preservado. Um `handle_path` removeria o /api e todas as chamadas

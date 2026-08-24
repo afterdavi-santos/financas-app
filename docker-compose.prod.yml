@@ -27,6 +27,9 @@ services:
       - "443:443"
     environment:
       DOMINIO: ${DOMINIO:?defina DOMINIO no .env}
+      # Opcional. Definido no .env, serve um segundo dominio em paralelo,
+      # com certificado proprio. Vazio = so o DOMINIO principal.
+      DOMINIO_ALT: ${DOMINIO_ALT:-}
       EMAIL_TLS: ${EMAIL_TLS:?defina EMAIL_TLS no .env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
@@ -71,7 +74,7 @@ services:
       # Mesma origem: o navegador nem chega a fazer requisição cross-origin.
       # Fica preenchido mesmo assim para o dia em que alguém apontar outro front
       # para esta API.
-      CORS_ORIGINS: https://${DOMINIO}
+      CORS_ORIGINS: https://${DOMINIO}${DOMINIO_ALT:+,https://${DOMINIO_ALT}}
     depends_on:
       postgres:
         condition: service_healthy
